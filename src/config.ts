@@ -1,41 +1,42 @@
-// Every number worth arguing about lives here, so tuning never means hunting through rules.
+// Every number worth arguing about lives here. Distances are in tiles, times in seconds.
 export const CONFIG = {
+  map: { size: 84, channels: 56, pull: 0.57, pools: 0.07, portalRing: 34, glucosePatches: 12, kupffer: 5, neutrophils: 8 },
   player: {
-    maxHp: 24,
-    ap: 6,
+    maxHp: 40,
+    speed: 4.2,
+    radius: 0.28,
+    vision: 7.5, // how far you can see; the obvious thing to raise with a power-up
     startEnergy: 3,
-    moveCost: 1,
-    strike: { ap: 3, min: 2, max: 4, hit: 0.9 },
-    // The shot spends energy, so fighting your way out makes the harvest matter more.
-    shot: { ap: 3, energy: 1, range: 6, min: 3, max: 5, hit: 0.85, falloffFrom: 3, falloffPerTile: 0.1 },
+    strike: { cooldown: 0.45, reach: 1.25, arc: 0.2, min: 3, max: 5 }, // arc: cosine of the half-angle
+    // The shot spends energy, so fighting your way out eats into the harvest.
+    shot: { cooldown: 0.35, energy: 1, speed: 14, range: 9, min: 4, max: 6, radius: 0.45 },
   },
   energy: {
-    quota: 12, // needed to make the trip back out
-    skim: { ap: 3, gain: 1 },
-    strip: { ap: 3, gain: 5, hostDamage: 10, alert: 25, maxResponders: 2 },
+    quota: 20, // needed to ride the vein back out
+    skim: { time: 1.1, gain: 1 },
+    strip: { time: 0.9, gain: 5, hostDamage: 10, alert: 25, maxResponders: 2, reach: 1.35 },
     patchMax: 3,
-    patchRegenEvery: 8, // turns per unit regrown
-    metabolismEvery: 5, // turns per unit burned
+    patchRegen: 22,
+    metabolism: 14, // seconds per unit burned
     starveDamage: 1,
   },
   host: { maxHealth: 100 },
   alert: {
     max: 100,
-    decayPerTurn: 1,
-    seenByNeutrophil: 2,
-    seenByKupffer: 5,
+    decay: 0.6, // per second while nothing can see you
+    seenByNeutrophil: 1.2, // per second
+    seenByKupffer: 3.5,
     perKill: 5,
-    // Reinforcements arrive through the portal vessels, scaled to how loud you have been.
     tiers: [
       { name: 'Calm', from: 0, spawnEvery: 0, spawnCount: 0 },
-      { name: 'Suspicious', from: 25, spawnEvery: 6, spawnCount: 1 },
-      { name: 'Alarmed', from: 50, spawnEvery: 5, spawnCount: 2 },
-      { name: 'Cytokine surge', from: 75, spawnEvery: 4, spawnCount: 3 },
+      { name: 'Suspicious', from: 25, spawnEvery: 13, spawnCount: 1 },
+      { name: 'Alarmed', from: 50, spawnEvery: 10, spawnCount: 2 },
+      { name: 'Cytokine surge', from: 75, spawnEvery: 7, spawnCount: 3 },
     ],
-    maxEnemies: 12,
+    maxEnemies: 16,
   },
   enemies: {
-    neutrophil: { hp: 6, ap: 6, attackAp: 4, min: 1, max: 3, hit: 0.75, sight: 6 },
-    kupffer: { hp: 14, ap: 3, attackAp: 3, min: 2, max: 4, hit: 0.75, sight: 5 },
+    neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, sight: 6, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
+    kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, sight: 5, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
   },
 } as const;

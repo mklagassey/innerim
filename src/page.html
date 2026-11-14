@@ -1,119 +1,117 @@
 <title>Insiderim Liver Run</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IBM+Plex+Mono:wght@500;700&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap">
 <style>
-  /* Layout: a stained tissue slide on the left, the lab notes for it on the right; notes drop below on a phone.
-     One look on purpose: the palette is an H&E stain, which only exists on a light slide. */
+  /* Layout: the game fills the screen; the readouts sit on its edges like a Diablo belt, vitals in the two bottom corners.
+     One look on purpose: you are inside a body with a lamp, so the page is dark whatever the viewer's theme. */
   :root {
-    color-scheme: light;
-    --slide: #fbf1f5;        /* unstained glass */
-    --mount: #f1dfe8;        /* the page around the slide */
-    --eosin: #d87fa4;        /* cytoplasm pink */
-    --eosin-soft: #f4cfde;
-    --hematoxylin: #5a3391;  /* nucleus purple */
-    --ink: #2a1840;
-    --ink-soft: #6a587c;
-    --you: #0c8f8a;          /* the one thing in here that is not tissue */
-    --blood: #c2392f;
-    --glucose: #b88a00;
-    --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
-    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+    --void: #0a0407;         /* unlit tissue */
+    --clot: #1c0b11;         /* panel ground */
+    --seam: #4a2028;         /* panel edges */
+    --bone: #f1e3d0;         /* text */
+    --bone-dim: #a8917f;
+    --blood: #e23a30;
+    --amber: #ecb42e;        /* energy, glucose */
+    --vein: #5680ff;
+    --display: "Cinzel", "Trajan Pro", Georgia, serif;
+    --body: "Spectral", Georgia, "Times New Roman", serif;
     --data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
   html, body { height: 100%; }
   body {
-    background: var(--mount); color: var(--ink); font: 400 15px/1.45 var(--body);
-    padding-block: 16px;
+    background: var(--void); color: var(--bone); font: 400 16px/1.45 var(--body); box-sizing: border-box;
+    padding-block: 12px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    box-sizing: border-box;
   }
-  .app { max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: 12px; }
-  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
-  h1 { font: 800 clamp(1.5rem, 3.4vw, 2.1rem)/1 var(--display); letter-spacing: -0.02em; margin: 0; color: var(--hematoxylin); }
-  .specimen { font: 500 0.78rem/1.3 var(--data); color: var(--ink-soft); letter-spacing: 0.04em; text-transform: uppercase; }
-  .bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
-  .stage { min-width: 0; display: flex; flex-direction: column; gap: 6px; position: relative; }
-  canvas { width: 100%; height: auto; display: block; border-radius: 6px; background: var(--slide);
-    box-shadow: 0 0 0 1px var(--eosin-soft), 0 10px 30px -18px var(--hematoxylin); cursor: crosshair; touch-action: manipulation; }
-  #hint { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.45em; margin: 0; }
-  .notes { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-  .meters { display: grid; gap: 8px; margin: 0; }
-  .meter { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: baseline; }
-  .meter dt { font: 600 0.72rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
-  .meter dd { margin: 0; font: 700 0.85rem/1 var(--data); font-variant-numeric: tabular-nums; }
-  .track { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: var(--eosin-soft); overflow: hidden; }
-  .track i { display: block; height: 100%; width: 0; background: var(--fill, var(--hematoxylin)); transition: width 0.18s ease; }
-  #hp { --fill: var(--you); } #ap { --fill: var(--ink); } #energy { --fill: var(--glucose); } #host { --fill: var(--eosin); }
-  #alert { --fill: var(--ink-soft); }
-  #alert[data-tier="1"] { --fill: var(--glucose); } #alert[data-tier="2"], #alert[data-tier="3"] { --fill: var(--blood); }
-  #alert[data-tier="3"] dd { color: var(--blood); }
-  .actions { display: grid; gap: 8px; }
-  button { font: 600 0.92rem/1.2 var(--body); color: var(--ink); background: var(--slide); border: 1.5px solid var(--ink);
-    border-radius: 6px; padding: 9px 12px; text-align: left; cursor: pointer; }
-  button:hover:not(:disabled) { background: var(--eosin-soft); }
-  button:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
-  button:disabled { opacity: 0.38; cursor: default; }
-  button small { display: block; font-weight: 400; color: var(--ink-soft); font-size: 0.78rem; }
-  #strip { border-color: var(--blood); } #end { background: var(--ink); color: var(--slide); }
-  #end:hover:not(:disabled) { background: var(--hematoxylin); }
-  #leave { background: var(--you); border-color: var(--you); color: var(--slide); }
-  #leave:hover { background: var(--ink); }
-  h2 { font: 600 0.72rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 6px; }
-  #log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.86rem; max-height: 13.5em; overflow-y: auto; }
-  #log li { color: var(--ink-soft); } #log li:last-child { color: var(--ink); font-weight: 600; }
-  .key { font-size: 0.82rem; color: var(--ink-soft); margin: 0; }
-  .key b { color: var(--ink); font-weight: 600; }
-  kbd { font: 500 0.78rem var(--data); border: 1px solid var(--eosin); border-radius: 3px; padding: 0 4px; background: var(--slide); color: var(--ink); }
-  #over { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(251, 241, 245, 0.86); border-radius: 6px; padding: 16px; }
-  #over div { max-width: 26rem; text-align: center; display: grid; gap: 10px; justify-items: center; }
-  #over h3 { font: 800 1.6rem/1.1 var(--display); margin: 0; color: var(--hematoxylin); text-wrap: balance; }
-  #over p { margin: 0; }
-  @media (max-width: 820px) { .bench { grid-template-columns: minmax(0, 1fr); } .actions { grid-template-columns: 1fr 1fr; } }
-  @media (prefers-reduced-motion: reduce) { .track i { transition: none; } }
+  .stage { position: relative; height: 100%; min-height: 420px; border: 1px solid var(--seam); border-radius: 4px; overflow: hidden; background: var(--void); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; outline: none; }
+  .hud { position: absolute; pointer-events: none; }
+  .hud button { pointer-events: auto; }
+  .name { top: 12px; left: 14px; display: grid; gap: 2px; }
+  h1 { font: 800 1.25rem/1 var(--display); letter-spacing: 0.08em; margin: 0; color: var(--bone); text-shadow: 0 2px 8px #000; }
+  .where { font: 500 0.68rem/1.2 var(--data); letter-spacing: 0.1em; text-transform: uppercase; color: var(--bone-dim); }
+  .gauges { top: 12px; left: 50%; transform: translateX(-50%); width: min(340px, 44%); display: grid; gap: 7px; }
+  .gauge { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: baseline; }
+  .gauge span { font: 600 0.62rem/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--bone-dim); }
+  .gauge b { font: 700 0.72rem/1 var(--data); color: var(--bone); }
+  .gauge i { grid-column: 1 / -1; height: 6px; background: var(--clot); border: 1px solid var(--seam); border-radius: 3px; overflow: hidden; display: block; }
+  .gauge i u { display: block; height: 100%; width: 0; background: var(--fill); transition: width 0.2s; }
+  #host { --fill: #c9768a; } #alert { --fill: var(--bone-dim); }
+  #alert[data-tier="1"] { --fill: var(--amber); } #alert[data-tier="2"], #alert[data-tier="3"] { --fill: var(--blood); }
+  #alert[data-tier="3"] b { color: var(--blood); }
+  .tools { top: 10px; right: 12px; }
+  button { font: 600 0.8rem/1.2 var(--display); letter-spacing: 0.08em; color: var(--bone); background: var(--clot); border: 1px solid var(--seam);
+    border-radius: 3px; padding: 9px 14px; cursor: pointer; }
+  button:hover { border-color: var(--bone-dim); }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  #map[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+  .orb { bottom: 14px; width: 84px; height: 84px; border-radius: 50%; border: 2px solid var(--seam); background: var(--clot); overflow: hidden;
+    box-shadow: inset 0 0 18px #000, 0 4px 18px #000; display: grid; place-items: center; }
+  .orb u { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--fill); transition: height 0.2s; }
+  .orb b { position: relative; font: 700 1.05rem/1 var(--data); color: #fff; text-shadow: 0 1px 4px #000, 0 0 2px #000; text-align: center; }
+  .orb b small { display: block; font: 600 0.5rem/1.6 var(--display); letter-spacing: 0.16em; text-transform: uppercase; }
+  #hp { left: 14px; --fill: linear-gradient(#f0554a, #8e1712); } #energy { right: 14px; --fill: linear-gradient(#f6cf5a, #a87708); }
+  .belt { left: 110px; right: 110px; bottom: 16px; display: grid; justify-items: center; gap: 8px; }
+  #log { margin: 0; white-space: pre-line; text-align: center; font-style: italic; color: var(--bone); text-shadow: 0 1px 6px #000, 0 0 3px #000; min-height: 1.45em; }
+  .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  #act-e { border-color: var(--amber); } #act-f { border-color: var(--blood); }
+  #need { margin: 0; font-size: 0.9rem; color: var(--vein); text-shadow: 0 1px 6px #000; }
+  .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.84); padding: 16px; overflow-y: auto; }
+  .card { max-width: 34rem; display: grid; gap: 14px; justify-items: start; }
+  .card h2 { font: 800 clamp(1.7rem, 5vw, 2.6rem)/1.05 var(--display); letter-spacing: 0.05em; margin: 0; text-wrap: balance; }
+  .card p { margin: 0; color: var(--bone); max-width: 60ch; }
+  .card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 0.95rem; }
+  .card dt { font: 500 0.78rem/1.7 var(--data); color: var(--amber); white-space: nowrap; }
+  .card dd { margin: 0; color: var(--bone-dim); }
+  .card button { font-size: 0.95rem; padding: 12px 22px; border-color: var(--amber); color: var(--amber); }
+  @media (max-width: 560px) {
+    .gauges { top: 48px; left: 14px; transform: none; width: calc(100% - 28px); }
+    .orb { width: 64px; height: 64px; } .belt { left: 84px; right: 84px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .gauge i u, .orb u { transition: none; } }
 </style>
-<div class="app">
-  <header>
-    <h1>Insiderim</h1>
-    <span class="specimen">Liver lobule &middot; cell tier &middot; about 10 micrometres per tile &middot; <span id="turn">Turn 1</span></span>
-  </header>
-  <div class="bench">
-    <div class="stage">
-      <canvas id="board" aria-label="Map of a liver lobule. Use the arrow keys to move."></canvas>
-      <p id="hint">&nbsp;</p>
-      <div id="over" hidden>
-        <div>
-          <h3 id="over-title"></h3>
-          <p id="over-body"></p>
-          <button id="again" type="button">Go in again</button>
-        </div>
-      </div>
+<div class="stage">
+  <canvas id="board" tabindex="0" aria-label="Isometric view of liver tissue around you"></canvas>
+  <div class="hud name"><h1>Insiderim</h1><span class="where">Liver lobule &middot; cell tier</span></div>
+  <div class="hud gauges">
+    <div class="gauge" id="host"><span>Host health</span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
+    <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
+  </div>
+  <div class="hud tools"><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
+  <div class="hud orb" id="hp"><u id="hp-fill"></u><b><span id="hp-val"></span><small>Life</small></b></div>
+  <div class="hud orb" id="energy"><u id="energy-fill"></u><b><span id="energy-val"></span><small>Energy</small></b></div>
+  <div class="hud belt">
+    <p id="log"></p>
+    <p id="need" hidden>The central vein. You need 20 energy to ride it out.</p>
+    <div class="acts">
+      <button id="act-e" type="button" hidden>E  Skim glucose</button>
+      <button id="act-f" type="button" hidden>F  Strip mitochondria</button>
     </div>
-    <aside class="notes">
-      <dl class="meters">
-        <div class="meter" id="hp"><dt>You</dt><dd id="hp-val"></dd><div class="track"><i id="hp-bar"></i></div></div>
-        <div class="meter" id="ap"><dt>Action points</dt><dd id="ap-val"></dd><div class="track"><i id="ap-bar"></i></div></div>
-        <div class="meter" id="energy"><dt>Energy for the trip out</dt><dd id="energy-val"></dd><div class="track"><i id="energy-bar"></i></div></div>
-        <div class="meter" id="host"><dt>Host health</dt><dd id="host-val"></dd><div class="track"><i id="host-bar"></i></div></div>
-        <div class="meter" id="alert"><dt>Immune alert</dt><dd id="alert-val"></dd><div class="track"><i id="alert-bar"></i></div></div>
+  </div>
+  <div class="veil" id="intro">
+    <div class="card">
+      <h2>You are ten micrometres tall and inside a liver</h2>
+      <p>Somewhere in this tissue is the central vein, your way back out. Riding it takes 20 energy. Sip glucose from the blood where it glows amber, or tear the mitochondria out of the host's own cells: five energy at once, and every immune cell nearby comes looking.</p>
+      <dl>
+        <dt>Click / hold</dt><dd>Walk. You can only see what your lamp reaches.</dd>
+        <dt>W A S D</dt><dd>Walk, if you prefer keys.</dd>
+        <dt>Click enemy</dt><dd>Close in and strike. <b>Space</b> swings at whatever is nearest.</dd>
+        <dt>Right-click</dt><dd>Fire toward the cursor. Costs 1 energy. <b>Q</b> does the same.</dd>
+        <dt>E</dt><dd>Skim glucose while standing on it. At the vein, leave.</dd>
+        <dt>F</dt><dd>Strip the nearest living cell. It dies and leaves a gap you can walk through.</dd>
+        <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>
       </dl>
-      <div class="actions">
-        <button id="skim" type="button">Skim glucose (G)<small>+1 energy, harmless, slow</small></button>
-        <button id="strip" type="button">Strip mitochondria (M)</button>
-        <button id="leave" type="button" hidden>Ride the central vein out (V)</button>
-        <button id="end" type="button">End turn (Space)</button>
-      </div>
-      <section>
-        <h2>What just happened</h2>
-        <ol id="log"></ol>
-      </section>
-      <p class="key">
-        <b>Goal:</b> collect 12 energy, then reach the blue <b>V</b> in the middle.
-        Click a tile or use <kbd>WASD</kbd> / arrows to move. Click an immune cell to attack: a strike if you are next to it, a shot (1 energy) from range.
-        Yellow hexagons are glucose. Stand next to a pink hepatocyte to strip it: +5 energy at once, but the cell dies, the host suffers, and everything comes looking.
-        Lilac cells with three-lobed nuclei are neutrophils; the amber stars are Kupffer cells, the liver's resident macrophages.
-      </p>
-    </aside>
+      <button id="begin" type="button">Enter the liver</button>
+    </div>
+  </div>
+  <div class="veil" id="over" hidden>
+    <div class="card">
+      <h2 id="over-title"></h2>
+      <p id="over-body"></p>
+      <button id="again" type="button">Go in again</button>
+    </div>
   </div>
 </div>
 <script>/*__GAME__*/</script>

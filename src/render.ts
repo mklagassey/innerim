@@ -1,132 +1,258 @@
-// Draws the liver as a stained tissue slide: pink hepatocytes with purple nuclei,
-// pale sinusoids between them. Placeholder shapes only.
+// Draws the liver in isometric view, lit only by what the player can see. Tissue you have
+// visited but cannot see right now is drawn from memory: dim and drained of colour.
 import { CONFIG } from './config';
-import { State, Point, key } from './game';
+import { Enemy, Point, State, idx, stripTarget } from './game';
 
-export const TILE = 32;
-const C = {
-  slide: '#fbf1f5', cell: '#eaa0bd', cellEdge: '#d87fa4', nucleus: '#5a3391',
-  dead: '#cfc3d3', deadBits: '#8d7f99', glucose: '#d9a400', blood: '#c2392f',
-  vein: '#3f5fb5', player: '#0c8f8a', playerEdge: '#075e5b', neutrophil: '#b9a5e6',
-  kupffer: '#c9862f', ink: '#2a1840', path: 'rgba(12,143,138,0.28)', pick: '#0c8f8a',
-  danger: '#c2392f', white: '#ffffff',
-};
+export const TW = 64, TH = 32;
+const WALL = 24;
+type RGB = readonly [number, number, number];
+const INK: RGB = [10, 4, 7];
+const FLOOR: RGB = [112, 30, 40], CELL_TOP: RGB = [186, 108, 118], CELL_L: RGB = [128, 62, 78], CELL_R: RGB = [92, 42, 60];
+const NUCLEUS: RGB = [62, 34, 92], DEAD: RGB = [74, 58, 70], AMBER: RGB = [236, 180, 46];
 
-export interface View {
-  hoverPath: Point[];
-  reach: number; // how many path tiles the player can afford
-  pick: Point[]; // hepatocytes that can be stripped right now
-  picked: Point | null;
-  tween: Map<number, Point>; // enemy id -> drawn position while the world's turn animates
-  targetId: number | null;
+export interface View { w: number; h: number; zoom: number; time: number; showMap: boolean; hover: Point | null; hoverEnemy: number | null }
+
+export const project = (x: number, y: number): Point => ({ x: ((x - y) * TW) / 2, y: ((x + y) * TH) / 2 });
+
+const cache = new Map<string, string>();
+/** A colour at a given brightness. Remembered tissue loses most of its colour. */
+function tint(c: RGB, light: number, memory = false): string {
+  const q = Math.round(light * 16);
+  const k = `${c[0]},${c[1]},${c[2]},${q},${memory ? 1 : 0}`;
+  let out = cache.get(k);
+  if (!out) {
+    const l = q / 16, grey = (c[0] + c[1] + c[2]) / 3;
+    const ch = (v: number, cold: number) => Math.round(INK[0] + ((memory ? v * 0.35 + grey * 0.65 + cold : v) - INK[0]) * l);
+    out = `rgb(${ch(c[0], -6)},${ch(c[1], 0)},${ch(c[2], 10)})`;
+    cache.set(k, out);
+  }
+  return out;
+}
+const hash = (x: number, y: number) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 1000 / 1000;
+
+function diamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, lift = 0, grow = 0) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - TH / 2 - lift - grow);
+  ctx.lineTo(cx + TW / 2 + grow * 2, cy - lift);
+  ctx.lineTo(cx, cy + TH / 2 - lift + grow);
+  ctx.lineTo(cx - TW / 2 - grow * 2, cy - lift);
+  ctx.closePath();
+}
+function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number) {
+  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
 }
 
 export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
-  const T = TILE;
-  ctx.fillStyle = C.slide;
-  ctx.fillRect(0, 0, s.width * T, s.height * T);
+  const p = s.player, R = CONFIG.player.vision;
+  ctx.fillStyle = `rgb(${INK[0]},${INK[1]},${INK[2]})`;
+  ctx.fillRect(0, 0, v.w, v.h);
+  ctx.save();
+  const cam = project(p.x, p.y);
+  ctx.translate(v.w / 2, v.h / 2);
+  ctx.scale(v.zoom, v.zoom);
+  ctx.translate(-cam.x, -cam.y);
 
-  for (let y = 0; y < s.height; y++) {
-    for (let x = 0; x < s.width; x++) {
-      const t = s.tiles[y][x], px = x * T, py = y * T;
+  const span = Math.ceil((v.w / v.zoom / TW + v.h / v.zoom / TH)) + 2;
+  const px = Math.floor(p.x), py = Math.floor(p.y);
+  const light = (x: number, y: number) => {
+    const d = Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y) / (R + 0.5);
+    return Math.max(0.34, 1 - 0.66 * d * d);
+  };
+  const target = stripTarget(s);
+  const things: { depth: number; draw: () => void }[] = [];
+
+  for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
+    for (let x = Math.max(0, px - span); x <= Math.min(s.size - 1, px + span); x++) {
+      const i = idx(s, x, y);
+      if (!s.explored[i]) continue;
+      const c = project(x + 0.5, y + 0.5);
+      if (Math.abs(c.x - cam.x) > v.w / v.zoom / 2 + TW || Math.abs(c.y - cam.y) > v.h / v.zoom / 2 + TH * 2) continue;
+      const vis = s.visible[i] === 1, l = vis ? light(x, y) : 0.3, t = s.tiles[i];
       if (t === 'cell') {
-        ctx.fillStyle = C.cell;
-        round(ctx, px + 1, py + 1, T - 2, T - 2, 7); ctx.fill();
-        ctx.strokeStyle = C.cellEdge; ctx.lineWidth = 1; ctx.stroke();
-        ctx.fillStyle = C.nucleus;
-        // Nuclei sit a little off-centre, differently in each cell, like real tissue.
-        const ox = ((x * 7 + y * 3) % 5) - 2, oy = ((x * 5 + y * 11) % 5) - 2;
-        dot(ctx, px + T / 2 + ox, py + T / 2 + oy, 5);
-      } else if (t === 'dead') {
-        ctx.fillStyle = C.dead;
-        round(ctx, px + 2, py + 2, T - 4, T - 4, 7); ctx.fill();
-        ctx.fillStyle = C.deadBits;
-        for (let i = 0; i < 5; i++) dot(ctx, px + 7 + ((i * 11 + x * 3) % 18), py + 7 + ((i * 7 + y * 5) % 18), 1.6);
-      } else if (t === 'portal' || t === 'vein') {
-        ctx.strokeStyle = t === 'portal' ? C.blood : C.vein;
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(px + T / 2, py + T / 2, T / 2 - 5, 0, Math.PI * 2); ctx.stroke();
-        label(ctx, t === 'portal' ? 'P' : 'V', px + T / 2, py + T / 2, ctx.strokeStyle as string, 12);
+        const hit = !!target && target.x === x && target.y === y;
+        const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
+        things.push({ depth: x + y + 1, draw: () => cell(ctx, c, x, y, l, !vis, hit, dying) });
+        continue;
       }
-      const g = s.glucose.get(key(x, y));
+      // Sinusoid floor: blood plasma, a little uneven from tile to tile.
+      ctx.fillStyle = tint(t === 'dead' ? DEAD : FLOOR, l * (0.86 + hash(x, y) * 0.14), !vis);
+      diamond(ctx, c.x, c.y, 0, 0.6); ctx.fill();
+      if (t === 'dead') {
+        ctx.fillStyle = tint(NUCLEUS, l, !vis);
+        for (let k = 0; k < 5; k++) { oval(ctx, c.x - 16 + hash(x + k, y) * 32, c.y - 6 + hash(x, y + k) * 12, 2.2, 1.2); ctx.fill(); }
+      }
+      const g = s.glucose.get(i);
       if (g !== undefined) {
-        for (let i = 0; i < CONFIG.energy.patchMax; i++) {
-          ctx.fillStyle = i < g ? C.glucose : 'rgba(217,164,0,0.18)';
-          hex(ctx, px + 8 + i * 8, py + (i % 2 ? 21 : 11), 4.5);
+        for (let k = 0; k < CONFIG.energy.patchMax; k++) {
+          const gx = c.x - 12 + k * 12, gy = c.y + (k % 2 ? 3 : -3);
+          ctx.fillStyle = k < g ? tint(AMBER, vis ? 1 : 0.4, !vis) : tint(AMBER, 0.16, true);
+          ctx.beginPath(); ctx.moveTo(gx, gy - 7); ctx.lineTo(gx + 5, gy); ctx.lineTo(gx, gy + 4); ctx.lineTo(gx - 5, gy); ctx.closePath(); ctx.fill();
+        }
+        if (vis && g > 0) {
+          ctx.globalCompositeOperation = 'lighter';
+          const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 34);
+          glow.addColorStop(0, `rgba(236,180,46,${0.2 + 0.06 * Math.sin(v.time * 3)})`); glow.addColorStop(1, 'rgba(236,180,46,0)');
+          ctx.fillStyle = glow; oval(ctx, c.x, c.y, 34, 17); ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
         }
       }
     }
   }
 
-  v.hoverPath.forEach((p, i) => {
-    ctx.fillStyle = i < v.reach ? C.path : 'rgba(42,24,64,0.08)';
-    ctx.fillRect(p.x * T + 4, p.y * T + 4, T - 8, T - 8);
-  });
-  for (const p of v.pick) {
-    const on = v.picked && v.picked.x === p.x && v.picked.y === p.y;
-    ctx.strokeStyle = on ? C.danger : C.pick;
-    ctx.lineWidth = on ? 3 : 2;
-    ctx.setLineDash(on ? [] : [4, 3]);
-    round(ctx, p.x * T + 2, p.y * T + 2, T - 4, T - 4, 7); ctx.stroke();
-    ctx.setLineDash([]);
+  // Vessels: the vein you came for, and the portals the immune system arrives through.
+  const vessel = (at: Point, rgb: string, size: number) => {
+    if (!s.explored[idx(s, at.x, at.y)]) return;
+    const c = project(at.x + 0.5, at.y + 0.5), on = s.visible[idx(s, at.x, at.y)] === 1;
+    ctx.globalAlpha = on ? 1 : 0.35;
+    for (let k = 0; k < 3; k++) {
+      const r = size * (1 - ((v.time * 0.35 + k / 3) % 1));
+      ctx.strokeStyle = `rgba(${rgb},${0.25 + 0.5 * (r / size)})`; ctx.lineWidth = 2.5;
+      oval(ctx, c.x, c.y, r, r / 2); ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(${rgb},0.9)`; oval(ctx, c.x, c.y, size * 0.22, size * 0.11); ctx.fill();
+    ctx.globalAlpha = 1;
+  };
+  vessel(s.vein, '86,128,255', 58);
+  for (const portal of s.portals) vessel(portal, '226,58,48', 36);
+
+  // Your own light on the floor.
+  ctx.globalCompositeOperation = 'lighter';
+  const lamp = ctx.createRadialGradient(cam.x, cam.y, 0, cam.x, cam.y, 150);
+  lamp.addColorStop(0, 'rgba(255,214,170,0.20)'); lamp.addColorStop(1, 'rgba(255,214,170,0)');
+  ctx.fillStyle = lamp; oval(ctx, cam.x, cam.y, 150, 75); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+
+  if (v.hover && s.explored[idx(s, Math.floor(v.hover.x), Math.floor(v.hover.y))] && v.hoverEnemy === null) {
+    const c = project(Math.floor(v.hover.x) + 0.5, Math.floor(v.hover.y) + 0.5);
+    ctx.strokeStyle = 'rgba(255,236,210,0.35)'; ctx.lineWidth = 1.5; diamond(ctx, c.x, c.y, 0, -3); ctx.stroke();
   }
 
   for (const e of s.enemies) {
-    const at = v.tween.get(e.id) ?? e;
-    const cx = at.x * T + T / 2, cy = at.y * T + T / 2;
-    if (e.kind === 'neutrophil') {
-      ctx.fillStyle = C.neutrophil; dot(ctx, cx, cy, 11);
-      ctx.strokeStyle = C.nucleus; ctx.lineWidth = 1; ctx.stroke();
-      // The three-lobed nucleus is how you tell a neutrophil on a real slide.
-      ctx.fillStyle = C.nucleus;
-      dot(ctx, cx - 4, cy + 2, 3.2); dot(ctx, cx, cy - 3, 3.2); dot(ctx, cx + 4, cy + 2, 3.2);
-    } else {
-      ctx.fillStyle = C.kupffer; star(ctx, cx, cy, 14, 9, 7); ctx.fill();
-      ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = C.ink; dot(ctx, cx, cy, 4);
-    }
-    const max = CONFIG.enemies[e.kind].hp;
-    ctx.fillStyle = 'rgba(42,24,64,0.25)'; ctx.fillRect(cx - 11, cy + 13, 22, 3);
-    ctx.fillStyle = C.danger; ctx.fillRect(cx - 11, cy + 13, 22 * (e.hp / max), 3);
-    if (e.mood !== 'patrol') label(ctx, e.mood === 'chase' ? '!' : '?', cx + 11, cy - 11, C.danger, 14);
-    if (v.targetId === e.id) {
-      ctx.strokeStyle = C.danger; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(cx, cy, 15, 0, Math.PI * 2); ctx.stroke();
-    }
+    if (!s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) continue;
+    things.push({ depth: e.x + e.y, draw: () => enemy(ctx, e, v) });
   }
+  things.push({ depth: p.x + p.y, draw: () => hero(ctx, s, v) });
+  things.sort((a, b) => a.depth - b.depth);
+  for (const t of things) t.draw();
 
-  const px = s.player.x * T + T / 2, py = s.player.y * T + T / 2;
-  ctx.fillStyle = C.player; round(ctx, px - 9, py - 9, 18, 18, 4); ctx.fill();
-  ctx.strokeStyle = C.playerEdge; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = C.white; dot(ctx, px, py, 3);
-}
-
-function round(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-function dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-}
-function hex(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) ctx.lineTo(x + r * Math.cos((Math.PI / 3) * i), y + r * Math.sin((Math.PI / 3) * i));
-  ctx.closePath(); ctx.fill();
-}
-function star(ctx: CanvasRenderingContext2D, x: number, y: number, R: number, r: number, n: number) {
-  ctx.beginPath();
-  for (let i = 0; i < n * 2; i++) {
-    const rad = i % 2 ? r : R, a = (Math.PI / n) * i;
-    ctx.lineTo(x + rad * Math.cos(a), y + rad * Math.sin(a));
+  for (const shot of s.shots) {
+    const c = project(shot.x, shot.y), tail = project(shot.x - shot.vx * 0.04, shot.y - shot.vy * 0.04);
+    ctx.strokeStyle = 'rgba(190,255,245,0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(tail.x, tail.y - 14); ctx.lineTo(c.x, c.y - 14); ctx.stroke();
   }
-  ctx.closePath();
+  ctx.textAlign = 'center';
+  for (const f of s.floats) {
+    const c = project(f.x, f.y);
+    ctx.globalAlpha = 1 - f.age / 0.9;
+    ctx.font = '700 15px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, c.x, c.y - 34 - f.age * 34);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // Darkness closing in at the edge of what you can see.
+  const dark = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.2, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.62);
+  dark.addColorStop(0, 'rgba(10,4,7,0)'); dark.addColorStop(1, 'rgba(10,4,7,0.8)');
+  ctx.fillStyle = dark; ctx.fillRect(0, 0, v.w, v.h);
+
+  if (v.showMap) automap(ctx, s, v);
 }
-function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, size: number) {
-  ctx.fillStyle = color;
-  ctx.font = `700 ${size}px "IBM Plex Mono", ui-monospace, monospace`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, y + 1);
+
+function cell(ctx: CanvasRenderingContext2D, c: Point, x: number, y: number, l: number, memory: boolean, target: boolean, dying: number) {
+  const lift = WALL * (1 - dying * 0.5);
+  ctx.fillStyle = tint(CELL_L, l, memory);
+  ctx.beginPath(); ctx.moveTo(c.x - TW / 2 - 1, c.y); ctx.lineTo(c.x, c.y + TH / 2 + 0.6); ctx.lineTo(c.x, c.y + TH / 2 - lift); ctx.lineTo(c.x - TW / 2 - 1, c.y - lift); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = tint(CELL_R, l, memory);
+  ctx.beginPath(); ctx.moveTo(c.x + TW / 2 + 1, c.y); ctx.lineTo(c.x, c.y + TH / 2 + 0.6); ctx.lineTo(c.x, c.y + TH / 2 - lift); ctx.lineTo(c.x + TW / 2 + 1, c.y - lift); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = tint(CELL_TOP, l * (0.9 + hash(x, y) * 0.1), memory);
+  diamond(ctx, c.x, c.y, lift, 0.6); ctx.fill();
+  ctx.fillStyle = tint(NUCLEUS, l, memory);
+  oval(ctx, c.x + (hash(x, y) - 0.5) * 12, c.y - lift + (hash(y, x) - 0.5) * 5, 8, 4.2); ctx.fill();
+  if (target) {
+    ctx.strokeStyle = dying ? '#ff5a4d' : 'rgba(236,180,46,0.95)'; ctx.lineWidth = 2;
+    diamond(ctx, c.x, c.y, lift, -2); ctx.stroke();
+  }
+}
+
+function enemy(ctx: CanvasRenderingContext2D, e: Enemy, v: View) {
+  const c = project(e.x, e.y), kup = e.kind === 'kupffer';
+  const bob = Math.sin(v.time * (kup ? 2 : 5) + e.id) * (kup ? 1 : 2);
+  const wind = e.windup >= 0 ? 1 - e.windup / CONFIG.enemies[e.kind].windup : 0;
+  const r = (kup ? 17 : 11) * (1 + wind * 0.25);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, r * 0.95, r * 0.42); ctx.fill();
+  const cy = c.y - r - 2 + bob;
+  const body = ctx.createRadialGradient(c.x - r * 0.35, cy - r * 0.4, 1, c.x, cy, r);
+  const flash = e.flash > 0;
+  if (kup) { body.addColorStop(0, flash ? '#fff' : '#f0bd72'); body.addColorStop(1, flash ? '#fff' : wind ? '#b3401f' : '#8a5a1e'); }
+  else { body.addColorStop(0, flash ? '#fff' : '#efe9ff'); body.addColorStop(1, flash ? '#fff' : wind ? '#b0688f' : '#8f7fc0'); }
+  ctx.fillStyle = body;
+  if (kup) {
+    // A macrophage is never round: it reaches out in every direction at once.
+    ctx.beginPath();
+    for (let k = 0; k <= 28; k++) {
+      const a = (k / 28) * Math.PI * 2, rr = r * (1 + 0.2 * Math.sin(a * 7 + v.time * 2.2 + e.id));
+      ctx.lineTo(c.x + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3a1f10'; oval(ctx, c.x + 2, cy + 1, 6, 5); ctx.fill();
+  } else {
+    oval(ctx, c.x, cy, r, r); ctx.fill();
+    // The three-lobed nucleus is how you tell a neutrophil on a real slide.
+    ctx.fillStyle = '#3e225c';
+    for (const [dx, dy] of [[-4, 2], [0, -3.5], [4, 2]]) { oval(ctx, c.x + dx, cy + dy, 3.3, 3.3); ctx.fill(); }
+  }
+  const max = CONFIG.enemies[e.kind].hp;
+  if (e.hp < max || v.hoverEnemy === e.id) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(c.x - 14, cy - r - 9, 28, 4);
+    ctx.fillStyle = '#e23a30'; ctx.fillRect(c.x - 14, cy - r - 9, 28 * (e.hp / max), 4);
+  }
+  if (v.hoverEnemy === e.id) { ctx.strokeStyle = 'rgba(255,90,77,0.9)'; ctx.lineWidth = 2; oval(ctx, c.x, c.y, r * 1.15, r * 0.52); ctx.stroke(); }
+}
+
+function hero(ctx: CanvasRenderingContext2D, s: State, v: View) {
+  const p = s.player, c = project(p.x, p.y);
+  const f = project(p.face.x, p.face.y), fl = Math.hypot(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
+  const moving = p.path.length > 0, step = moving ? Math.sin(v.time * 16) * 1.5 : 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; oval(ctx, c.x, c.y, 9, 4.5); ctx.fill();
+  if (p.swing > 0) {
+    const a = Math.atan2(fy, fx), t = 1 - p.swing / 0.18;
+    ctx.strokeStyle = `rgba(255,244,225,${0.9 - t * 0.6})`; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.ellipse(c.x, c.y - 10, 34, 19, 0, a - 1.1 + t * 0.5, a - 0.2 + t * 1.3); ctx.stroke();
+  }
+  const suit = p.hurt > 0 ? '#ff7a6e' : '#dfeee9';
+  ctx.strokeStyle = '#2a3b3d'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(c.x - 3, c.y - 8); ctx.lineTo(c.x - 3, c.y - 1 + step); ctx.moveTo(c.x + 3, c.y - 8); ctx.lineTo(c.x + 3, c.y - 1 - step); ctx.stroke();
+  ctx.fillStyle = suit; ctx.beginPath(); ctx.roundRect(c.x - 6, c.y - 21, 12, 15, 5); ctx.fill();
+  ctx.fillStyle = '#9fb6b1'; ctx.beginPath(); ctx.roundRect(c.x - 4 - fx * 5, c.y - 20 - fy * 2, 8, 10, 3); ctx.fill(); // air pack
+  ctx.fillStyle = suit; oval(ctx, c.x, c.y - 26, 6, 6); ctx.fill();
+  ctx.fillStyle = '#1c2b33'; oval(ctx, c.x + fx * 2.6, c.y - 26 + fy * 1.6, 3.6, 3.2); ctx.fill(); // visor
+  ctx.fillStyle = 'rgba(255,224,170,0.95)'; oval(ctx, c.x + fx * 7, c.y - 17 + fy * 4, 1.8, 1.8); ctx.fill(); // lamp
+  if (p.channel) {
+    const t = p.channel.t / p.channel.total;
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(c.x, c.y - 44, 9, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = p.channel.kind === 'strip' ? '#ff5a4d' : '#ecb42e'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(c.x, c.y - 44, 9, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
+  }
+}
+
+/** The overlay map: only the tissue you have actually seen. */
+function automap(ctx: CanvasRenderingContext2D, s: State, v: View) {
+  const u = Math.max(4, Math.min(8, Math.min(v.w, v.h) / 95)), p = s.player;
+  const at = (x: number, y: number) => ({ x: v.w / 2 + (x - y - (p.x - p.y)) * u, y: v.h / 2 + (x + y - (p.x + p.y)) * u * 0.5 });
+  const dot = (x: number, y: number, r: number, color: string) => { const c = at(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fill(); };
+  ctx.fillStyle = 'rgba(10,4,7,0.35)'; ctx.fillRect(0, 0, v.w, v.h);
+  for (let y = 0; y < s.size; y++)
+    for (let x = 0; x < s.size; x++) {
+      const i = idx(s, x, y);
+      if (!s.explored[i] || s.tiles[i] === 'cell') continue;
+      const c = at(x + 0.5, y + 0.5);
+      ctx.fillStyle = s.visible[i] ? 'rgba(255,226,190,0.5)' : 'rgba(255,226,190,0.26)';
+      ctx.beginPath(); ctx.moveTo(c.x, c.y - u * 0.5); ctx.lineTo(c.x + u, c.y); ctx.lineTo(c.x, c.y + u * 0.5); ctx.lineTo(c.x - u, c.y); ctx.closePath(); ctx.fill();
+    }
+  for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
+  for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
+  if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
+  for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
+  dot(p.x, p.y, u * 0.8, '#ffffff');
 }
