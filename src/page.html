@@ -1,0 +1,119 @@
+<title>Insiderim Liver Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+  /* Layout: a stained tissue slide on the left, the lab notes for it on the right; notes drop below on a phone.
+     One look on purpose: the palette is an H&E stain, which only exists on a light slide. */
+  :root {
+    color-scheme: light;
+    --slide: #fbf1f5;        /* unstained glass */
+    --mount: #f1dfe8;        /* the page around the slide */
+    --eosin: #d87fa4;        /* cytoplasm pink */
+    --eosin-soft: #f4cfde;
+    --hematoxylin: #5a3391;  /* nucleus purple */
+    --ink: #2a1840;
+    --ink-soft: #6a587c;
+    --you: #0c8f8a;          /* the one thing in here that is not tissue */
+    --blood: #c2392f;
+    --glucose: #b88a00;
+    --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--mount); color: var(--ink); font: 400 15px/1.45 var(--body);
+    padding-block: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
+  }
+  .app { max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: 12px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+  h1 { font: 800 clamp(1.5rem, 3.4vw, 2.1rem)/1 var(--display); letter-spacing: -0.02em; margin: 0; color: var(--hematoxylin); }
+  .specimen { font: 500 0.78rem/1.3 var(--data); color: var(--ink-soft); letter-spacing: 0.04em; text-transform: uppercase; }
+  .bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  .stage { min-width: 0; display: flex; flex-direction: column; gap: 6px; position: relative; }
+  canvas { width: 100%; height: auto; display: block; border-radius: 6px; background: var(--slide);
+    box-shadow: 0 0 0 1px var(--eosin-soft), 0 10px 30px -18px var(--hematoxylin); cursor: crosshair; touch-action: manipulation; }
+  #hint { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.45em; margin: 0; }
+  .notes { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .meters { display: grid; gap: 8px; margin: 0; }
+  .meter { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: baseline; }
+  .meter dt { font: 600 0.72rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+  .meter dd { margin: 0; font: 700 0.85rem/1 var(--data); font-variant-numeric: tabular-nums; }
+  .track { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: var(--eosin-soft); overflow: hidden; }
+  .track i { display: block; height: 100%; width: 0; background: var(--fill, var(--hematoxylin)); transition: width 0.18s ease; }
+  #hp { --fill: var(--you); } #ap { --fill: var(--ink); } #energy { --fill: var(--glucose); } #host { --fill: var(--eosin); }
+  #alert { --fill: var(--ink-soft); }
+  #alert[data-tier="1"] { --fill: var(--glucose); } #alert[data-tier="2"], #alert[data-tier="3"] { --fill: var(--blood); }
+  #alert[data-tier="3"] dd { color: var(--blood); }
+  .actions { display: grid; gap: 8px; }
+  button { font: 600 0.92rem/1.2 var(--body); color: var(--ink); background: var(--slide); border: 1.5px solid var(--ink);
+    border-radius: 6px; padding: 9px 12px; text-align: left; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--eosin-soft); }
+  button:focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
+  button:disabled { opacity: 0.38; cursor: default; }
+  button small { display: block; font-weight: 400; color: var(--ink-soft); font-size: 0.78rem; }
+  #strip { border-color: var(--blood); } #end { background: var(--ink); color: var(--slide); }
+  #end:hover:not(:disabled) { background: var(--hematoxylin); }
+  #leave { background: var(--you); border-color: var(--you); color: var(--slide); }
+  #leave:hover { background: var(--ink); }
+  h2 { font: 600 0.72rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 6px; }
+  #log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.86rem; max-height: 13.5em; overflow-y: auto; }
+  #log li { color: var(--ink-soft); } #log li:last-child { color: var(--ink); font-weight: 600; }
+  .key { font-size: 0.82rem; color: var(--ink-soft); margin: 0; }
+  .key b { color: var(--ink); font-weight: 600; }
+  kbd { font: 500 0.78rem var(--data); border: 1px solid var(--eosin); border-radius: 3px; padding: 0 4px; background: var(--slide); color: var(--ink); }
+  #over { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(251, 241, 245, 0.86); border-radius: 6px; padding: 16px; }
+  #over div { max-width: 26rem; text-align: center; display: grid; gap: 10px; justify-items: center; }
+  #over h3 { font: 800 1.6rem/1.1 var(--display); margin: 0; color: var(--hematoxylin); text-wrap: balance; }
+  #over p { margin: 0; }
+  @media (max-width: 820px) { .bench { grid-template-columns: minmax(0, 1fr); } .actions { grid-template-columns: 1fr 1fr; } }
+  @media (prefers-reduced-motion: reduce) { .track i { transition: none; } }
+</style>
+<div class="app">
+  <header>
+    <h1>Insiderim</h1>
+    <span class="specimen">Liver lobule &middot; cell tier &middot; about 10 micrometres per tile &middot; <span id="turn">Turn 1</span></span>
+  </header>
+  <div class="bench">
+    <div class="stage">
+      <canvas id="board" aria-label="Map of a liver lobule. Use the arrow keys to move."></canvas>
+      <p id="hint">&nbsp;</p>
+      <div id="over" hidden>
+        <div>
+          <h3 id="over-title"></h3>
+          <p id="over-body"></p>
+          <button id="again" type="button">Go in again</button>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">
+      <dl class="meters">
+        <div class="meter" id="hp"><dt>You</dt><dd id="hp-val"></dd><div class="track"><i id="hp-bar"></i></div></div>
+        <div class="meter" id="ap"><dt>Action points</dt><dd id="ap-val"></dd><div class="track"><i id="ap-bar"></i></div></div>
+        <div class="meter" id="energy"><dt>Energy for the trip out</dt><dd id="energy-val"></dd><div class="track"><i id="energy-bar"></i></div></div>
+        <div class="meter" id="host"><dt>Host health</dt><dd id="host-val"></dd><div class="track"><i id="host-bar"></i></div></div>
+        <div class="meter" id="alert"><dt>Immune alert</dt><dd id="alert-val"></dd><div class="track"><i id="alert-bar"></i></div></div>
+      </dl>
+      <div class="actions">
+        <button id="skim" type="button">Skim glucose (G)<small>+1 energy, harmless, slow</small></button>
+        <button id="strip" type="button">Strip mitochondria (M)</button>
+        <button id="leave" type="button" hidden>Ride the central vein out (V)</button>
+        <button id="end" type="button">End turn (Space)</button>
+      </div>
+      <section>
+        <h2>What just happened</h2>
+        <ol id="log"></ol>
+      </section>
+      <p class="key">
+        <b>Goal:</b> collect 12 energy, then reach the blue <b>V</b> in the middle.
+        Click a tile or use <kbd>WASD</kbd> / arrows to move. Click an immune cell to attack: a strike if you are next to it, a shot (1 energy) from range.
+        Yellow hexagons are glucose. Stand next to a pink hepatocyte to strip it: +5 energy at once, but the cell dies, the host suffers, and everything comes looking.
+        Lilac cells with three-lobed nuclei are neutrophils; the amber stars are Kupffer cells, the liver's resident macrophages.
+      </p>
+    </aside>
+  </div>
+</div>
+<script>/*__GAME__*/</script>
