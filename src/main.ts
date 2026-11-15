@@ -15,8 +15,9 @@ const view: View = { w: 800, h: 600, zoom: 1, dpr: 1, time: 0, showMap: false, h
 const keys = new Set<string>();
 let held = false, pointer: { x: number; y: number } | null = null, retarget = 0;
 
+let sharpness = 2, slowFrames = 0; // drawing detail is dropped on machines that cannot keep up
 function resize() {
-  const r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, sharpness);
   view.w = Math.max(1, r.width); view.h = Math.max(1, r.height);
   canvas.width = Math.round(view.w * dpr); canvas.height = Math.round(view.h * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -221,8 +222,11 @@ function hud() {
 
 let then = performance.now(), walked = 0;
 function frame(now: number) {
-  const dt = Math.min(0.05, (now - then) / 1000);
+  const raw = (now - then) / 1000;
+  const dt = Math.min(0.05, raw);
   then = now;
+  slowFrames = raw > 1 / 30 && raw < 0.25 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
+  if (slowFrames > 90 && sharpness > 1) { sharpness = 1; slowFrames = 0; resize(); }
   view.time += dt;
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }

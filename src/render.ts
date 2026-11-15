@@ -7,7 +7,6 @@ import { CONFIG } from './config';
 import { Enemy, Point, State, cloaked, idx, open, stripTarget, vision } from './game';
 
 export const TW = 64, TH = 32;
-const WALL = 30;
 const INK = '#0a0407';
 
 export interface View {
@@ -30,21 +29,6 @@ function poly(ctx: Ctx, pts: number[]) {
   for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
   ctx.closePath();
 }
-/** An isometric tile outline with softened corners, the way a real cell is never square. */
-function softDiamond(ctx: Ctx, cx: number, cy: number, hw: number, hh: number, r: number) {
-  const pts = [[cx, cy - hh], [cx + hw, cy], [cx, cy + hh], [cx - hw, cy]];
-  ctx.beginPath();
-  for (let i = 0; i < 4; i++) {
-    const p = pts[i], a = pts[(i + 3) % 4], b = pts[(i + 1) % 4];
-    const la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
-    const sx = p[0] + ((a[0] - p[0]) / la) * r, sy = p[1] + ((a[1] - p[1]) / la) * r;
-    const ex = p[0] + ((b[0] - p[0]) / lb) * r, ey = p[1] + ((b[1] - p[1]) / lb) * r;
-    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-    ctx.quadraticCurveTo(p[0], p[1], ex, ey);
-  }
-  ctx.closePath();
-}
-
 // ---------- painted tiles ----------
 
 const sprites = new Map<string, HTMLCanvasElement>();
@@ -70,103 +54,122 @@ function sprite(key: string, w: number, h: number, scale: number, memory: boolea
   return cv;
 }
 
-const CELL_W = TW + 4, CELL_H = TH + WALL + 6, CELL_OX = CELL_W / 2, CELL_OY = WALL + TH / 2 + 3;
+// Each hepatocyte is its own size and height, so a wall of them reads as a heap of cells, not masonry.
+const CELL_VARIANTS = 12;
+const cellHeight = (variant: number) => 20 + ((variant * 7) % 12) * 1.4;
+const cellRadius = (variant: number) => 29 + ((variant * 5) % 7) * 0.8;
+const cellShift = (variant: number) => (((variant * 3) % 5) - 2) * 1.1;
+const CELL_W = TW + 28, CELL_TOP = 46, CELL_H = CELL_TOP + TH + 16, CELL_OX = CELL_W / 2, CELL_OY = CELL_TOP + TH / 2;
 
-/** A hepatocyte: a soft block of pink cytoplasm, granular with mitochondria, with a round nucleus. */
-function paintCell(c: Ctx, variant: number, mask: number) {
-  const r = rand(variant * 31 + mask * 7 + 3), ox = CELL_OX, oy = CELL_OY, top = oy - WALL, hw = TW / 2 + 0.5, hh = TH / 2 + 0.3;
-  // The two faces you can see: the lit one and the one in shadow.
-  let g = c.createLinearGradient(0, top, 0, oy + hh);
-  g.addColorStop(0, '#a35368'); g.addColorStop(0.55, '#7b3850'); g.addColorStop(1, '#3d1526');
-  c.fillStyle = g; poly(c, [ox - hw, top, ox, top + hh, ox, oy + hh, ox - hw, oy]); c.fill();
-  g = c.createLinearGradient(0, top, 0, oy + hh);
-  g.addColorStop(0, '#6e3350'); g.addColorStop(0.55, '#4e2039'); g.addColorStop(1, '#260c1b');
-  c.fillStyle = g; poly(c, [ox + hw, top, ox, top + hh, ox, oy + hh, ox + hw, oy]); c.fill();
-  // Membrane folds running down the faces.
-  for (let i = 0; i < 9; i++) {
-    const u = r(), left = i % 2 === 0, x = left ? ox - hw + u * hw : ox + u * hw;
-    const y0 = left ? top + u * hh : top + hh - u * hh, len = 6 + r() * (WALL - 8);
-    c.strokeStyle = `rgba(${left ? '255,190,200' : '20,5,15'},${0.05 + r() * 0.07})`; c.lineWidth = 0.8 + r();
-    c.beginPath(); c.moveTo(x, y0 + 2 + r() * 6); c.lineTo(x + (r() - 0.5) * 2, y0 + 2 + len); c.stroke();
+/** A closed, slightly lumpy loop: no living membrane is a clean ellipse. */
+function lumpy(c: Ctx, cx: number, cy: number, rx: number, ry: number, seed: number, depth = 0.05, from = 0, to = Math.PI * 2, move = true) {
+  const steps = 40, p1 = seed * 1.7, p2 = seed * 3.1;
+  for (let k = 0; k <= steps; k++) {
+    const a = from + ((to - from) * k) / steps;
+    const w = 1 + depth * Math.sin(a * 3 + p1) + depth * 0.6 * Math.sin(a * 5 + p2);
+    const x = cx + Math.cos(a) * rx * w, y = cy + Math.sin(a) * ry * w;
+    if (k === 0 && move) c.moveTo(x, y); else c.lineTo(x, y);
   }
-  // Red light off the blood pools at the foot of the cell.
-  g = c.createLinearGradient(0, oy - 6, 0, oy + hh);
-  g.addColorStop(0, 'rgba(200,40,50,0)'); g.addColorStop(1, 'rgba(200,40,50,0.22)');
-  c.fillStyle = g; poly(c, [ox - hw, oy - 8, ox, oy + hh - 8, ox + hw, oy - 8, ox + hw, oy, ox, oy + hh, ox - hw, oy]); c.fill();
+}
 
-  // The top: cytoplasm, lit from the upper left.
-  softDiamond(c, ox, top, hw, hh, 6);
-  g = c.createRadialGradient(ox - 10, top - 5, 2, ox, top, 40);
-  g.addColorStop(0, '#e9aab2'); g.addColorStop(0.6, '#c57f8e'); g.addColorStop(1, '#9d5a70');
+/** A hepatocyte: a soft mound of pink cytoplasm, granular with mitochondria, with a round nucleus. */
+function paintCell(c: Ctx, variant: number) {
+  const r = rand(variant * 31 + 3), H = cellHeight(variant), rx = cellRadius(variant), ry = rx / 2;
+  const ox = CELL_OX + cellShift(variant), oy = CELL_OY, top = oy - H, seed = variant * 2.3 + 1;
+  // Tissue packed in behind the cell, so the crevices between neighbours are dark flesh and not holes.
+  c.fillStyle = '#2c0f1c';
+  c.beginPath(); lumpy(c, CELL_OX, oy, 35, 17.5, seed + 9, 0.03); c.closePath(); c.fill();
+  c.fillRect(CELL_OX - 35, oy - H * 0.62, 70, H * 0.62);
+  c.beginPath(); lumpy(c, CELL_OX, oy - H * 0.62, 35, 17.5, seed + 9, 0.03); c.closePath(); c.fill();
+  // Where it presses into the floor.
+  c.save(); c.shadowColor = 'rgba(6,1,4,0.75)'; c.shadowBlur = 9 * spriteScale; c.shadowOffsetY = 3 * spriteScale;
+  c.fillStyle = 'rgba(6,1,4,0.6)'; oval(c, ox, oy + 1, rx * 0.92, ry * 0.92); c.fill(); c.restore();
+
+  // The flank: a bulging wall of membrane, lit from the left and falling into shadow on the right.
+  c.beginPath();
+  lumpy(c, ox, top, rx, ry, seed, 0.05, Math.PI, Math.PI * 2);
+  c.quadraticCurveTo(ox + rx + 3.5, oy - H * 0.45, ox + rx * 0.97, oy);
+  lumpy(c, ox, oy, rx * 0.97, ry * 0.97, seed + 4, 0.04, 0, Math.PI, false);
+  c.quadraticCurveTo(ox - rx - 3.5, oy - H * 0.45, ox - rx, top);
+  c.closePath();
+  let g = c.createLinearGradient(ox - rx, 0, ox + rx, 0);
+  g.addColorStop(0, '#9c5069'); g.addColorStop(0.3, '#a9596f'); g.addColorStop(0.62, '#6b2f49'); g.addColorStop(1, '#2d0f1f');
+  c.fillStyle = g; c.fill();
+  c.save(); c.clip();
+  g = c.createLinearGradient(0, top, 0, oy + ry);
+  g.addColorStop(0, 'rgba(20,4,12,0)'); g.addColorStop(0.75, 'rgba(20,4,12,0.4)'); g.addColorStop(1, 'rgba(150,30,40,0.38)'); // shade, then red light off the blood
+  c.fillStyle = g; c.fillRect(0, 0, CELL_W, CELL_H);
+  // Folds and stretch marks in the membrane.
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI * (0.08 + r() * 0.84), x = ox + Math.cos(a) * rx * 0.98, y0 = top + Math.sin(a) * ry + 3 + r() * 5, len = 4 + r() * (H - 9);
+    c.strokeStyle = `rgba(${x < ox ? '255,200,205' : '15,3,10'},${0.07 + r() * 0.1})`; c.lineWidth = 0.8 + r() * 1.2; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x, y0); c.quadraticCurveTo(x + (r() - 0.5) * 5, y0 + len * 0.5, x + (r() - 0.5) * 3, y0 + len); c.stroke();
+  }
+  c.restore();
+
+  // The crown, domed: brightest up and to the left, darkening as it rolls over the edge.
+  c.beginPath(); lumpy(c, ox, top, rx, ry, seed); c.closePath();
+  g = c.createRadialGradient(ox - rx * 0.3, top - ry * 0.35, 1, ox, top, rx * 1.05);
+  g.addColorStop(0, '#f0b4ba'); g.addColorStop(0.55, '#cf8996'); g.addColorStop(0.9, '#a8627a'); g.addColorStop(1, '#8a4a66');
   c.fillStyle = g; c.fill();
   c.save(); c.clip();
   // Granules: hepatocytes are stuffed with mitochondria and glycogen.
-  for (let i = 0; i < 70; i++) {
-    const u = r() * 2 - 1, v = r() * 2 - 1;
-    if (Math.abs(u) + Math.abs(v) > 0.93) continue;
-    c.fillStyle = r() < 0.6 ? `rgba(120,42,66,${0.18 + r() * 0.3})` : `rgba(255,226,220,${0.12 + r() * 0.22})`;
-    oval(c, ox + u * hw, top + v * hh, 0.5 + r() * 1.1, 0.35 + r() * 0.6, r() * 3); c.fill();
+  for (let i = 0; i < 80; i++) {
+    const a = r() * 6.283, d = Math.sqrt(r()) * 0.93;
+    c.fillStyle = r() < 0.6 ? `rgba(120,42,66,${0.16 + r() * 0.3})` : `rgba(255,228,222,${0.12 + r() * 0.22})`;
+    oval(c, ox + Math.cos(a) * rx * d, top + Math.sin(a) * ry * d, 0.5 + r() * 1.1, 0.35 + r() * 0.6, r() * 3); c.fill();
   }
-  // A fat droplet or two.
-  for (let i = 0; i < 2 + Math.floor(r() * 3); i++) {
-    const u = r() * 1.3 - 0.65, v = r() * 1.3 - 0.65;
-    if (Math.abs(u) + Math.abs(v) > 0.75) continue;
-    c.fillStyle = 'rgba(255,238,225,0.3)'; oval(c, ox + u * hw, top + v * hh, 1.8 + r(), 1 + r() * 0.6); c.fill();
+  for (let i = 0; i < 2 + Math.floor(r() * 3); i++) { // fat droplets
+    const a = r() * 6.283, d = 0.3 + r() * 0.5;
+    c.fillStyle = 'rgba(255,240,228,0.32)'; oval(c, ox + Math.cos(a) * rx * d, top + Math.sin(a) * ry * d, 1.8 + r(), 1 + r() * 0.6); c.fill();
     c.strokeStyle = 'rgba(120,50,70,0.3)'; c.lineWidth = 0.5; c.stroke();
   }
   c.restore();
   // Nucleus, sometimes two: about a quarter of real hepatocytes are binucleate.
   const two = variant % 4 === 3;
-  for (const off of two ? [-8, 8] : [0]) {
-    const nx = ox + off + (r() - 0.5) * (two ? 2 : 10), ny = top + (r() - 0.5) * (two ? 2 : 5), rx = two ? 6 : 8, ry = rx * 0.56;
-    c.fillStyle = 'rgba(60,20,50,0.25)'; oval(c, nx + 1, ny + 1.5, rx + 1, ry + 1); c.fill();
-    g = c.createRadialGradient(nx - rx * 0.35, ny - ry * 0.5, 0.5, nx, ny, rx);
+  for (const off of two ? [-7.5, 7.5] : [0]) {
+    const nx = ox + off + (r() - 0.5) * (two ? 2 : 9), ny = top + (r() - 0.5) * (two ? 2 : 4.5), nrx = two ? 6 : 8, nry = nrx * 0.56;
+    c.fillStyle = 'rgba(60,20,50,0.25)'; oval(c, nx + 1, ny + 1.5, nrx + 1, nry + 1); c.fill();
+    g = c.createRadialGradient(nx - nrx * 0.35, ny - nry * 0.5, 0.5, nx, ny, nrx);
     g.addColorStop(0, '#8a66bd'); g.addColorStop(0.7, '#553784'); g.addColorStop(1, '#2f1c50');
-    c.fillStyle = g; oval(c, nx, ny, rx, ry); c.fill();
+    c.fillStyle = g; oval(c, nx, ny, nrx, nry); c.fill();
     c.strokeStyle = 'rgba(25,12,45,0.7)'; c.lineWidth = 0.8; c.stroke();
     c.fillStyle = '#1c0f33';
-    oval(c, nx + (r() - 0.5) * rx * 0.7, ny + (r() - 0.5) * ry * 0.6, 1.5, 1); c.fill();
-    if (r() < 0.6) { oval(c, nx + (r() - 0.5) * rx, ny + (r() - 0.5) * ry * 0.8, 1, 0.7); c.fill(); }
+    oval(c, nx + (r() - 0.5) * nrx * 0.7, ny + (r() - 0.5) * nry * 0.6, 1.5, 1); c.fill();
+    if (r() < 0.6) { oval(c, nx + (r() - 0.5) * nrx, ny + (r() - 0.5) * nry * 0.8, 1, 0.7); c.fill(); }
   }
-  // Light catching the far edges of the membrane, and a soft crease where the top turns down.
-  c.lineWidth = 1.2; c.lineCap = 'round';
-  c.strokeStyle = 'rgba(255,228,224,0.4)';
-  c.beginPath(); c.moveTo(ox - hw + 5, top - 2); c.lineTo(ox, top - hh + 1); c.lineTo(ox + hw - 5, top - 2); c.stroke();
-  c.strokeStyle = 'rgba(255,205,210,0.22)';
-  c.beginPath(); c.moveTo(ox - hw + 4, top + 2.5); c.lineTo(ox, top + hh); c.lineTo(ox + hw - 4, top + 2.5); c.stroke();
-  // Bile canaliculi: the fine channels where two hepatocytes press together.
-  c.strokeStyle = 'rgba(96,98,34,0.75)'; c.lineWidth = 1.3;
-  if (mask & 1) { c.beginPath(); c.moveTo(ox + hw - 6, top + 3); c.lineTo(ox + 5, top + hh - 2.5); c.stroke(); }
-  if (mask & 2) { c.beginPath(); c.moveTo(ox - hw + 6, top + 3); c.lineTo(ox - 5, top + hh - 2.5); c.stroke(); }
+  // A wet sheen along the far rim and a soft glint on the crown.
+  c.strokeStyle = 'rgba(255,232,228,0.45)'; c.lineWidth = 1.3; c.lineCap = 'round';
+  c.beginPath(); lumpy(c, ox, top, rx - 1.5, ry - 1, seed, 0.05, Math.PI * 1.08, Math.PI * 1.7); c.stroke();
+  c.fillStyle = 'rgba(255,245,240,0.22)'; oval(c, ox - rx * 0.36, top - ry * 0.42, rx * 0.26, ry * 0.2, -0.35); c.fill();
 }
 
-const FLOOR_W = TW + 4, FLOOR_H = TH + 4;
-/** Sinusoid floor: the thin lining of a blood channel, perforated by clusters of pores. */
+const FLOOR_W = TW * 1.6, FLOOR_H = TH * 1.6 + 6;
+/** Sinusoid floor: the thin lining of a blood channel, perforated by clusters of pores. Soft-edged, so tiles melt together. */
 function paintFloor(c: Ctx, variant: number, dead: boolean) {
   const r = rand(variant * 17 + (dead ? 91 : 5)), ox = FLOOR_W / 2, oy = FLOOR_H / 2;
-  poly(c, [ox, oy - TH / 2 - 1, ox + TW / 2 + 1.5, oy, ox, oy + TH / 2 + 1, ox - TW / 2 - 1.5, oy]);
-  const g = c.createLinearGradient(ox - 20, oy - 14, ox + 20, oy + 14);
-  const shade = r() * 10;
-  g.addColorStop(0, `rgb(${128 + shade},${34 + shade * 0.3},${46 + shade * 0.3})`); g.addColorStop(1, `rgb(${92 + shade},${22},${34})`);
-  c.fillStyle = g; c.fill();
+  // A feathered pool of colour a little bigger than the tile: neighbours overlap and no seam shows.
+  c.save(); c.shadowColor = '#7c2231'; c.shadowBlur = 8 * spriteScale; c.fillStyle = '#7c2231';
+  oval(c, ox, oy, TW * 0.55, TH * 0.55); c.fill(); c.fill(); c.restore();
+  poly(c, [ox, oy - TH / 2 - 2, ox + TW / 2 + 4, oy, ox, oy + TH / 2 + 2, ox - TW / 2 - 4, oy]);
   c.save(); c.clip();
   // Slow streaks in the plasma.
   for (let i = 0; i < 5; i++) {
-    c.strokeStyle = `rgba(${r() < 0.5 ? '255,150,150' : '40,5,12'},${0.05 + r() * 0.06})`; c.lineWidth = 1 + r() * 2.5;
-    const y = oy - 14 + r() * 28, x = ox - 30 + r() * 20;
-    c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 18, y + (r() - 0.5) * 8, x + 30 + r() * 16, y + 6 + r() * 8); c.stroke();
+    c.strokeStyle = `rgba(${r() < 0.5 ? '255,150,150' : '40,5,12'},${0.04 + r() * 0.05})`; c.lineWidth = 1 + r() * 2.5; c.lineCap = 'round';
+    const y = oy - 12 + r() * 24, x = ox - 26 + r() * 18;
+    c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 16, y + (r() - 0.5) * 8, x + 26 + r() * 14, y + 5 + r() * 7); c.stroke();
   }
   // Fenestrations: the sieve plates of a liver sinusoid.
   for (let k = 0; k < 3; k++) {
-    const cx = ox + (r() - 0.5) * 34, cy = oy + (r() - 0.5) * 14;
+    const cx = ox + (r() - 0.5) * 30, cy = oy + (r() - 0.5) * 12;
     for (let i = 0; i < 8; i++) {
-      c.fillStyle = `rgba(28,4,10,${0.3 + r() * 0.3})`;
+      c.fillStyle = `rgba(28,4,10,${0.28 + r() * 0.3})`;
       oval(c, cx + (r() - 0.5) * 11, cy + (r() - 0.5) * 5.5, 0.9, 0.5); c.fill();
     }
   }
   if (dead) {
     // What is left of a hepatocyte: a collapsed membrane, spilled granules, a broken nucleus.
-    c.fillStyle = 'rgba(86,70,84,0.72)'; oval(c, ox, oy, 25, 11.5, 0.05); c.fill();
+    c.fillStyle = 'rgba(86,70,84,0.72)'; c.beginPath(); lumpy(c, ox, oy, 25, 11.5, variant + 2, 0.12); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(190,168,180,0.4)'; c.lineWidth = 1;
     for (let i = 0; i < 6; i++) {
       const a = r() * 6.3, d = 6 + r() * 14;
@@ -264,8 +267,8 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const px = Math.floor(p.x), py = Math.floor(p.y);
   const target = stripTarget(s);
   const things: { depth: number; draw: () => void }[] = [];
-  const isCell = (x: number, y: number) => !open(s, x, y);
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
+  const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
     for (let x = Math.max(0, px - span); x <= Math.min(s.size - 1, px + span); x++) {
@@ -275,30 +278,36 @@ export function draw(ctx: Ctx, s: State, v: View) {
       if (Math.abs(c.x - cam.x) > v.w / v.zoom / 2 + TW || Math.abs(c.y - cam.y) > v.h / v.zoom / 2 + TH * 2.5) continue;
       const vis = s.visible[i] === 1, t = s.tiles[i];
       if (t === 'cell') {
-        const variant = Math.floor(hash(x, y) * 8), mask = (isCell(x + 1, y) ? 1 : 0) | (isCell(x, y + 1) ? 2 : 0);
+        const variant = Math.floor(hash(x, y) * CELL_VARIANTS);
         const hit = !!target && target.x === x && target.y === y;
         const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
         things.push({ depth: x + y + 1, draw: () => {
-          const img = sprite(`c${variant}.${mask}`, CELL_W, CELL_H, scale, !vis, (cx) => paintCell(cx, variant, mask));
-          const squash = 1 - dying * 0.4, h = CELL_H * squash;
-          ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY + (CELL_H - h), CELL_W, h);
+          const img = sprite(`c${variant}`, CELL_W, CELL_H, scale, !vis, (cx) => paintCell(cx, variant));
+          const squash = 1 - dying * 0.4, h = CELL_OY * squash;
+          // Squash toward the floor as the cell is torn open.
+          if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
+          else ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY, CELL_W, CELL_H);
           if (hit) {
             ctx.strokeStyle = dying ? '#ff5a4d' : 'rgba(236,180,46,0.95)'; ctx.lineWidth = 2;
-            softDiamond(ctx, c.x, c.y - WALL * squash, TW / 2 - 3, TH / 2 - 1.5, 5); ctx.stroke();
+            oval(ctx, c.x + cellShift(variant), c.y - cellHeight(variant) * squash, cellRadius(variant) - 3, cellRadius(variant) / 2 - 1.5); ctx.stroke();
           }
         } });
         continue;
       }
-      const variant = Math.floor(hash(x, y) * 6), dead = t === 'dead';
+      floors.push({ x, y, i, c, vis });
+    }
+  }
+  // Remembered floor first, lit floor over it, so the edge of your sight is a soft boundary and not a staircase.
+  floors.sort((a, b) => Number(a.vis) - Number(b.vis));
+  for (const { x, y, i, c, vis } of floors) {
+    {
+      const variant = Math.floor(hash(x, y) * 6), dead = s.tiles[i] === 'dead';
       const img = sprite(`f${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, !vis, (cx) => paintFloor(cx, variant, dead));
       ctx.drawImage(img, c.x - FLOOR_W / 2, c.y - FLOOR_H / 2, FLOOR_W, FLOOR_H);
-      // Shadow gathers where the floor meets a wall of cells.
-      ctx.fillStyle = 'rgba(8,2,5,0.32)';
-      if (isCell(x - 1, y)) { poly(ctx, [c.x - TW / 2, c.y, c.x, c.y - TH / 2, c.x + 9, c.y - TH / 2 + 4.5, c.x - TW / 2 + 9, c.y + 4.5]); ctx.fill(); }
-      if (isCell(x, y - 1)) { poly(ctx, [c.x + TW / 2, c.y, c.x, c.y - TH / 2, c.x - 9, c.y - TH / 2 + 4.5, c.x + TW / 2 - 9, c.y + 4.5]); ctx.fill(); }
 
       const g = s.glucose.get(i);
-      if (g !== undefined) {
+      // Drawn with the standing things, so a neighbouring floor tile cannot wash over it.
+      if (g !== undefined) things.push({ depth: x + y + 0.2, draw: () => {
         if (vis && g > 0) {
           ctx.globalCompositeOperation = 'lighter';
           const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 36);
@@ -315,7 +324,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
           ctx.fillStyle = '#ffe08a'; poly(ctx, [gx, gy - 14, gx + 5, gy - 11, gx, gy - 9, gx - 5, gy - 11]); ctx.fill();
           ctx.globalAlpha = 1;
         }
-      }
+      } });
     }
   }
 
@@ -367,7 +376,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   if (v.hover && s.explored[idx(s, Math.floor(v.hover.x), Math.floor(v.hover.y))] && v.hoverEnemy === null && !v.mark) {
     const c = project(Math.floor(v.hover.x) + 0.5, Math.floor(v.hover.y) + 0.5);
     ctx.strokeStyle = 'rgba(255,236,210,0.3)'; ctx.lineWidth = 1.5;
-    poly(ctx, [c.x, c.y - TH / 2 + 3, c.x + TW / 2 - 6, c.y, c.x, c.y + TH / 2 - 3, c.x - TW / 2 + 6, c.y]); ctx.stroke();
+    oval(ctx, c.x, c.y, TW * 0.3, TH * 0.3); ctx.stroke();
   }
 
   for (const b of rbcs) if (b.x > 0 && seenAt(b)) things.push({ depth: b.x + b.y, draw: () => bloodCell(ctx, b, v.time) });
