@@ -4,6 +4,7 @@ import * as G from './game';
 import { draw, nearestBloodCell, TH, TW, View } from './render';
 import * as Tips from './tips';
 import * as Sound from './audio';
+import * as Stats from './stats';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -114,7 +115,7 @@ $('tip-ok').addEventListener('click', closeTip);
 $('tips-reset').addEventListener('click', () => { Tips.unmuteAll(); $('tips-reset').hidden = true; });
 $('tips-reset').hidden = Tips.mutedCount() === 0;
 $('begin').addEventListener('click', () => { started = true; Sound.start(); $('intro').hidden = true; canvas.focus(); });
-$('again').addEventListener('click', () => { s = G.createGame(); shownOffer = ''; Tips.newRun(); keys.clear(); release(); $('over').hidden = true; });
+$('again').addEventListener('click', () => { s = G.createGame(); Stats.begin(); shownOffer = ''; Tips.newRun(); keys.clear(); release(); $('over').hidden = true; });
 
 // ---------- heads-up display ----------
 
@@ -217,6 +218,8 @@ function hud() {
     $('over-body').textContent =
       `${Math.round(s.time)} seconds inside. Host health ${s.hostHealth}%. ${s.cellsKilled} hepatocyte${s.cellsKilled === 1 ? '' : 's'} killed, ` +
       `${s.kills} immune cell${s.kills === 1 ? '' : 's'} destroyed, roughly ${Math.min(100, seen)}% of the tissue mapped. ${s.status === 'won' ? verdict : ''}`;
+    $('over-saved').textContent = 'Filing the run report\u2026';
+    void Stats.save(s).then((ok) => { $('over-saved').textContent = ok ? 'Run report filed.' : 'Run report not filed: open the game from its Claude link, signed in, to record runs.'; });
   }
 }
 
@@ -236,7 +239,9 @@ function frame(now: number) {
     if (!tip) {
       const was = { x: s.player.x, y: s.player.y };
       G.update(s, dt, heldDirection());
-      walked += G.dist(was, s.player);
+      const moved = G.dist(was, s.player);
+      walked += moved;
+      Stats.track(s, dt, moved);
       if (walked > 0.95) { walked = 0; Sound.play('step'); }
     }
   }
