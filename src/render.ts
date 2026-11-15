@@ -254,7 +254,7 @@ function bloodCell(ctx: Ctx, b: Rbc, time: number) {
 
 // How brightly each tile is currently drawn, eased toward what the rules say so nothing snaps on or off.
 let glowFor: Uint8Array | null = null;
-let lit = new Float32Array(0), known = new Float32Array(0);
+let lit = new Float32Array(0), known = new Float32Array(0), reek = new Float32Array(0);
 const FADE_IN = 0.45, FADE_OUT = 0.8, FADE_KNOWN = 0.5; // seconds
 
 export function draw(ctx: Ctx, s: State, v: View) {
@@ -279,7 +279,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const things: { depth: number; draw: () => void }[] = [];
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
-  if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); }
+  if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); }
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
     for (let x = Math.max(0, px - span); x <= Math.min(s.size - 1, px + span); x++) {
@@ -366,30 +366,29 @@ export function draw(ctx: Ctx, s: State, v: View) {
   // Your scent on the current: a faint sickly haze over every tile it has reached.
   ctx.globalCompositeOperation = 'lighter';
   for (const { c, i } of floors) {
-    const whiff = Math.max(lit[i], 0.4) * Math.max(0, 1 - s.scent[i] / (CONFIG.scent.reach * scentScale(s)));
+    // Eased, like the light, so the haze drifts along with you and never jumps from tile to tile.
+    const aim = Math.max(0, 1 - s.scent[i] / (CONFIG.scent.reach * scentScale(s)));
+    reek[i] += Math.max(-dt / 0.9, Math.min(dt / 0.6, aim - reek[i]));
+    const whiff = Math.max(lit[i], 0.4) * reek[i];
     if (whiff < 0.03) continue;
     const haze = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, TW * 0.62);
-    haze.addColorStop(0, `rgba(200,225,80,${0.34 * whiff})`); haze.addColorStop(1, 'rgba(190,215,90,0)');
+    haze.addColorStop(0, `rgba(200,225,80,${0.26 * whiff})`); haze.addColorStop(1, 'rgba(190,215,90,0)');
     ctx.fillStyle = haze; oval(ctx, c.x, c.y, TW * 0.62, TH * 0.62); ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
   // Your footprints, fading as they age. Immune cells that cross them will follow.
   const life = trailLife(s);
-  s.trail.forEach((f, k) => {
+  for (const f of s.trail) {
     const left = 1 - (s.time - f.born) / life;
-    if (left <= 0) return; // you always know where you have just walked
-    const side = k % 2 ? 1 : -1, c = project(f.x - f.dy * 0.13 * side, f.y + f.dx * 0.13 * side);
+    if (left <= 0) continue; // you always know where you have just walked
+    // Left and right feet alternate. The side comes from when the print was made, so it never changes.
+    const side = Math.round(f.born * 1000) % 2 ? 1 : -1, c = project(f.x - f.dy * 0.13 * side, f.y + f.dx * 0.13 * side);
     const ahead = project(f.dx, f.dy), turn = Math.atan2(ahead.y, ahead.x);
-    const a = Math.min(1, left * 1.6);
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = a * 0.3;
-    ctx.fillStyle = '#c8e150'; oval(ctx, c.x, c.y, 13, 6.5); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = a * 0.9;
-    ctx.fillStyle = '#e4f08a';
+    ctx.globalAlpha = left * 0.6; // a dark stain that thins out steadily until it is gone
+    ctx.fillStyle = '#1a0a10';
     oval(ctx, c.x + Math.cos(turn) * 2.5, c.y + Math.sin(turn) * 2.5, 5.5, 3, turn); ctx.fill(); // sole
     oval(ctx, c.x - Math.cos(turn) * 5.5, c.y - Math.sin(turn) * 5.5, 2.6, 2, turn); ctx.fill(); // heel
-  });
+  }
   ctx.globalAlpha = 1;
 
   // Vessels: openings in the floor that the blood pours into or out of.

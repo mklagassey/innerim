@@ -25,7 +25,7 @@ export const TIPS: Tip[] = [
   { id: 'calm', kind: 'Pickup', title: 'Interleukin-10',
     body: `The body's own stand-down signal. Walk through it to drop the immune alert by ${CONFIG.items.calmDrop}. It stays put while the alert is empty, so remember where you saw it. Keeping off their noses for a few seconds also makes the alert drain quickly.` },
   { id: 'trail', kind: 'Danger', title: 'Your scent',
-    body: 'You shed a scent. The yellow haze is how far it carries: a long way downstream toward the central vein, hardly at all upstream. Immune cells that catch it come looking, and any that cross your footprints will follow them to you until the prints fade. Approach from downstream and they will not know you are there. CD47 upgrades shorten both.' },
+    body: 'You shed a scent. The yellow haze is how far it carries: a long way downstream toward the central vein, hardly at all upstream. Immune cells that catch it come looking, and any that cross your footprints will follow them to you until the dark prints fade. Approach from downstream and they will not know you are there. CD47 upgrades shorten both.' },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
     body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
 ];
