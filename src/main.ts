@@ -3,6 +3,7 @@ import { CONFIG, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
 import { draw, TH, TW, View } from './render';
 import * as Tips from './tips';
+import * as Sound from './audio';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -10,7 +11,7 @@ const ctx = canvas.getContext('2d')!;
 
 let s = G.createGame();
 let started = false;
-const view: View = { w: 800, h: 600, zoom: 1, time: 0, showMap: false, hover: null, hoverEnemy: null };
+const view: View = { w: 800, h: 600, zoom: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null };
 const keys = new Set<string>();
 let held = false, pointer: { x: number; y: number } | null = null, retarget = 0;
 
@@ -98,6 +99,9 @@ window.addEventListener('blur', () => { keys.clear(); release(); });
 $('act-e').addEventListener('click', useE);
 $('act-f').addEventListener('click', () => G.startStrip(s));
 $('map').addEventListener('click', toggleMap);
+const showSound = () => { $('sound').textContent = Sound.isOn() ? 'Sound on' : 'Sound off'; $('sound').setAttribute('aria-pressed', String(Sound.isOn())); };
+$('sound').addEventListener('click', () => { Sound.setOn(!Sound.isOn()); showSound(); });
+showSound();
 $('act-h').addEventListener('click', () => G.usePatch(s));
 $('act-c').addEventListener('click', () => G.cloak(s));
 $('offer-list').addEventListener('click', (ev) => {
@@ -107,7 +111,7 @@ $('offer-list').addEventListener('click', (ev) => {
 $('tip-ok').addEventListener('click', closeTip);
 $('tips-reset').addEventListener('click', () => { Tips.unmuteAll(); $('tips-reset').hidden = true; });
 $('tips-reset').hidden = Tips.mutedCount() === 0;
-$('begin').addEventListener('click', () => { started = true; $('intro').hidden = true; canvas.focus(); });
+$('begin').addEventListener('click', () => { started = true; Sound.start(); $('intro').hidden = true; canvas.focus(); });
 $('again').addEventListener('click', () => { s = G.createGame(); shownOffer = ''; Tips.newRun(); keys.clear(); release(); $('over').hidden = true; });
 
 // ---------- heads-up display ----------
@@ -116,8 +120,15 @@ const last: Record<string, string> = {};
 let shownOffer = '';
 let tip: Tips.Tip | null = null;
 
-function showTip(next: Tips.Tip) {
+function showTip(next: Tips.Tip, at: G.Point) {
   tip = next;
+  view.mark = at;
+  // Keep the box off the thing it is pointing at.
+  const markY = view.h / 2 + (at.x - s.player.x + at.y - s.player.y) * (TH / 2) * view.zoom;
+  const markX = view.w / 2 + (at.x - s.player.x - (at.y - s.player.y)) * (TW / 2) * view.zoom;
+  $('tip').classList.toggle('high', markY > view.h * 0.5);
+  $('tip').classList.toggle('right', markX < view.w * 0.5);
+  Sound.play('tip');
   keys.clear(); release();
   $('tip-kind').textContent = next.kind;
   $('tip-title').textContent = next.title;
@@ -130,6 +141,7 @@ function closeTip() {
   if (!tip) return;
   if ($<HTMLInputElement>('tip-mute').checked) Tips.mute(tip.id);
   tip = null;
+  view.mark = null;
   $('tip').hidden = true;
   canvas.focus();
 }
@@ -206,16 +218,26 @@ function hud() {
 
 // ---------- loop ----------
 
-let then = performance.now();
+let then = performance.now(), walked = 0;
 function frame(now: number) {
   const dt = Math.min(0.05, (now - then) / 1000);
   then = now;
   view.time += dt;
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
-    if (!tip && !s.offer) { const next = Tips.nextTip(s); if (next) showTip(next); }
-    if (!tip) G.update(s, dt, heldDirection());
+    if (!tip && !s.offer) { const next = Tips.nextTip(s); if (next) showTip(next.tip, next.at); }
+    if (!tip) {
+      const was = { x: s.player.x, y: s.player.y };
+      G.update(s, dt, heldDirection());
+      walked += G.dist(was, s.player);
+      if (walked > 0.95) { walked = 0; Sound.play('step'); }
+    }
   }
+  for (const e of s.events) Sound.play(e);
+  s.events.length = 0;
+  // The host's pulse quickens as the immune alert climbs.
+  const tier = CONFIG.alert.tiers.findIndex((t) => t.name === G.alertTier(s).name);
+  Sound.pulse(started && s.status === 'playing' && !tip ? [58, 76, 98, 124][tier] : 0, s.player.hp / G.maxHp(s));
   aimPointer();
   draw(ctx, s, view);
   hud();

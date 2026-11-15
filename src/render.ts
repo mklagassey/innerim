@@ -10,7 +10,7 @@ const INK: RGB = [10, 4, 7];
 const FLOOR: RGB = [112, 30, 40], CELL_TOP: RGB = [186, 108, 118], CELL_L: RGB = [128, 62, 78], CELL_R: RGB = [92, 42, 60];
 const NUCLEUS: RGB = [62, 34, 92], DEAD: RGB = [74, 58, 70], AMBER: RGB = [236, 180, 46];
 
-export interface View { w: number; h: number; zoom: number; time: number; showMap: boolean; hover: Point | null; hoverEnemy: number | null }
+export interface View { w: number; h: number; zoom: number; time: number; showMap: boolean; hover: Point | null; hoverEnemy: number | null; mark: Point | null }
 
 export const project = (x: number, y: number): Point => ({ x: ((x - y) * TW) / 2, y: ((x + y) * TH) / 2 });
 
@@ -161,7 +161,25 @@ export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
   dark.addColorStop(0, 'rgba(10,4,7,0)'); dark.addColorStop(1, 'rgba(10,4,7,0.8)');
   ctx.fillStyle = dark; ctx.fillRect(0, 0, v.w, v.h);
 
-  if (v.showMap) automap(ctx, s, v);
+  if (v.mark) {
+    // Points out whatever the info box on screen is talking about.
+    const m = project(v.mark.x, v.mark.y);
+    const x = v.w / 2 + (m.x - cam.x) * v.zoom, y = v.h / 2 + (m.y - cam.y) * v.zoom;
+    const beat = (v.time * 1.4) % 1, hop = Math.abs(Math.sin(v.time * 5)) * 8;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#ffd35a'; ctx.lineWidth = 3;
+    oval(ctx, x, y, 34 * v.zoom, 17 * v.zoom); ctx.stroke();
+    ctx.globalAlpha = 1 - beat;
+    oval(ctx, x, y, (34 + beat * 30) * v.zoom, (17 + beat * 15) * v.zoom); ctx.stroke();
+    ctx.globalAlpha = 1;
+    const top = y - 62 * v.zoom - hop;
+    ctx.fillStyle = '#ffd35a';
+    ctx.beginPath(); ctx.moveTo(x, top + 22); ctx.lineTo(x - 13, top); ctx.lineTo(x - 5, top); ctx.lineTo(x - 5, top - 18); ctx.lineTo(x + 5, top - 18); ctx.lineTo(x + 5, top); ctx.lineTo(x + 13, top); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  if (v.showMap && !v.mark) automap(ctx, s, v);
 }
 
 function cell(ctx: CanvasRenderingContext2D, c: Point, x: number, y: number, l: number, memory: boolean, target: boolean, dying: number) {

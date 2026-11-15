@@ -60,6 +60,7 @@ export interface State {
   lastDamageSite: Point | null;
   status: 'playing' | 'won' | 'dead';
   log: { text: string; t: number }[];
+  events: string[]; // things that just happened, for whoever makes the noises
   rng: () => number;
   nextId: number;
 }
@@ -104,6 +105,7 @@ export function createGame(seed = Date.now()): State {
     lastDamageSite: null,
     status: 'playing',
     log: [],
+    events: [],
     rng: mulberry32(seed ^ 0x9e3779b9),
     nextId: 1,
   };
@@ -123,6 +125,10 @@ function spawn(s: State, kind: EnemyKind, tile: Point): Enemy {
   return e;
 }
 
+/** Notes that something audible happened. The rules never play sound themselves. */
+function emit(s: State, what: string) {
+  if (s.events.length < 40) s.events.push(what);
+}
 function say(s: State, text: string) {
   s.log.push({ text, t: s.time });
   if (s.log.length > 60) s.log.shift();
@@ -142,12 +148,14 @@ export const cloaked = (s: State) => s.cloak > 0;
 export function choose(s: State, id: UpgradeId): boolean {
   if (!s.offer?.includes(id)) return false;
   s.offer = null;
+  emit(s, 'upgrade');
   s.upgrades[id]++;
   if (id === 'glycocalyx') s.player.hp = Math.min(maxHp(s), s.player.hp + UPGRADES.glycocalyx.per);
   say(s, `${UPGRADES[id].name}${s.upgrades[id] > 1 ? ' ' + 'I'.repeat(s.upgrades[id]) : ''} is yours.`);
   return true;
 }
 function openCache(s: State) {
+  emit(s, 'cache');
   const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => s.upgrades[id] < UPGRADES[id].max);
   const offer: UpgradeId[] = [];
   while (pool.length && offer.length < CONFIG.items.offer) offer.push(pool.splice(Math.floor(s.rng() * pool.length), 1)[0]);
@@ -157,6 +165,7 @@ function openCache(s: State) {
 export function usePatch(s: State): boolean {
   if (s.status !== 'playing' || s.patches <= 0 || s.player.hp >= maxHp(s)) return false;
   s.patches--;
+  emit(s, 'heal');
   const before = s.player.hp;
   s.player.hp = Math.min(maxHp(s), before + CONFIG.items.patchHeal);
   float(s, s.player, `+${Math.round(s.player.hp - before)}`, '#7be08a');
@@ -168,6 +177,7 @@ export function cloak(s: State): boolean {
   s.player.energy -= CONFIG.cloak.energy;
   s.cloak = cloakTime(s);
   s.cloakCd = CONFIG.cloak.cooldown + s.cloak;
+  emit(s, 'cloak');
   return true;
 }
 
@@ -332,6 +342,7 @@ export function strike(s: State, toward?: Point): boolean {
   if (aim && dist(aim, p) > 0.01) p.face = { x: (aim.x - p.x) / dist(aim, p), y: (aim.y - p.y) / dist(aim, p) };
   p.swingCd = c.cooldown;
   p.swing = 0.18;
+  emit(s, 'swing');
   s.cloak = 0; // violence gives you away
   interrupt(s);
   for (const e of [...s.enemies]) {
@@ -355,6 +366,7 @@ export function shoot(s: State, x: number, y: number): boolean {
   p.shotCd = c.cooldown;
   s.cloak = 0;
   interrupt(s);
+  emit(s, 'shot');
   s.shots.push({ x: p.x, y: p.y, vx: p.face.x * c.speed, vy: p.face.y * c.speed, left: c.range });
   return true;
 }
@@ -363,6 +375,7 @@ export function shoot(s: State, x: number, y: number): boolean {
 export function startSkim(s: State): boolean {
   if (s.status !== 'playing' || s.player.channel || glucoseHere(s) <= 0) return false;
   stop(s);
+  emit(s, 'sip');
   s.player.channel = { kind: 'skim', t: 0, total: CONFIG.energy.skim.time, ...tileOf(s.player) };
   return true;
 }
@@ -371,12 +384,14 @@ export function startStrip(s: State): boolean {
   const cell = stripTarget(s);
   if (s.status !== 'playing' || s.player.channel || !cell) return false;
   stop(s);
+  emit(s, 'tear');
   s.player.channel = { kind: 'strip', t: 0, total: CONFIG.energy.strip.time, ...cell };
   return true;
 }
 export function leave(s: State): boolean {
   if (s.status !== 'playing' || !canLeave(s)) return false;
   s.status = 'won';
+  emit(s, 'win');
   say(s, 'You slip into the central vein and ride the current back toward the heart.');
   return true;
 }
@@ -386,6 +401,7 @@ function finishChannel(s: State, ch: Channel) {
   if (ch.kind === 'skim') {
     const left = s.glucose.get(i) ?? 0;
     if (left <= 0) return;
+    emit(s, 'skim');
     s.glucose.set(i, left - 1);
     p.energy += CONFIG.energy.skim.gain;
     float(s, p, `+${CONFIG.energy.skim.gain} energy`, '#e8b530');
@@ -400,6 +416,7 @@ function finishChannel(s: State, ch: Channel) {
   s.cellsKilled++;
   s.lastDamageSite = { x: ch.x, y: ch.y };
   float(s, p, `+${c.gain} energy`, '#e8b530');
+  emit(s, 'strip');
   say(s, 'The hepatocyte dies and leaks danger signals.');
   raiseAlert(s, Math.max(1, c.alert - bonus(s, 'apoptosis')));
   // A dying cell's signals pull in everything nearby, and first responders ride in on the blood.
@@ -413,6 +430,7 @@ function finishChannel(s: State, ch: Channel) {
 function hurtEnemy(s: State, e: Enemy, dmg: number) {
   e.hp -= dmg;
   e.flash = 0.15;
+  emit(s, e.hp <= 0 ? (e.kind === 'kupffer' ? 'bigkill' : 'kill') : 'hit');
   float(s, e, String(dmg), '#ffffff');
   if (e.hp <= 0) {
     s.enemies = s.enemies.filter((o) => o !== e);
@@ -433,10 +451,12 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
   const p = s.player;
   p.hp -= dmg;
   p.hurt = 0.25;
+  emit(s, 'hurt');
   float(s, p, `-${dmg}`, '#ff5a4d');
   if (p.hp <= 0) {
     p.hp = 0;
     s.status = 'dead';
+    emit(s, 'dead');
     say(s, by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : 'The neutrophils dissolve you where you stand.');
   }
 }
@@ -451,7 +471,7 @@ function raiseAlert(s: State, by: number) {
   const before = alertTier(s).name;
   s.alert = Math.max(0, Math.min(CONFIG.alert.max, s.alert + by));
   const after = alertTier(s).name;
-  if (by > 0 && after !== before) say(s, `Immune alert: ${after}.`);
+  if (by > 0 && after !== before) { say(s, `Immune alert: ${after}.`); emit(s, 'alarm'); }
 }
 
 /** Neutrophils ride in through portal vessels the player cannot see. */
@@ -514,6 +534,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       if (s.patches >= CONFIG.items.maxPatches) continue;
       s.patches++;
       float(s, p, 'Fibrin patch', '#7be08a');
+      emit(s, 'pickup');
     } else openCache(s);
     s.pickups.splice(s.pickups.indexOf(item), 1);
   }
@@ -579,7 +600,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const d = dist(e, p);
   const saw = !cloaked(s) && d <= c.sight && sees(s, tileOf(e), tileOf(p));
   if (saw) {
-    if (e.mood !== 'chase') float(s, e, '!', '#ff5a4d');
+    if (e.mood !== 'chase') { float(s, e, '!', '#ff5a4d'); emit(s, 'spot'); }
     e.mood = 'chase'; e.unseen = 0; e.goal = tileOf(p);
     raiseAlert(s, (e.kind === 'kupffer' ? CONFIG.alert.seenByKupffer : CONFIG.alert.seenByNeutrophil) * dt);
   } else e.unseen += dt;

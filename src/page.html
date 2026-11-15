@@ -41,7 +41,8 @@
   #host { --fill: #c9768a; } #alert { --fill: var(--bone-dim); }
   #alert[data-tier="1"] { --fill: var(--amber); } #alert[data-tier="2"], #alert[data-tier="3"] { --fill: var(--blood); }
   #alert[data-tier="3"] b { color: var(--blood); }
-  .tools { top: 10px; right: 12px; }
+  .tools { top: 10px; right: 12px; display: flex; gap: 8px; }
+  #sound[aria-pressed="false"] { color: var(--bone-dim); }
   button { font: 600 0.8rem/1.2 var(--display); letter-spacing: 0.08em; color: var(--bone); background: var(--clot); border: 1px solid var(--seam);
     border-radius: 3px; padding: 9px 14px; cursor: pointer; }
   button:hover { border-color: var(--bone-dim); }
@@ -68,10 +69,15 @@
   #offer-list strong { font: 800 1rem/1.15 var(--display); letter-spacing: 0.04em; }
   #offer-list span { font: 400 0.92rem/1.35 var(--body); }
   #offer-list em { font: italic 400 0.82rem/1.35 var(--body); color: var(--bone-dim); }
-  #tip { background: rgba(10, 4, 7, 0.3); align-items: end; padding-bottom: 12vh; }
+  /* The info box takes the corner furthest from what it describes, and never dims it. */
+  #tip { background: none; place-items: end start; padding: 72px 28px 112px; pointer-events: none; }
+  #tip .note { pointer-events: auto; }
+  #tip.high { align-items: start; }
+  #tip.right { justify-items: end; }
   .note { max-width: 26rem; background: var(--clot); border: 1px solid var(--seam); border-radius: 4px; padding: 20px; box-shadow: 0 12px 40px #000; }
   .note h2 { font-size: 1.5rem; }
   .note .where { color: var(--amber); }
+  .note .pointer { font: 500 0.72rem/1.2 var(--data); color: #ffd35a; letter-spacing: 0.04em; }
   .note label { display: flex; align-items: center; gap: 8px; color: var(--bone-dim); font-size: 0.92rem; cursor: pointer; }
   .note input { accent-color: var(--amber); width: 16px; height: 16px; margin: 0; }
   .card button.quiet { border-color: var(--seam); color: var(--bone-dim); font-size: 0.78rem; padding: 8px 14px; }
@@ -97,7 +103,7 @@
     <div class="gauge" id="host"><span>Host health</span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
   </div>
-  <div class="hud tools"><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
+  <div class="hud tools"><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
   <div class="hud orb" id="hp"><u id="hp-fill"></u><b><span id="hp-val"></span><small>Life</small></b></div>
   <div class="hud orb" id="energy"><u id="energy-fill"></u><b><span id="energy-val"></span><small>Energy</small></b></div>
   <div class="hud belt">
@@ -140,6 +146,7 @@
       <span class="where" id="tip-kind"></span>
       <h2 id="tip-title"></h2>
       <p id="tip-body"></p>
+      <span class="pointer">Marked in yellow on screen.</span>
       <label><input type="checkbox" id="tip-mute"> Don't show this again</label>
       <button id="tip-ok" type="button">Got it</button>
     </div>

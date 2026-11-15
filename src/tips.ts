@@ -1,7 +1,7 @@
 // The first time you meet something, the game stops and tells you what it is.
 // "Don't show again" is remembered in the browser between runs.
 import { CONFIG } from './config';
-import { State, glucoseHere, idx, stripTarget } from './game';
+import { Point, State, dist, idx, stripTarget } from './game';
 
 export interface Tip { id: string; title: string; kind: string; body: string }
 
@@ -43,23 +43,28 @@ export function unmuteAll() {
 }
 export const mutedCount = () => muted.size;
 
-/** What the player can see right now that they have not been told about yet. */
-export function nextTip(s: State): Tip | null {
-  const seen = (x: number, y: number) => s.visible[idx(s, Math.floor(x), Math.floor(y))] === 1;
-  const here: Record<string, boolean> = {
-    portal: s.time > 1.2 && s.portals.some((p) => seen(p.x, p.y)),
-    cell: s.time > 4 && !!stripTarget(s),
-    glucose: glucoseHere(s) > 0 || [...s.glucose.keys()].some((k) => s.visible[k] === 1),
-    neutrophil: s.enemies.some((e) => e.kind === 'neutrophil' && seen(e.x, e.y)),
-    kupffer: s.enemies.some((e) => e.kind === 'kupffer' && seen(e.x, e.y)),
-    cache: s.pickups.some((i) => i.kind === 'cache' && seen(i.x, i.y)),
-    patch: s.pickups.some((i) => i.kind === 'patch' && seen(i.x, i.y)),
-    vein: seen(s.vein.x, s.vein.y),
+/** What the player can see right now that they have not been told about yet, and where it is. */
+export function nextTip(s: State): { tip: Tip; at: Point } | null {
+  const seen = (p: Point) => s.visible[idx(s, Math.floor(p.x), Math.floor(p.y))] === 1;
+  const mid = (p: Point) => ({ x: p.x + 0.5, y: p.y + 0.5 });
+  const nearest = (ps: Point[]) => ps.filter(seen).sort((a, b) => dist(a, s.player) - dist(b, s.player))[0] ?? null;
+  const cell = stripTarget(s);
+  const glucose = [...s.glucose.keys()].map((k) => mid({ x: k % s.size, y: Math.floor(k / s.size) }));
+  const here: Record<string, Point | null> = {
+    portal: s.time > 1.2 ? nearest(s.portals.map(mid)) : null,
+    cell: s.time > 4 && cell ? mid(cell) : null,
+    glucose: nearest(glucose),
+    neutrophil: nearest(s.enemies.filter((e) => e.kind === 'neutrophil')),
+    kupffer: nearest(s.enemies.filter((e) => e.kind === 'kupffer')),
+    cache: nearest(s.pickups.filter((i) => i.kind === 'cache')),
+    patch: nearest(s.pickups.filter((i) => i.kind === 'patch')),
+    vein: nearest([mid(s.vein)]),
   };
   for (const tip of TIPS) {
-    if (!here[tip.id] || muted.has(tip.id) || shownThisRun.has(tip.id)) continue;
+    const at = here[tip.id];
+    if (!at || muted.has(tip.id) || shownThisRun.has(tip.id)) continue;
     shownThisRun.add(tip.id);
-    return tip;
+    return { tip, at: { x: at.x, y: at.y } };
   }
   return null;
 }
