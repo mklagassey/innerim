@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, cloaked, idx, open, stripTarget, vision } from './game';
+import { Enemy, Point, State, cloaked, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -362,6 +362,35 @@ export function draw(ctx: Ctx, s: State, v: View) {
       } });
     }
   }
+
+  // Your scent on the current: a faint sickly haze over every tile it has reached.
+  ctx.globalCompositeOperation = 'lighter';
+  for (const { c, i } of floors) {
+    const whiff = Math.max(lit[i], 0.4) * Math.max(0, 1 - s.scent[i] / (CONFIG.scent.reach * scentScale(s)));
+    if (whiff < 0.03) continue;
+    const haze = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, TW * 0.62);
+    haze.addColorStop(0, `rgba(200,225,80,${0.34 * whiff})`); haze.addColorStop(1, 'rgba(190,215,90,0)');
+    ctx.fillStyle = haze; oval(ctx, c.x, c.y, TW * 0.62, TH * 0.62); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // Your footprints, fading as they age. Immune cells that cross them will follow.
+  const life = trailLife(s);
+  s.trail.forEach((f, k) => {
+    const left = 1 - (s.time - f.born) / life;
+    if (left <= 0) return; // you always know where you have just walked
+    const side = k % 2 ? 1 : -1, c = project(f.x - f.dy * 0.13 * side, f.y + f.dx * 0.13 * side);
+    const ahead = project(f.dx, f.dy), turn = Math.atan2(ahead.y, ahead.x);
+    const a = Math.min(1, left * 1.6);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a * 0.3;
+    ctx.fillStyle = '#c8e150'; oval(ctx, c.x, c.y, 13, 6.5); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = a * 0.9;
+    ctx.fillStyle = '#e4f08a';
+    oval(ctx, c.x + Math.cos(turn) * 2.5, c.y + Math.sin(turn) * 2.5, 5.5, 3, turn); ctx.fill(); // sole
+    oval(ctx, c.x - Math.cos(turn) * 5.5, c.y - Math.sin(turn) * 5.5, 2.6, 2, turn); ctx.fill(); // heel
+  });
+  ctx.globalAlpha = 1;
 
   // Vessels: openings in the floor that the blood pours into or out of.
   const vessel = (at: Point, vein: boolean) => {

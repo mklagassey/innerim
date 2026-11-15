@@ -241,7 +241,7 @@ test('a dead Kupffer cell leaves an upgrade behind', () => {
 test('the cloak deploys by itself when you are first spotted, and confuses the hunter', () => {
   const s = quiet(21);
   s.upgrades.cd47 = 1;
-  const e = foe(s, 1.6, 0);
+  const e = foe(s, 1.1, 0);
   run(s, 0.2);
   assert.equal(G.cloaked(s), true);
   assert.equal(s.player.energy, CONFIG.player.startEnergy - CONFIG.cloak.energy);
@@ -249,7 +249,7 @@ test('the cloak deploys by itself when you are first spotted, and confuses the h
   assert.ok(e.idle > 1.5, 'it stands there confused');
   assert.equal(s.player.hp, G.maxHp(s));
   const plain = quiet(21);
-  const e2 = foe(plain, 1.6, 0);
+  const e2 = foe(plain, 1.1, 0);
   run(plain, 0.2);
   assert.equal(e2.mood, 'chase', 'without the upgrade it just hunts you');
 });
@@ -284,4 +284,60 @@ test('interleukin-10 drops the alert, and waits for you when there is nothing to
   G.update(s, 0.05, { x: 0, y: 0 });
   assert.equal(s.pickups.length, 0);
   assert.ok(s.alert < 31 && s.alert > 28, `alert ${s.alert}`);
+});
+
+// A straight corridor of floor from the vein outward, for testing the current.
+function corridor() {
+  const s = G.createGame(7);
+  s.enemies = []; s.pickups = [];
+  s.tiles.fill('cell');
+  const y = s.vein.y;
+  for (let x = s.vein.x; x <= s.vein.x + 30; x++) s.tiles[G.idx(s, x, y)] = 'floor';
+  s.flow = null;
+  s.player.x = s.vein.x + 15.5; s.player.y = y + 0.5; s.player.path = [];
+  return s;
+}
+
+test('scent carries far downstream and hardly at all upstream', () => {
+  const s = corridor(), y = s.player.y;
+  G.update(s, 0.05);
+  assert.ok(G.scentAt(s, { x: s.player.x - 6, y }) > 0, 'six tiles toward the vein smells of you');
+  assert.equal(G.scentAt(s, { x: s.player.x + 6, y }), 0, 'six tiles upstream does not');
+  assert.ok(G.scentAt(s, { x: s.player.x + 2, y }) > 0, 'right behind you does');
+});
+
+test('a cell downstream comes to investigate; one upstream at the same distance does not', () => {
+  for (const [side, expected] of [[-6, 'investigate'], [6, 'patrol']] as const) {
+    const s = corridor();
+    const e = G.createGame(7).enemies.find((x) => x.kind === 'neutrophil')!;
+    e.x = s.player.x + side; e.y = s.player.y; e.mood = 'patrol'; e.goal = null; e.path = []; e.idle = 99;
+    s.enemies = [e];
+    run(s, 0.5);
+    assert.equal(e.mood, expected, `side ${side}`);
+  }
+});
+
+test('a cell that crosses your footprints follows them to you', () => {
+  const s = corridor(), y = s.player.y;
+  // Walk upstream, leaving a trail behind (downstream of where you end up, but too far to smell directly).
+  s.upgrades.cd47 = 0;
+  run(s, 2.6, { x: 1, y: 0 });
+  assert.ok(s.trail.length >= 8, `prints laid: ${s.trail.length}`);
+  s.scent.fill(Infinity); s.scentClock = 1e9; // judge the footprints alone
+  const e = G.createGame(7).enemies.find((x) => x.kind === 'neutrophil')!;
+  e.x = s.trail[0].x; e.y = y; e.mood = 'patrol'; e.goal = null; e.path = []; e.idle = 99;
+  s.enemies = [e];
+  const from = G.dist(e, s.player);
+  run(s, 1.5);
+  assert.ok(G.dist(e, s.player) < from - 2, `closed from ${from.toFixed(1)} to ${G.dist(e, s.player).toFixed(1)}`);
+});
+
+test('CD47 shortens both the plume and the trail', () => {
+  const s = corridor(), y = s.player.y;
+  G.update(s, 0.05);
+  const plain = G.scentAt(s, { x: s.player.x - 6, y }), life = G.trailLife(s);
+  s.upgrades.cd47 = 3; s.scentClock = 0;
+  G.update(s, 0.05);
+  assert.ok(plain > 0 && G.scentAt(s, { x: s.player.x - 6, y }) === 0);
+  assert.ok(G.trailLife(s) < life * 0.5);
 });

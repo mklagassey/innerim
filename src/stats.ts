@@ -3,9 +3,9 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'liver-10'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'liver-11'; // bump when rules change so reports can be compared fairly
 
-const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
+const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
 
 interface Tally {
   events: Record<string, number>;
@@ -71,6 +71,7 @@ export function report(s: G.State) {
     hostHealth: Math.round(s.hostHealth),
     cellsStripped: s.cellsKilled, skims: t.events.skim ?? 0,
     immuneKills: s.kills,
+    timesSniffed: t.events.sniff ?? 0,
     timesSpotted: t.events.spot ?? 0, timesHurt: t.events.hurt ?? 0,
     swings: t.events.swing ?? 0, shots: t.events.shot ?? 0, hitsLanded: t.events.hit ?? 0,
     cloaks: t.events.cloak ?? 0, patchesUsed: t.events.heal ?? 0, patchesLeft: s.patches, calmsUsed: t.events.calm ?? 0,

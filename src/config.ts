@@ -23,8 +23,8 @@ export const CONFIG = {
   host: { maxHealth: 100 },
   alert: {
     max: 100,
-    decay: 0.6, // per second while nothing can see you
-    loseAfter: 4, // seconds out of sight before the search starts to give up
+    decay: 0.6, // per second while nothing has your scent
+    loseAfter: 4, // seconds off their noses before the search starts to give up
     shake: 5, // per second once it does
     seenByNeutrophil: 1.2, // per second
     seenByKupffer: 3.5,
@@ -48,10 +48,23 @@ export const CONFIG = {
     patchDrop: 0.2, // chance a dead neutrophil leaves one behind
     offer: 3, // upgrades to choose between at each cache
   },
+  // Immune cells have no eyes. They taste the blood for you: your scent drifts downstream
+  // toward the central vein, and you leave a trail of footprints that fades.
+  scent: {
+    reach: 8, // how far the plume carries, in cost units (one tile downstream costs `down`)
+    down: 1, across: 1.7, up: 3.2,
+    contact: 2.5, // within this much plume, a cell knows exactly where you are
+    touch: 1.3, // or this close in tiles, whichever way the blood is running
+    every: 0.2, // seconds between plume updates
+    trailLife: 12, // seconds a footprint lasts
+    stride: 0.9, // tiles between footprints
+    sniff: 1.6, // how close a cell must pass to a footprint to pick up the trail
+    maskPerLevel: 0.2, // each CD47 level shortens plume and trail by this share
+  },
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {
-    neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, sight: 6, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
-    kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, sight: 5, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
+    neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
+    kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, nose: 1.25, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
   },
 } as const;
 
@@ -69,7 +82,7 @@ export const UPGRADES = {
     real: 'The enzyme neutrophils use to cut through tissue.' },
   peroxidase: { name: 'Myeloperoxidase rounds', track: 'Warrior', max: 3, per: 3, what: '+3 shot damage.',
     real: 'The neutrophil enzyme that makes bleach on the spot.' },
-  cd47: { name: 'CD47 cloak', track: 'Stealth', max: 3, per: 2, what: 'When an immune cell spots you, you vanish for a few seconds and it loses track of you (2 energy). Each level lasts longer.',
+  cd47: { name: 'CD47 cloak', track: 'Stealth', max: 3, per: 2, what: 'When an immune cell finds you, your scent vanishes for a few seconds and it loses you (2 energy). Each level lasts longer and shortens your scent and footprint trail by 20%.',
     real: "The 'do not eat me' signal healthy cells show to macrophages." },
   apoptosis: { name: 'Apoptosis mimic', track: 'Stealth', max: 3, per: 8, what: 'Stripping a cell raises far less alarm. At level 2, no responders come.',
     real: 'Cells that die by apoptosis are cleared quietly, with no inflammation.' },

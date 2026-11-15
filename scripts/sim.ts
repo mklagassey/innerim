@@ -13,6 +13,7 @@ function play(bot: Bot, seed: number) {
   let plan = 0;
   while (s.status === 'playing' && s.time < 150) {
     s.explored.fill(1);
+    if (s.offer) G.choose(s, s.offer[0]); // takes whatever is offered first, so the clock keeps running
     const p = s.player;
     const foe = G.enemyNear(s, p, 2.2);
     if (G.canLeave(s)) G.leave(s);

@@ -25,6 +25,8 @@ export interface Enemy extends Point {
 }
 export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
+/** One footprint: where you stepped, which way you were heading, and when. */
+export interface Print extends Point { dx: number; dy: number; born: number }
 export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
 
@@ -50,6 +52,11 @@ export interface State {
   shots: Shot[];
   floats: Float[];
   hostHealth: number;
+  trail: Print[]; // oldest first
+  strideLeft: number;
+  scent: Float32Array; // per tile: what it costs your scent to drift there (Infinity = it does not)
+  scentClock: number;
+  flow: Int16Array | null; // steps to the central vein from each tile; null when it needs working out again
   alert: number;
   unseen: number; // seconds since any immune cell last had eyes on you
   time: number;
@@ -96,6 +103,11 @@ export function createGame(seed = Date.now()): State {
     shots: [],
     floats: [],
     hostHealth: CONFIG.host.maxHealth,
+    trail: [],
+    strideLeft: 0,
+    scent: new Float32Array(N * N).fill(Infinity),
+    scentClock: 0,
+    flow: null,
     alert: 0,
     unseen: 0,
     time: 0,
@@ -145,6 +157,72 @@ export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol');
 export const speed = (s: State) => CONFIG.player.speed * (1 + bonus(s, 'atp'));
 export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
 export const cloaked = (s: State) => s.cloak > 0;
+
+/** 1 with no masking, down to 0.4 with a full CD47 coat. Scales the plume and the trail alike. */
+export const scentScale = (s: State) => 1 - CONFIG.scent.maskPerLevel * s.upgrades.cd47;
+/** Seconds one of your footprints lasts. */
+export const trailLife = (s: State) => CONFIG.scent.trailLife * scentScale(s);
+
+/** Steps to the central vein from every open tile: which way the blood is running. */
+function flowField(s: State): Int16Array {
+  if (s.flow) return s.flow;
+  const f = new Int16Array(s.size * s.size).fill(-1), queue = [s.vein];
+  f[idx(s, s.vein.x, s.vein.y)] = 0;
+  for (let q = 0; q < queue.length; q++) {
+    const c = queue[q], d = f[idx(s, c.x, c.y)];
+    for (const [dx, dy] of STREAM) {
+      const x = c.x + dx, y = c.y + dy;
+      if (!open(s, x, y) || f[idx(s, x, y)] >= 0) continue;
+      f[idx(s, x, y)] = d + 1;
+      queue.push({ x, y });
+    }
+  }
+  return (s.flow = f);
+}
+/** Lets your scent drift out from where you stand. It goes far downstream, a little way
+ *  across the current, and barely at all against it. Cells never block a view here, they
+ *  only block the blood, so the plume bends round corners. */
+function spreadScent(s: State) {
+  const sc = CONFIG.scent, flow = flowField(s), limit = sc.reach * 1.3 * scentScale(s);
+  s.scent.fill(Infinity);
+  if (cloaked(s)) return;
+  const start = tileOf(s.player), frontier: Point[] = [start];
+  s.scent[idx(s, start.x, start.y)] = 0;
+  while (frontier.length) {
+    let best = 0;
+    for (let k = 1; k < frontier.length; k++)
+      if (s.scent[idx(s, frontier[k].x, frontier[k].y)] < s.scent[idx(s, frontier[best].x, frontier[best].y)]) best = k;
+    const c = frontier.splice(best, 1)[0], i = idx(s, c.x, c.y), cost = s.scent[i];
+    for (const [dx, dy] of STREAM) {
+      const x = c.x + dx, y = c.y + dy;
+      if (!open(s, x, y)) continue;
+      const j = idx(s, x, y), slope = flow[j] - flow[i];
+      const next = cost + (slope < 0 ? sc.down : slope > 0 ? sc.up : sc.across);
+      if (next > limit || next >= s.scent[j]) continue;
+      if (s.scent[j] === Infinity) frontier.push({ x, y });
+      s.scent[j] = next;
+    }
+  }
+}
+
+/** How strongly a tile smells of you right now, 0 (nothing) to 1 (you are standing on it). */
+export function scentAt(s: State, p: Point, nose = 1): number {
+  const t = tileOf(p);
+  if (!inside(s, t.x, t.y)) return 0;
+  const reach = CONFIG.scent.reach * scentScale(s) * nose;
+  return Math.max(0, 1 - s.scent[idx(s, t.x, t.y)] / reach);
+}
+
+/** The freshest of your footprints that a cell standing at `at` could pick up. */
+function freshPrint(s: State, at: Point): Print | null {
+  const life = trailLife(s);
+  for (let k = s.trail.length - 1; k >= 0; k--) {
+    const f = s.trail[k];
+    if (s.time - f.born > life) break;
+    if (dist(f, at) <= CONFIG.scent.sniff && sees(s, tileOf(at), tileOf(f))) return f;
+  }
+  return null;
+}
 
 /** Take one of the upgrades on offer. */
 export function choose(s: State, id: UpgradeId): boolean {
@@ -222,6 +300,7 @@ export function look(s: State) {
     }
 }
 
+const STREAM = [[1, 0], [-1, 0], [0, 1], [0, -1]]; // blood does not squeeze between two cells that touch at a corner
 const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 /** Shortest route between tiles, start excluded. Never cuts a corner. */
@@ -420,6 +499,7 @@ function finishChannel(s: State, ch: Channel) {
   const c = CONFIG.energy.strip;
   if (s.tiles[i] !== 'cell') return;
   s.tiles[i] = 'dead';
+  s.flow = null; // a new gap for the blood to run through
   p.energy += c.gain;
   s.hostHealth = Math.max(0, s.hostHealth - c.hostDamage);
   s.cellsKilled++;
@@ -514,6 +594,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.cloak = Math.max(0, s.cloak - dt); s.cloakCd = Math.max(0, s.cloakCd - dt);
   if (s.upgrades.clotting && p.hp < maxHp(s)) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
 
+  const before = { x: p.x, y: p.y };
   // Walking: held keys win over a clicked route, and a chosen enemy is hunted down.
   const target = p.attackId === null ? null : s.enemies.find((e) => e.id === p.attackId) ?? null;
   if (dir && (dir.x || dir.y)) {
@@ -534,6 +615,16 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     const d = follow(s, p, speed(s), dt, pc.radius);
     if (d) p.face = d;
   }
+
+  // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.
+  const stepped = dist(before, p);
+  if (stepped > 0 && !cloaked(s)) {
+    s.strideLeft -= stepped;
+    if (s.strideLeft <= 0) { s.strideLeft = CONFIG.scent.stride; s.trail.push({ x: p.x, y: p.y, dx: p.face.x, dy: p.face.y, born: s.time }); }
+  }
+  while (s.trail.length && s.time - s.trail[0].born > trailLife(s)) s.trail.shift();
+  s.scentClock -= dt;
+  if (s.scentClock <= 0) { s.scentClock = CONFIG.scent.every; spreadScent(s); }
 
   if (p.channel) {
     p.channel.t += dt;
@@ -615,12 +706,17 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.floats = s.floats.filter((f) => f.age < 0.9);
 }
 
-/** One enemy's share of a tick. Returns true if it can see the player. */
+/** One enemy's share of a tick. Returns true if it knows where the player is. */
 function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const c = CONFIG.enemies[e.kind], p = s.player;
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   const d = dist(e, p);
-  const saw = !cloaked(s) && d <= c.sight && sees(s, tileOf(e), tileOf(p));
+  // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
+  const whiff = cloaked(s) ? 0 : scentAt(s, e, c.nose);
+  const found = !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p))));
+  const print = cloaked(s) ? null : freshPrint(s, e);
+  // Once it is after you, any trace of scent keeps it on you.
+  const saw = found || (e.mood === 'chase' && whiff > 0);
   if (saw) {
     // The cloak answers a first sighting on its own, if it is ready and you can pay for it.
     if (e.mood !== 'chase' && cloak(s)) {
@@ -631,7 +727,21 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
     if (e.mood !== 'chase') { float(s, e, '!', '#ff5a4d'); emit(s, 'spot'); }
     e.mood = 'chase'; e.unseen = 0; e.goal = tileOf(p);
     raiseAlert(s, (e.kind === 'kupffer' ? CONFIG.alert.seenByKupffer : CONFIG.alert.seenByNeutrophil) * dt);
-  } else e.unseen += dt;
+  } else {
+    e.unseen += dt;
+    const goTo = (t: Point) => { if (!e.goal || e.goal.x !== t.x || e.goal.y !== t.y) { e.goal = t; e.repath = Math.min(e.repath, 0.25); } };
+    if (whiff > 0 && e.mood !== 'chase') {
+      // A trace on the current: it turns upstream to find out what is shedding it.
+      if (e.mood !== 'investigate') { float(s, e, '?', '#ffd35a'); emit(s, 'sniff'); }
+      e.mood = 'investigate';
+      goTo(tileOf(p));
+    } else if (print) {
+      // On your footprints: each one leads to a fresher one.
+      if (e.mood === 'patrol') { float(s, e, '?', '#ffd35a'); emit(s, 'sniff'); e.mood = 'investigate'; }
+      if (e.mood === 'chase') e.unseen = Math.min(e.unseen, c.forget - 0.5); // still on the trail
+      goTo(tileOf(print));
+    }
+  }
 
   // A blow in progress lands or whiffs depending on whether you got out of the way.
   if (e.windup >= 0) {
@@ -645,7 +755,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   if (saw && d <= c.reach && e.cooldown <= 0) { e.windup = c.windup; return saw; }
 
   if (e.mood === 'chase' && e.unseen > c.forget && (!e.goal || dist(e, mid(e.goal)) < 0.8)) { e.mood = 'patrol'; e.goal = null; e.idle = 1; }
-  if (e.mood === 'investigate' && e.goal && dist(e, mid(e.goal)) < 1.8) { e.mood = 'patrol'; e.goal = null; e.idle = 1.5; e.home = tileOf(e); }
+  if (e.mood === 'investigate' && e.goal && dist(e, mid(e.goal)) < 1.8 && !print && whiff <= 0) { e.mood = 'patrol'; e.goal = null; e.idle = 1.5; e.home = tileOf(e); }
   if (e.mood === 'patrol' && !e.path.length) {
     e.idle -= dt;
     if (e.idle > 0) return saw;
