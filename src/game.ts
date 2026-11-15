@@ -78,7 +78,11 @@ const mid = (p: Point): Point => ({ x: p.x + 0.5, y: p.y + 0.5 });
 export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(p.y) });
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-export function createGame(seed = Date.now()): State {
+/** What survives from one map to the next: who you have become, and the state of the host. */
+export interface Carry { hp: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth });
+
+export function createGame(seed = Date.now(), carry?: Carry): State {
   const m = generate(seed);
   const N = m.size;
   const s: State = {
@@ -90,11 +94,11 @@ export function createGame(seed = Date.now()): State {
     portals: m.portals,
     vein: m.vein,
     player: {
-      ...mid(m.start), hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, face: { x: 1, y: 0 },
+      ...mid(m.start), hp: carry?.hp ?? CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, face: { x: 1, y: 0 },
       path: [], attackId: null, swingCd: 0, shotCd: 0, swing: 0, channel: null, hurt: 0,
     },
-    upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>,
-    patches: 1,
+    upgrades: carry ? { ...carry.upgrades } : Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>,
+    patches: carry?.patches ?? 1,
     pickups: [...m.caches.map((c) => ({ ...mid(c), kind: 'cache' as const })), ...m.patches.map((c) => ({ ...mid(c), kind: 'patch' as const })), ...m.calms.map((c) => ({ ...mid(c), kind: 'calm' as const }))],
     offer: null,
     cloak: 0,
@@ -102,7 +106,7 @@ export function createGame(seed = Date.now()): State {
     enemies: [],
     shots: [],
     floats: [],
-    hostHealth: CONFIG.host.maxHealth,
+    hostHealth: carry?.hostHealth ?? CONFIG.host.maxHealth,
     trail: [],
     strideLeft: 0,
     scent: new Float32Array(N * N).fill(Infinity),

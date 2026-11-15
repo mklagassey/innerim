@@ -341,3 +341,16 @@ test('CD47 shortens both the plume and the trail', () => {
   assert.ok(plain > 0 && G.scentAt(s, { x: s.player.x - 6, y }) === 0);
   assert.ok(G.trailLife(s) < life * 0.5);
 });
+
+test('a character and the host carry over into the next map', () => {
+  const a = G.createGame(5);
+  a.upgrades.glycocalyx = 2; a.player.hp = 33; a.patches = 3; a.hostHealth = 70;
+  const b = G.createGame(6, G.carryOf(a));
+  assert.equal(b.upgrades.glycocalyx, 2);
+  assert.equal(b.player.hp, 33);
+  assert.equal(b.patches, 3);
+  assert.equal(b.hostHealth, 70);
+  assert.equal(b.player.energy, CONFIG.player.startEnergy, 'energy is spent on the ride');
+  b.upgrades.glycocalyx = 3;
+  assert.equal(a.upgrades.glycocalyx, 2, 'the two maps do not share one build object');
+});
