@@ -263,3 +263,25 @@ test('a fibrin patch applies itself when life runs low', () => {
   assert.equal(s.patches, 0);
   assert.ok(s.player.hp > G.maxHp(s) * CONFIG.items.autoPatchBelow);
 });
+
+test('the alert drains slowly at first, then fast once you have been out of sight a while', () => {
+  const s = G.createGame(7);
+  s.enemies = [];
+  s.alert = 24; // below the first tier, so no reinforcements arrive to spot you
+  for (let i = 0; i < 60; i++) G.update(s, 0.05, { x: 0, y: 0 }); // 3 s
+  assert.ok(!G.losingThem(s) && s.alert > 21, `slow at first: ${s.alert}`);
+  for (let i = 0; i < 60; i++) G.update(s, 0.05, { x: 0, y: 0 }); // 3 s more, 2 of them past the threshold
+  assert.ok(G.losingThem(s) && s.alert < 13, `fast later: ${s.alert}`);
+});
+
+test('interleukin-10 drops the alert, and waits for you when there is nothing to calm', () => {
+  const s = G.createGame(7);
+  s.enemies = [];
+  s.pickups = [{ x: s.player.x, y: s.player.y, kind: 'calm' }];
+  G.update(s, 0.05, { x: 0, y: 0 });
+  assert.equal(s.pickups.length, 1, 'left alone at zero alert');
+  s.alert = 60;
+  G.update(s, 0.05, { x: 0, y: 0 });
+  assert.equal(s.pickups.length, 0);
+  assert.ok(s.alert < 31 && s.alert > 28, `alert ${s.alert}`);
+});

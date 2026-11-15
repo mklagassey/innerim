@@ -22,6 +22,8 @@ export const TIPS: Tip[] = [
     body: 'A bubble of cargo adrift in the blood. Walk into it to choose one upgrade from three.' },
   { id: 'patch', kind: 'Pickup', title: 'Fibrin patch',
     body: `A knot of clotting protein. Walk over it to pick it up. When your life runs low, one seals the wound on its own and heals ${CONFIG.items.patchHeal}. Press H to use one sooner.` },
+  { id: 'calm', kind: 'Pickup', title: 'Interleukin-10',
+    body: `The body's own stand-down signal. Walk through it to drop the immune alert by ${CONFIG.items.calmDrop}. It stays put while the alert is empty, so remember where you saw it. Staying out of sight for a few seconds also makes the alert drain quickly.` },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
     body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
 ];
@@ -60,6 +62,7 @@ export function nextTip(s: State, extra: Record<string, Point | null> = {}): { t
     kupffer: nearest(s.enemies.filter((e) => e.kind === 'kupffer')),
     cache: nearest(s.pickups.filter((i) => i.kind === 'cache')),
     patch: nearest(s.pickups.filter((i) => i.kind === 'patch')),
+    calm: nearest(s.pickups.filter((i) => i.kind === 'calm')),
     vein: nearest([mid(s.vein)]),
     ...extra,
   };

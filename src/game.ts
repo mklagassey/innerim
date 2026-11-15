@@ -25,7 +25,7 @@ export interface Enemy extends Point {
 }
 export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
-export interface Pickup extends Point { kind: 'cache' | 'patch' }
+export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
 
 export interface State {
@@ -51,6 +51,7 @@ export interface State {
   floats: Float[];
   hostHealth: number;
   alert: number;
+  unseen: number; // seconds since any immune cell last had eyes on you
   time: number;
   metabolism: number;
   regen: number;
@@ -87,7 +88,7 @@ export function createGame(seed = Date.now()): State {
     },
     upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>,
     patches: 1,
-    pickups: [...m.caches.map((c) => ({ ...mid(c), kind: 'cache' as const })), ...m.patches.map((c) => ({ ...mid(c), kind: 'patch' as const }))],
+    pickups: [...m.caches.map((c) => ({ ...mid(c), kind: 'cache' as const })), ...m.patches.map((c) => ({ ...mid(c), kind: 'patch' as const })), ...m.calms.map((c) => ({ ...mid(c), kind: 'calm' as const }))],
     offer: null,
     cloak: 0,
     cloakCd: 0,
@@ -96,6 +97,7 @@ export function createGame(seed = Date.now()): State {
     floats: [],
     hostHealth: CONFIG.host.maxHealth,
     alert: 0,
+    unseen: 0,
     time: 0,
     metabolism: 0,
     regen: 0,
@@ -470,6 +472,9 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
   }
 }
 
+/** True once the immune cells have lost you for long enough that the alert is draining fast. */
+export const losingThem = (s: State) => s.alert > 0 && s.unseen >= CONFIG.alert.loseAfter;
+
 export function alertTier(s: State) {
   const tiers = CONFIG.alert.tiers;
   let tier: (typeof tiers)[number] = tiers[0];
@@ -544,6 +549,12 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       s.patches++;
       float(s, p, 'Fibrin patch', '#7be08a');
       emit(s, 'pickup');
+    } else if (item.kind === 'calm') {
+      if (s.alert <= 0) continue; // nothing to soothe: leave it for later
+      raiseAlert(s, -CONFIG.items.calmDrop);
+      float(s, p, 'Interleukin-10', '#b9a4ff');
+      say(s, `The tissue settles. Immune alert: ${alertTier(s).name}.`);
+      emit(s, 'calm');
     } else openCache(s);
     s.pickups.splice(s.pickups.indexOf(item), 1);
   }
@@ -576,7 +587,9 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (d < min && d > 0.001) shift(s, e, ((e.x - p.x) / d) * (min - d), ((e.y - p.y) / d) * (min - d), CONFIG.enemies[e.kind].radius);
   }
   if (s.status !== 'playing') return;
-  if (!seen) raiseAlert(s, -CONFIG.alert.decay * dt);
+  // Stay out of sight long enough and the search loses heart, like any manhunt.
+  s.unseen = seen ? 0 : s.unseen + dt;
+  if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
 
   const en = CONFIG.energy;
   s.regen += dt;

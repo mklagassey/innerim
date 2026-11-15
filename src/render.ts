@@ -523,7 +523,7 @@ function enemy(ctx: Ctx, e: Enemy, v: View) {
 }
 
 /** A cache is a vesicle of loot; a patch is a pale knot of fibrin. */
-function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch', seen: boolean, time: number) {
+function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch' | 'calm', seen: boolean, time: number) {
   const c = project(x, y), hover = seen ? Math.sin(time * 2.4 + x) * 2 : 0;
   ctx.globalAlpha = seen ? 1 : 0.35;
   ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, 8, 4); ctx.fill();
@@ -544,6 +544,23 @@ function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch', seen: b
     for (let k = 0; k < 4; k++) { const a = time * 0.8 + k * 1.57; oval(ctx, c.x + Math.cos(a) * 4, cy + Math.sin(a) * 3.2 + 1, 1.7, 1.7); ctx.fill(); }
     ctx.strokeStyle = 'rgba(233,255,251,0.75)'; ctx.lineWidth = 1.2; oval(ctx, c.x, cy, 10, 10); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.7)'; oval(ctx, c.x - 4, cy - 5, 2.6, 1.5, -0.6); ctx.fill();
+  } else if (kind === 'calm') {
+    // Interleukin-10: a violet droplet that breathes out slow rings.
+    const cy = c.y - 12 + hover;
+    if (seen) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 2; k++) {
+        const t = (time * 0.45 + k * 0.5) % 1;
+        ctx.strokeStyle = `rgba(170,140,255,${0.5 * (1 - t)})`; ctx.lineWidth = 1.5;
+        oval(ctx, c.x, c.y, 6 + t * 22, 3 + t * 11); ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    const body = ctx.createRadialGradient(c.x - 2, cy - 3, 1, c.x, cy, 9);
+    body.addColorStop(0, 'rgba(240,232,255,0.95)'); body.addColorStop(0.55, 'rgba(150,120,235,0.8)'); body.addColorStop(1, 'rgba(70,48,150,0.85)');
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.moveTo(c.x, cy - 12); ctx.bezierCurveTo(c.x + 9, cy - 2, c.x + 8, cy + 8, c.x, cy + 8); ctx.bezierCurveTo(c.x - 8, cy + 8, c.x - 9, cy - 2, c.x, cy - 12); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; oval(ctx, c.x - 3, cy - 1, 1.6, 2.6, 0.5); ctx.fill();
   } else {
     // Fibrin: a mesh of pale threads with a clot at the centre.
     const cy = c.y - 9 + hover, rf = rand(Math.floor(x * 31 + y * 17));
@@ -635,7 +652,7 @@ function automap(ctx: Ctx, s: State, v: View) {
     }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
-  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cache' ? '#78f0e1' : '#7be08a');
+  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   dot(p.x, p.y, u * 0.8, '#ffffff');

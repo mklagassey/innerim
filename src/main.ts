@@ -168,7 +168,9 @@ function hud() {
   set('host-val', 'text', `${s.hostHealth}%`);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
-  set('alert-val', 'text', tier.name);
+  const losing = G.losingThem(s);
+  set('alert-val', 'text', losing ? `${tier.name} \u00b7 losing them` : tier.name);
+  $('alert').classList.toggle('losing', losing);
   set('alert', 'tier', String(CONFIG.alert.tiers.findIndex((t) => t.name === tier.name)));
 
   const playing = started && s.status === 'playing';

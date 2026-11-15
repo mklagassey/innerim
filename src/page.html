@@ -41,6 +41,8 @@
   #host { --fill: #c9768a; } #alert { --fill: var(--bone-dim); }
   #alert[data-tier="1"] { --fill: var(--amber); } #alert[data-tier="2"], #alert[data-tier="3"] { --fill: var(--blood); }
   #alert[data-tier="3"] b { color: var(--blood); }
+  #alert.losing b, #alert.losing i { animation: losing 0.9s ease-in-out infinite; }
+  @keyframes losing { 50% { opacity: 0.35; } }
   .tools { top: 10px; right: 12px; display: flex; gap: 8px; }
   #sound[aria-pressed="false"] { color: var(--bone-dim); }
   button { font: 600 0.8rem/1.2 var(--display); letter-spacing: 0.08em; color: var(--bone); background: var(--clot); border: 1px solid var(--seam);
@@ -94,7 +96,7 @@
     .orb { width: 64px; height: 64px; } .belt { left: 12px; right: 12px; bottom: 88px; }
     #style, #build { display: none; }
   }
-  @media (prefers-reduced-motion: reduce) { .gauge i u, .orb u { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .gauge i u, .orb u { transition: none; } #alert.losing b, #alert.losing i { animation: none; } }
 </style>
 <div class="stage">
   <canvas id="board" tabindex="0" aria-label="Isometric view of liver tissue around you"></canvas>

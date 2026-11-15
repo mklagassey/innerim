@@ -24,6 +24,8 @@ export const CONFIG = {
   alert: {
     max: 100,
     decay: 0.6, // per second while nothing can see you
+    loseAfter: 4, // seconds out of sight before the search starts to give up
+    shake: 5, // per second once it does
     seenByNeutrophil: 1.2, // per second
     seenByKupffer: 3.5,
     perKill: 5,
@@ -38,6 +40,8 @@ export const CONFIG = {
   items: {
     caches: 6, // upgrade choices scattered through the liver
     patches: 4,
+    calms: 3, // interleukin-10 droplets
+    calmDrop: 30, // alert removed by one
     patchHeal: 15,
     autoPatchBelow: 0.35, // a patch applies itself when life falls to this fraction
     maxPatches: 5,
