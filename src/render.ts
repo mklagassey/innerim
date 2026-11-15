@@ -1,7 +1,7 @@
 // Draws the liver in isometric view, lit only by what the player can see. Tissue you have
 // visited but cannot see right now is drawn from memory: dim and drained of colour.
 import { CONFIG } from './config';
-import { Enemy, Point, State, idx, stripTarget } from './game';
+import { Enemy, Point, State, cloaked, idx, stripTarget, vision } from './game';
 
 export const TW = 64, TH = 32;
 const WALL = 24;
@@ -43,7 +43,7 @@ function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
 }
 
 export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
-  const p = s.player, R = CONFIG.player.vision;
+  const p = s.player, R = vision(s);
   ctx.fillStyle = `rgb(${INK[0]},${INK[1]},${INK[2]})`;
   ctx.fillRect(0, 0, v.w, v.h);
   ctx.save();
@@ -131,6 +131,11 @@ export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
     if (!s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) continue;
     things.push({ depth: e.x + e.y, draw: () => enemy(ctx, e, v) });
   }
+  for (const item of s.pickups) {
+    if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
+    const seen = s.visible[idx(s, Math.floor(item.x), Math.floor(item.y))] === 1;
+    things.push({ depth: item.x + item.y - 0.01, draw: () => pickup(ctx, item.x, item.y, item.kind, seen, v.time) });
+  }
   things.push({ depth: p.x + p.y, draw: () => hero(ctx, s, v) });
   things.sort((a, b) => a.depth - b.depth);
   for (const t of things) t.draw();
@@ -210,8 +215,37 @@ function enemy(ctx: CanvasRenderingContext2D, e: Enemy, v: View) {
   if (v.hoverEnemy === e.id) { ctx.strokeStyle = 'rgba(255,90,77,0.9)'; ctx.lineWidth = 2; oval(ctx, c.x, c.y, r * 1.15, r * 0.52); ctx.stroke(); }
 }
 
+/** A cache is a vesicle of loot; a patch is a pale knot of fibrin. */
+function pickup(ctx: CanvasRenderingContext2D, x: number, y: number, kind: 'cache' | 'patch', seen: boolean, time: number) {
+  const c = project(x, y), hover = seen ? Math.sin(time * 2.4 + x) * 2 : 0;
+  ctx.globalAlpha = seen ? 1 : 0.35;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, 8, 4); ctx.fill();
+  if (kind === 'cache') {
+    if (seen) {
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = ctx.createRadialGradient(c.x, c.y - 12, 0, c.x, c.y - 12, 30);
+      glow.addColorStop(0, 'rgba(120,240,225,0.35)'); glow.addColorStop(1, 'rgba(120,240,225,0)');
+      ctx.fillStyle = glow; oval(ctx, c.x, c.y - 12, 30, 30); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    const body = ctx.createRadialGradient(c.x - 3, c.y - 17 + hover, 1, c.x, c.y - 13 + hover, 10);
+    body.addColorStop(0, '#e9fffb'); body.addColorStop(1, '#2f9e97');
+    ctx.fillStyle = body; oval(ctx, c.x, c.y - 13 + hover, 9, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(233,255,251,0.7)'; ctx.lineWidth = 1.2; oval(ctx, c.x, c.y - 13 + hover, 9, 9); ctx.stroke();
+  } else {
+    ctx.strokeStyle = '#d9e8a8'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI + 0.4;
+      ctx.beginPath(); ctx.moveTo(c.x - Math.cos(a) * 7, c.y - 8 + hover - Math.sin(a) * 5); ctx.lineTo(c.x + Math.cos(a) * 7, c.y - 8 + hover + Math.sin(a) * 5); ctx.stroke();
+    }
+    ctx.fillStyle = '#7be08a'; oval(ctx, c.x, c.y - 8 + hover, 2.6, 2.6); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function hero(ctx: CanvasRenderingContext2D, s: State, v: View) {
   const p = s.player, c = project(p.x, p.y);
+  if (cloaked(s)) ctx.globalAlpha = 0.38;
   const f = project(p.face.x, p.face.y), fl = Math.hypot(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
   const moving = p.path.length > 0, step = moving ? Math.sin(v.time * 16) * 1.5 : 0;
   ctx.fillStyle = 'rgba(0,0,0,0.45)'; oval(ctx, c.x, c.y, 9, 4.5); ctx.fill();
@@ -234,6 +268,7 @@ function hero(ctx: CanvasRenderingContext2D, s: State, v: View) {
     ctx.strokeStyle = p.channel.kind === 'strip' ? '#ff5a4d' : '#ecb42e'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(c.x, c.y - 44, 9, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 /** The overlay map: only the tissue you have actually seen. */
@@ -252,6 +287,7 @@ function automap(ctx: CanvasRenderingContext2D, s: State, v: View) {
     }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
+  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cache' ? '#78f0e1' : '#7be08a');
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   dot(p.x, p.y, u * 0.8, '#ffffff');

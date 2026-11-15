@@ -58,6 +58,16 @@
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   #act-e { border-color: var(--amber); } #act-f { border-color: var(--blood); }
   #need { margin: 0; font-size: 0.9rem; color: var(--vein); text-shadow: 0 1px 6px #000; }
+  #style { color: var(--amber); margin-top: 6px; }
+  #build { white-space: pre-line; font: 400 0.82rem/1.35 var(--body); color: var(--bone-dim); text-shadow: 0 1px 4px #000; }
+  #act-h { border-color: #7be08a; } #act-c { border-color: #78f0e1; }
+  #offer-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; width: 100%; }
+  #offer-list button { display: grid; gap: 6px; align-content: start; text-align: left; padding: 14px; color: var(--bone); border-color: var(--seam); letter-spacing: 0; }
+  #offer-list button:hover { border-color: var(--amber); }
+  #offer-list small { font: 500 0.66rem/1 var(--data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); }
+  #offer-list strong { font: 800 1rem/1.15 var(--display); letter-spacing: 0.04em; }
+  #offer-list span { font: 400 0.92rem/1.35 var(--body); }
+  #offer-list em { font: italic 400 0.82rem/1.35 var(--body); color: var(--bone-dim); }
   .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.84); padding: 16px; overflow-y: auto; }
   .card { max-width: 34rem; display: grid; gap: 14px; justify-items: start; }
   .card h2 { font: 800 clamp(1.7rem, 5vw, 2.6rem)/1.05 var(--display); letter-spacing: 0.05em; margin: 0; text-wrap: balance; }
@@ -68,13 +78,14 @@
   .card button { font-size: 0.95rem; padding: 12px 22px; border-color: var(--amber); color: var(--amber); }
   @media (max-width: 560px) {
     .gauges { top: 48px; left: 14px; transform: none; width: calc(100% - 28px); }
-    .orb { width: 64px; height: 64px; } .belt { left: 84px; right: 84px; }
+    .orb { width: 64px; height: 64px; } .belt { left: 12px; right: 12px; bottom: 88px; }
+    #style, #build { display: none; }
   }
   @media (prefers-reduced-motion: reduce) { .gauge i u, .orb u { transition: none; } }
 </style>
 <div class="stage">
   <canvas id="board" tabindex="0" aria-label="Isometric view of liver tissue around you"></canvas>
-  <div class="hud name"><h1>Insiderim</h1><span class="where">Liver lobule &middot; cell tier</span></div>
+  <div class="hud name"><h1>Insiderim</h1><span class="where">Liver lobule &middot; cell tier</span><span class="where" id="style"></span><span id="build"></span></div>
   <div class="hud gauges">
     <div class="gauge" id="host"><span>Host health</span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
@@ -86,6 +97,8 @@
     <p id="log"></p>
     <p id="need" hidden>The central vein. You need 20 energy to ride it out.</p>
     <div class="acts">
+      <button id="act-h" type="button" hidden>H  Fibrin patch</button>
+      <button id="act-c" type="button" hidden>C  Cloak</button>
       <button id="act-e" type="button" hidden>E  Skim glucose</button>
       <button id="act-f" type="button" hidden>F  Strip mitochondria</button>
     </div>
@@ -101,9 +114,17 @@
         <dt>Right-click</dt><dd>Fire toward the cursor. Costs 1 energy. <b>Q</b> does the same.</dd>
         <dt>E</dt><dd>Skim glucose while standing on it. At the vein, leave.</dd>
         <dt>F</dt><dd>Strip the nearest living cell. It dies and leaves a gap you can walk through.</dd>
+        <dt>H</dt><dd>Use a fibrin patch to heal. Glowing vesicles in the tissue hold upgrades.</dd>
         <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>
       </dl>
       <button id="begin" type="button">Enter the liver</button>
+    </div>
+  </div>
+  <div class="veil" id="offer" hidden>
+    <div class="card">
+      <h2>Take one</h2>
+      <p>There are no classes. What you take here is what you become.</p>
+      <div id="offer-list"></div>
     </div>
   </div>
   <div class="veil" id="over" hidden>

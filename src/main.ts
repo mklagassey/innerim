@@ -1,5 +1,5 @@
 // Input, the game loop and the heads-up display. All rules live in game.ts.
-import { CONFIG } from './config';
+import { CONFIG, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
 import { draw, TH, TW, View } from './render';
 
@@ -85,7 +85,10 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'e') useE();
   else if (k === 'f') G.startStrip(s);
   else if (k === ' ') { ev.preventDefault(); G.strike(s); }
+  else if (s.offer && '123'.includes(k)) { const id = s.offer[Number(k) - 1]; if (id) G.choose(s, id); }
   else if (k === 'q' && view.hover) G.shoot(s, view.hover.x, view.hover.y);
+  else if (k === 'h' || k === '1') G.usePatch(s);
+  else if (k === 'c') G.cloak(s);
 });
 window.addEventListener('keyup', (ev) => keys.delete(ev.key.toLowerCase()));
 window.addEventListener('blur', () => { keys.clear(); release(); });
@@ -93,12 +96,20 @@ window.addEventListener('blur', () => { keys.clear(); release(); });
 $('act-e').addEventListener('click', useE);
 $('act-f').addEventListener('click', () => G.startStrip(s));
 $('map').addEventListener('click', toggleMap);
+$('act-h').addEventListener('click', () => G.usePatch(s));
+$('act-c').addEventListener('click', () => G.cloak(s));
+$('offer-list').addEventListener('click', (ev) => {
+  const id = (ev.target as HTMLElement).closest('button')?.dataset.id as UpgradeId | undefined;
+  if (id) { G.choose(s, id); keys.clear(); release(); }
+});
 $('begin').addEventListener('click', () => { started = true; $('intro').hidden = true; canvas.focus(); });
-$('again').addEventListener('click', () => { s = G.createGame(); keys.clear(); release(); $('over').hidden = true; });
+$('again').addEventListener('click', () => { s = G.createGame(); shownOffer = ''; keys.clear(); release(); $('over').hidden = true; });
 
 // ---------- heads-up display ----------
 
 const last: Record<string, string> = {};
+let shownOffer = '';
+const roman = (n: number) => 'I'.repeat(n);
 function set(id: string, prop: 'text' | 'height' | 'width' | 'hidden' | 'tier', value: string) {
   if (last[id + prop] === value) return;
   last[id + prop] = value;
@@ -111,7 +122,7 @@ function set(id: string, prop: 'text' | 'height' | 'width' | 'hidden' | 'tier', 
 
 function hud() {
   const p = s.player, pct = (v: number, max: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
-  set('hp-fill', 'height', pct(p.hp, CONFIG.player.maxHp));
+  set('hp-fill', 'height', pct(p.hp, G.maxHp(s)));
   set('hp-val', 'text', String(Math.ceil(p.hp)));
   set('energy-fill', 'height', pct(p.energy, CONFIG.energy.quota));
   set('energy-val', 'text', `${p.energy}/${CONFIG.energy.quota}`);
@@ -128,6 +139,32 @@ function hud() {
   set('act-e', 'text', leaving ? 'E  Ride the central vein out' : 'E  Skim glucose');
   set('act-f', 'hidden', playing && !harvesting && G.stripTarget(s) ? '0' : '1');
   set('need', 'hidden', playing && G.atVein(s) && !leaving ? '0' : '1');
+  set('act-h', 'hidden', playing && s.patches > 0 ? '0' : '1');
+  set('act-h', 'text', `H  Fibrin patch \u00d7${s.patches}`);
+  set('act-c', 'hidden', playing && s.upgrades.cd47 > 0 ? '0' : '1');
+  set('act-c', 'text', G.cloaked(s) ? `Unseen ${s.cloak.toFixed(0)}s` : s.cloakCd > 0 ? `Cloak ${Math.ceil(s.cloakCd)}s` : 'C  Cloak');
+  const owned = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => s.upgrades[id] > 0);
+  set('build', 'text', owned.map((id) => `${UPGRADES[id].name} ${roman(s.upgrades[id])}`).join('\n'));
+  const tracks = owned.reduce<Record<string, number>>((a, id) => ({ ...a, [UPGRADES[id].track]: (a[UPGRADES[id].track] ?? 0) + s.upgrades[id] }), {});
+  const lead = Object.entries(tracks).sort((a, b) => b[1] - a[1])[0];
+  set('style', 'text', lead ? `${lead[0]} build` : 'No upgrades yet');
+
+  // The upgrade choice: built once per offer so the buttons stay clickable.
+  const key = s.offer ? s.offer.join() : '';
+  if (key !== shownOffer) {
+    shownOffer = key;
+    $('offer').hidden = !s.offer;
+    $('offer-list').replaceChildren(...(s.offer ?? []).map((id, i) => {
+      const u = UPGRADES[id], b = document.createElement('button');
+      b.type = 'button'; b.dataset.id = id; b.dataset.track = u.track;
+      const add = (tag: string, text: string) => b.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
+      add('small', `${i + 1} \u00b7 ${u.track}`);
+      add('strong', `${u.name}${s.upgrades[id] ? ' ' + roman(s.upgrades[id] + 1) : ''}`);
+      add('span', u.what);
+      add('em', u.real);
+      return b;
+    }));
+  }
 
   set('log', 'text', s.log.filter((m) => s.time - m.t < 7).slice(-3).map((m) => m.text).join('\n'));
 

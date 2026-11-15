@@ -35,8 +35,42 @@ export const CONFIG = {
     ],
     maxEnemies: 16,
   },
+  items: {
+    caches: 6, // upgrade choices scattered through the liver
+    patches: 4,
+    patchHeal: 15,
+    maxPatches: 5,
+    patchDrop: 0.2, // chance a dead neutrophil leaves one behind
+    offer: 3, // upgrades to choose between at each cache
+  },
+  cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10 },
   enemies: {
     neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, sight: 6, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
     kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, sight: 5, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
   },
 } as const;
+
+export type Track = 'Tank' | 'Warrior' | 'Stealth' | 'Scout';
+export interface Upgrade { name: string; track: Track; max: number; per: number; what: string; real: string }
+
+// No classes: a build is whatever mix of these the player picks. Each is a real thing
+// with one liberty taken, which is that you can carry it off and use it.
+export const UPGRADES = {
+  glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 12, what: '+12 maximum life, and heals that much now.',
+    real: 'The sugar coat that shields the lining of every blood vessel.' },
+  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.35, what: 'Slowly knit your wounds closed over time.',
+    real: 'The liver makes most of the proteins that clot blood.' },
+  elastase: { name: 'Elastase edge', track: 'Warrior', max: 3, per: 2, what: '+2 strike damage.',
+    real: 'The enzyme neutrophils use to cut through tissue.' },
+  peroxidase: { name: 'Myeloperoxidase rounds', track: 'Warrior', max: 3, per: 3, what: '+3 shot damage.',
+    real: 'The neutrophil enzyme that makes bleach on the spot.' },
+  cd47: { name: 'CD47 cloak', track: 'Stealth', max: 3, per: 2, what: 'Press C to go unseen for a few seconds (2 energy). Each level lasts longer.',
+    real: "The 'do not eat me' signal healthy cells show to macrophages." },
+  apoptosis: { name: 'Apoptosis mimic', track: 'Stealth', max: 3, per: 8, what: 'Stripping a cell raises far less alarm. At level 2, no responders come.',
+    real: 'Cells that die by apoptosis are cleared quietly, with no inflammation.' },
+  retinol: { name: 'Retinol reserve', track: 'Scout', max: 3, per: 1.5, what: '+1.5 tiles of sight.',
+    real: "Vitamin A, the pigment of vision. Most of the body's supply is stored in the liver." },
+  atp: { name: 'ATP surge', track: 'Scout', max: 3, per: 0.09, what: 'Move 9% faster.',
+    real: 'The energy currency every cell runs on.' },
+} as const satisfies Record<string, Upgrade>;
+export type UpgradeId = keyof typeof UPGRADES;

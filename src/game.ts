@@ -1,6 +1,6 @@
 // The rules of the liver prototype, simulated in real time. No drawing and no browser
 // APIs in here, so the whole game can be run and tested from plain code.
-import { CONFIG } from './config';
+import { CONFIG, UPGRADES, UpgradeId } from './config';
 import { generate, mulberry32, Point } from './map';
 
 export type { Point };
@@ -25,6 +25,7 @@ export interface Enemy extends Point {
 }
 export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
+export interface Pickup extends Point { kind: 'cache' | 'patch' }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
 
 export interface State {
@@ -39,6 +40,12 @@ export interface State {
     hp: number; energy: number; face: Point; path: Point[]; attackId: number | null;
     swingCd: number; shotCd: number; swing: number; channel: Channel | null; hurt: number;
   };
+  upgrades: Record<UpgradeId, number>; // level of each upgrade: this is the character build
+  patches: number;
+  pickups: Pickup[];
+  offer: UpgradeId[] | null; // a choice waiting to be made; the world holds still meanwhile
+  cloak: number; // seconds of invisibility left
+  cloakCd: number;
   enemies: Enemy[];
   shots: Shot[];
   floats: Float[];
@@ -77,6 +84,12 @@ export function createGame(seed = Date.now()): State {
       ...mid(m.start), hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, face: { x: 1, y: 0 },
       path: [], attackId: null, swingCd: 0, shotCd: 0, swing: 0, channel: null, hurt: 0,
     },
+    upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>,
+    patches: 1,
+    pickups: [...m.caches.map((c) => ({ ...mid(c), kind: 'cache' as const })), ...m.patches.map((c) => ({ ...mid(c), kind: 'patch' as const }))],
+    offer: null,
+    cloak: 0,
+    cloakCd: 0,
     enemies: [],
     shots: [],
     floats: [],
@@ -116,6 +129,48 @@ function say(s: State, text: string) {
 }
 const float = (s: State, at: Point, text: string, color: string) => s.floats.push({ x: at.x, y: at.y, text, color, age: 0 });
 
+// ---------- the build ----------
+
+const bonus = (s: State, id: UpgradeId) => s.upgrades[id] * UPGRADES[id].per;
+export const maxHp = (s: State) => CONFIG.player.maxHp + bonus(s, 'glycocalyx');
+export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol');
+export const speed = (s: State) => CONFIG.player.speed * (1 + bonus(s, 'atp'));
+export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
+export const cloaked = (s: State) => s.cloak > 0;
+
+/** Take one of the upgrades on offer. */
+export function choose(s: State, id: UpgradeId): boolean {
+  if (!s.offer?.includes(id)) return false;
+  s.offer = null;
+  s.upgrades[id]++;
+  if (id === 'glycocalyx') s.player.hp = Math.min(maxHp(s), s.player.hp + UPGRADES.glycocalyx.per);
+  say(s, `${UPGRADES[id].name}${s.upgrades[id] > 1 ? ' ' + 'I'.repeat(s.upgrades[id]) : ''} is yours.`);
+  return true;
+}
+function openCache(s: State) {
+  const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => s.upgrades[id] < UPGRADES[id].max);
+  const offer: UpgradeId[] = [];
+  while (pool.length && offer.length < CONFIG.items.offer) offer.push(pool.splice(Math.floor(s.rng() * pool.length), 1)[0]);
+  if (offer.length) s.offer = offer;
+}
+/** Slap a fibrin patch on. */
+export function usePatch(s: State): boolean {
+  if (s.status !== 'playing' || s.patches <= 0 || s.player.hp >= maxHp(s)) return false;
+  s.patches--;
+  const before = s.player.hp;
+  s.player.hp = Math.min(maxHp(s), before + CONFIG.items.patchHeal);
+  float(s, s.player, `+${Math.round(s.player.hp - before)}`, '#7be08a');
+  return true;
+}
+/** Show the 'do not eat me' signal: nothing can see you until it fades or you attack. */
+export function cloak(s: State): boolean {
+  if (s.status !== 'playing' || !s.upgrades.cd47 || s.cloakCd > 0 || s.player.energy < CONFIG.cloak.energy) return false;
+  s.player.energy -= CONFIG.cloak.energy;
+  s.cloak = cloakTime(s);
+  s.cloakCd = CONFIG.cloak.cooldown + s.cloak;
+  return true;
+}
+
 // ---------- the map ----------
 
 export const idx = (s: State, x: number, y: number) => y * s.size + x;
@@ -140,7 +195,7 @@ export function sees(s: State, a: Point, b: Point): boolean {
 /** Works out what the player can see right now, and remembers it. */
 export function look(s: State) {
   s.visible.fill(0);
-  const p = tileOf(s.player), R = CONFIG.player.vision, r = Math.ceil(R);
+  const p = tileOf(s.player), R = vision(s), r = Math.ceil(R);
   for (let y = p.y - r; y <= p.y + r; y++)
     for (let x = p.x - r; x <= p.x + r; x++) {
       if (!inside(s, x, y) || Math.hypot(x - p.x, y - p.y) > R) continue;
@@ -277,12 +332,13 @@ export function strike(s: State, toward?: Point): boolean {
   if (aim && dist(aim, p) > 0.01) p.face = { x: (aim.x - p.x) / dist(aim, p), y: (aim.y - p.y) / dist(aim, p) };
   p.swingCd = c.cooldown;
   p.swing = 0.18;
+  s.cloak = 0; // violence gives you away
   interrupt(s);
   for (const e of [...s.enemies]) {
     const d = dist(e, p);
     if (d > c.reach + CONFIG.enemies[e.kind].radius) continue;
     if (d > 0.3 && ((e.x - p.x) * p.face.x + (e.y - p.y) * p.face.y) / d < c.arc) continue;
-    hurtEnemy(s, e, roll(s, c.min, c.max));
+    hurtEnemy(s, e, roll(s, c.min, c.max) + bonus(s, 'elastase'));
   }
   return true;
 }
@@ -297,6 +353,7 @@ export function shoot(s: State, x: number, y: number): boolean {
   p.face = { x: (x - p.x) / d, y: (y - p.y) / d };
   p.energy -= c.energy;
   p.shotCd = c.cooldown;
+  s.cloak = 0;
   interrupt(s);
   s.shots.push({ x: p.x, y: p.y, vx: p.face.x * c.speed, vy: p.face.y * c.speed, left: c.range });
   return true;
@@ -344,12 +401,13 @@ function finishChannel(s: State, ch: Channel) {
   s.lastDamageSite = { x: ch.x, y: ch.y };
   float(s, p, `+${c.gain} energy`, '#e8b530');
   say(s, 'The hepatocyte dies and leaks danger signals.');
-  raiseAlert(s, c.alert);
+  raiseAlert(s, Math.max(1, c.alert - bonus(s, 'apoptosis')));
   // A dying cell's signals pull in everything nearby, and first responders ride in on the blood.
+  const reach = 26 - s.upgrades.apoptosis * 8;
   for (const e of s.enemies) {
-    if (e.mood !== 'chase' && dist(e, s.lastDamageSite) < 26) { e.mood = 'investigate'; e.goal = { ...s.lastDamageSite }; e.path = []; e.repath = 0; e.idle = 0; }
+    if (e.mood !== 'chase' && dist(e, s.lastDamageSite) < reach) { e.mood = 'investigate'; e.goal = { ...s.lastDamageSite }; e.path = []; e.repath = 0; e.idle = 0; }
   }
-  arrive(s, Math.min(s.cellsKilled, c.maxResponders));
+  if (s.upgrades.apoptosis < 2) arrive(s, Math.min(s.cellsKilled, c.maxResponders));
 }
 
 function hurtEnemy(s: State, e: Enemy, dmg: number) {
@@ -359,6 +417,9 @@ function hurtEnemy(s: State, e: Enemy, dmg: number) {
   if (e.hp <= 0) {
     s.enemies = s.enemies.filter((o) => o !== e);
     s.kills++;
+    // A Kupffer cell is full of what it has eaten; neutrophils sometimes leave a clot behind.
+    if (e.kind === 'kupffer') s.pickups.push({ x: e.x, y: e.y, kind: 'cache' });
+    else if (s.rng() < CONFIG.items.patchDrop) s.pickups.push({ x: e.x, y: e.y, kind: 'patch' });
     if (s.player.attackId === e.id) s.player.attackId = null;
     raiseAlert(s, CONFIG.alert.perKill);
     return;
@@ -411,11 +472,13 @@ function arrive(s: State, count: number) {
 
 /** Advance the game by dt seconds. `dir` is a walking direction held on the keyboard, if any. */
 export function update(s: State, dt: number, dir: Point | null = null) {
-  if (s.status !== 'playing') return;
+  if (s.status !== 'playing' || s.offer) return;
   dt = Math.min(dt, 0.05);
   s.time += dt;
   const p = s.player, pc = CONFIG.player;
   p.swingCd -= dt; p.shotCd -= dt; p.swing -= dt; p.hurt -= dt;
+  s.cloak = Math.max(0, s.cloak - dt); s.cloakCd = Math.max(0, s.cloakCd - dt);
+  if (s.upgrades.clotting && p.hp < maxHp(s)) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
 
   // Walking: held keys win over a clicked route, and a chosen enemy is hunted down.
   const target = p.attackId === null ? null : s.enemies.find((e) => e.id === p.attackId) ?? null;
@@ -424,17 +487,17 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     p.face = { x: dir.x / len, y: dir.y / len };
     p.path = []; p.attackId = null;
     interrupt(s);
-    shift(s, p, p.face.x * pc.speed * dt, p.face.y * pc.speed * dt, pc.radius);
+    shift(s, p, p.face.x * speed(s) * dt, p.face.y * speed(s) * dt, pc.radius);
   } else if (target) {
     const reach = pc.strike.reach + CONFIG.enemies[target.kind].radius - 0.15;
     if (dist(target, p) <= reach) { p.path = []; strike(s, target); }
     else {
       if (!p.path.length || dist(mid(p.path[p.path.length - 1]), target) > 1) p.path = findPath(s, tileOf(p), tileOf(target)) ?? [];
-      const d = follow(s, p, pc.speed, dt, pc.radius);
+      const d = follow(s, p, speed(s), dt, pc.radius);
       if (d) p.face = d;
     }
   } else if (p.path.length) {
-    const d = follow(s, p, pc.speed, dt, pc.radius);
+    const d = follow(s, p, speed(s), dt, pc.radius);
     if (d) p.face = d;
   }
 
@@ -445,11 +508,21 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
   look(s);
 
+  for (const item of [...s.pickups]) {
+    if (dist(item, p) > 0.75) continue;
+    if (item.kind === 'patch') {
+      if (s.patches >= CONFIG.items.maxPatches) continue;
+      s.patches++;
+      float(s, p, 'Fibrin patch', '#7be08a');
+    } else openCache(s);
+    s.pickups.splice(s.pickups.indexOf(item), 1);
+  }
+
   for (const shot of [...s.shots]) {
     const step = Math.hypot(shot.vx, shot.vy) * dt;
     shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.left -= step;
     const hit = s.enemies.find((e) => dist(e, shot) < pc.shot.radius + CONFIG.enemies[e.kind].radius * 0.5);
-    if (hit) hurtEnemy(s, hit, roll(s, pc.shot.min, pc.shot.max));
+    if (hit) hurtEnemy(s, hit, roll(s, pc.shot.min, pc.shot.max) + bonus(s, 'peroxidase'));
     if (hit || shot.left <= 0 || !open(s, Math.floor(shot.x), Math.floor(shot.y))) s.shots.splice(s.shots.indexOf(shot), 1);
   }
 
@@ -504,7 +577,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const c = CONFIG.enemies[e.kind], p = s.player;
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   const d = dist(e, p);
-  const saw = d <= c.sight && sees(s, tileOf(e), tileOf(p));
+  const saw = !cloaked(s) && d <= c.sight && sees(s, tileOf(e), tileOf(p));
   if (saw) {
     if (e.mood !== 'chase') float(s, e, '!', '#ff5a4d');
     e.mood = 'chase'; e.unseen = 0; e.goal = tileOf(p);

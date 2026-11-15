@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CONFIG } from '../src/config';
+import { CONFIG, UPGRADES, UpgradeId } from '../src/config';
 import { generate } from '../src/map';
 import * as G from '../src/game';
 
-const quiet = (seed = 1) => { const s = G.createGame(seed); s.enemies = []; return s; };
+const quiet = (seed = 1) => { const s = G.createGame(seed); s.enemies = []; s.pickups = []; return s; };
 const run = (s: G.State, seconds: number, dir: G.Point | null = null) => { for (let t = 0; t < seconds; t += 1 / 60) G.update(s, 1 / 60, dir); };
 /** Stands the player on open tissue right beside a living hepatocyte. */
 const besideCell = (s: G.State) => {
@@ -140,6 +140,8 @@ test('a bot mashing buttons never breaks the game', () => {
       else if (r < 0.06) G.strike(s);
       else if (r < 0.07) G.shoot(s, s.player.x + s.rng() - 0.5, s.player.y + s.rng() - 0.5);
       else if (r < 0.08 && s.enemies[0]) G.attack(s, s.enemies[0].id);
+      if (s.offer) G.choose(s, s.offer[Math.floor(s.rng() * s.offer.length)]);
+      if (r > 0.99) { G.usePatch(s); G.cloak(s); }
       G.update(s, 1 / 30, dir);
       const p = s.player;
       assert.ok(Number.isFinite(p.x + p.y) && G.open(s, Math.floor(p.x), Math.floor(p.y)), 'player in open tissue');
@@ -147,4 +149,91 @@ test('a bot mashing buttons never breaks the game', () => {
       assert.ok(s.alert >= 0 && s.alert <= 100 && p.energy >= 0);
     }
   }
+});
+
+const foe = (s: G.State, dx: number, dy: number, kind: G.EnemyKind = 'neutrophil'): G.Enemy => {
+  const e: G.Enemy = { id: s.nextId++, kind, x: s.player.x + dx, y: s.player.y + dy, hp: CONFIG.enemies[kind].hp, mood: 'patrol', goal: null, home: G.tileOf(s.player), path: [], repath: 0, cooldown: 0, windup: -1, idle: 0, unseen: 99, flash: 0 };
+  s.enemies.push(e);
+  return e;
+};
+
+test('walking onto a cache pauses the world and offers three different upgrades', () => {
+  const s = quiet(11);
+  s.pickups.push({ x: s.player.x, y: s.player.y, kind: 'cache' });
+  run(s, 0.1);
+  assert.equal(s.offer?.length, 3);
+  assert.equal(new Set(s.offer).size, 3);
+  const t0 = s.time;
+  run(s, 1);
+  assert.equal(s.time, t0, 'nothing moves while you choose');
+  const id = s.offer![0];
+  assert.equal(G.choose(s, 'nope' as UpgradeId), false);
+  assert.equal(G.choose(s, id), true);
+  assert.equal(s.upgrades[id], 1);
+  assert.equal(s.offer, null);
+});
+
+test('a maxed upgrade is never offered again', () => {
+  const s = quiet(12);
+  for (const id of Object.keys(UPGRADES) as UpgradeId[]) s.upgrades[id] = UPGRADES[id].max;
+  s.upgrades.atp = 0;
+  s.pickups.push({ x: s.player.x, y: s.player.y, kind: 'cache' });
+  run(s, 0.1);
+  assert.deepEqual(s.offer, ['atp']);
+});
+
+test('upgrades change what the character can do', () => {
+  const s = quiet(13);
+  const base = { hp: G.maxHp(s), see: G.vision(s), run: G.speed(s) };
+  s.upgrades.glycocalyx = 2; s.upgrades.retinol = 1; s.upgrades.atp = 3;
+  assert.equal(G.maxHp(s), base.hp + 24);
+  assert.equal(G.vision(s), base.see + 1.5);
+  assert.ok(G.speed(s) > base.run * 1.25);
+  s.upgrades.elastase = 3;
+  const e = foe(s, 0.8, 0);
+  G.strike(s, e);
+  assert.equal(s.enemies.length, 0, 'three levels of elastase kill a neutrophil in one blow');
+});
+
+test('fibrin patches heal, up to full life', () => {
+  const s = quiet(14);
+  assert.equal(G.usePatch(s), false, 'no use at full life');
+  s.player.hp = 10;
+  assert.equal(G.usePatch(s), true);
+  assert.equal(s.player.hp, 10 + CONFIG.items.patchHeal);
+  assert.equal(s.patches, 0);
+  assert.equal(G.usePatch(s), false);
+});
+
+test('the cloak hides you until it fades or you attack', () => {
+  const s = quiet(15);
+  assert.equal(G.cloak(s), false, 'needs the upgrade');
+  s.upgrades.cd47 = 1;
+  const e = foe(s, 1.5, 0);
+  assert.equal(G.cloak(s), true);
+  assert.equal(s.player.energy, CONFIG.player.startEnergy - CONFIG.cloak.energy);
+  run(s, 2);
+  assert.equal(e.mood, 'patrol', 'a neutrophil a step away does not notice');
+  assert.equal(s.alert, 0);
+  G.strike(s, e);
+  assert.equal(G.cloaked(s), false);
+  assert.equal(G.cloak(s), false, 'and it needs time to recover');
+});
+
+test('apoptosis mimic makes stripping quiet', () => {
+  const loud = quiet(5), hush = quiet(5);
+  hush.upgrades.apoptosis = 2;
+  for (const s of [loud, hush]) { besideCell(s); G.startStrip(s); run(s, CONFIG.energy.strip.time + 0.1); }
+  assert.ok(hush.alert < loud.alert - 10);
+  assert.equal(loud.enemies.length, 1);
+  assert.equal(hush.enemies.length, 0);
+  assert.equal(hush.hostHealth, loud.hostHealth, 'the host pays the same either way');
+});
+
+test('a dead Kupffer cell leaves an upgrade behind', () => {
+  const s = quiet(16);
+  const k = foe(s, 0.9, 0, 'kupffer');
+  k.hp = 1;
+  G.strike(s, k);
+  assert.equal(s.pickups.filter((i) => i.kind === 'cache').length, 1);
 });

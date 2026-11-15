@@ -12,6 +12,8 @@ export interface Layout {
   glucose: Point[];
   kupffer: Point[];
   neutrophils: Point[];
+  caches: Point[];
+  patches: Point[];
 }
 
 export function mulberry32(seed: number): () => number {
@@ -98,5 +100,11 @@ export function generate(seed: number): Layout {
   const neutrophils: Point[] = [];
   for (let i = 0; i < c.neutrophils; i++) neutrophils.push(pick((p) => far(p, start, 16)));
 
-  return { size: N, wall, vein, portals, start, glucose, kupffer, neutrophils };
+  const caches: Point[] = [];
+  for (let i = 0; i < CONFIG.items.caches; i++)
+    caches.push(pick((p) => far(p, start, i === 0 ? 4 : 10) && (i > 0 || !far(p, start, 9)) && far(p, vein, 5) && caches.every((q) => far(p, q, 10))));
+  const patches: Point[] = [];
+  for (let i = 0; i < CONFIG.items.patches; i++) patches.push(pick((p) => far(p, start, 8) && patches.every((q) => far(p, q, 12))));
+
+  return { size: N, wall, vein, portals, start, glucose, kupffer, neutrophils, caches, patches };
 }
