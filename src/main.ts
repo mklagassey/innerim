@@ -2,6 +2,7 @@
 import { CONFIG, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
 import { draw, TH, TW, View } from './render';
+import * as Tips from './tips';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -79,6 +80,7 @@ window.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const k = ev.key.toLowerCase();
   if (k === 'tab' || k === 'm') { ev.preventDefault(); if (!ev.repeat) toggleMap(); return; }
+  if (tip) { if (k === 'enter' || k === ' ' || k === 'escape') { ev.preventDefault(); closeTip(); } return; }
   if (!started || s.status !== 'playing') return;
   if (KEY_DIRS[k]) { ev.preventDefault(); keys.add(k); }
   else if (ev.repeat) return;
@@ -102,13 +104,35 @@ $('offer-list').addEventListener('click', (ev) => {
   const id = (ev.target as HTMLElement).closest('button')?.dataset.id as UpgradeId | undefined;
   if (id) { G.choose(s, id); keys.clear(); release(); }
 });
+$('tip-ok').addEventListener('click', closeTip);
+$('tips-reset').addEventListener('click', () => { Tips.unmuteAll(); $('tips-reset').hidden = true; });
+$('tips-reset').hidden = Tips.mutedCount() === 0;
 $('begin').addEventListener('click', () => { started = true; $('intro').hidden = true; canvas.focus(); });
-$('again').addEventListener('click', () => { s = G.createGame(); shownOffer = ''; keys.clear(); release(); $('over').hidden = true; });
+$('again').addEventListener('click', () => { s = G.createGame(); shownOffer = ''; Tips.newRun(); keys.clear(); release(); $('over').hidden = true; });
 
 // ---------- heads-up display ----------
 
 const last: Record<string, string> = {};
 let shownOffer = '';
+let tip: Tips.Tip | null = null;
+
+function showTip(next: Tips.Tip) {
+  tip = next;
+  keys.clear(); release();
+  $('tip-kind').textContent = next.kind;
+  $('tip-title').textContent = next.title;
+  $('tip-body').textContent = next.body;
+  $<HTMLInputElement>('tip-mute').checked = false;
+  $('tip').hidden = false;
+  $('tip-ok').focus();
+}
+function closeTip() {
+  if (!tip) return;
+  if ($<HTMLInputElement>('tip-mute').checked) Tips.mute(tip.id);
+  tip = null;
+  $('tip').hidden = true;
+  canvas.focus();
+}
 const roman = (n: number) => 'I'.repeat(n);
 function set(id: string, prop: 'text' | 'height' | 'width' | 'hidden' | 'tier', value: string) {
   if (last[id + prop] === value) return;
@@ -189,7 +213,8 @@ function frame(now: number) {
   view.time += dt;
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
-    G.update(s, dt, heldDirection());
+    if (!tip && !s.offer) { const next = Tips.nextTip(s); if (next) showTip(next); }
+    if (!tip) G.update(s, dt, heldDirection());
   }
   aimPointer();
   draw(ctx, s, view);

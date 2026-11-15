@@ -68,6 +68,13 @@
   #offer-list strong { font: 800 1rem/1.15 var(--display); letter-spacing: 0.04em; }
   #offer-list span { font: 400 0.92rem/1.35 var(--body); }
   #offer-list em { font: italic 400 0.82rem/1.35 var(--body); color: var(--bone-dim); }
+  #tip { background: rgba(10, 4, 7, 0.3); align-items: end; padding-bottom: 12vh; }
+  .note { max-width: 26rem; background: var(--clot); border: 1px solid var(--seam); border-radius: 4px; padding: 20px; box-shadow: 0 12px 40px #000; }
+  .note h2 { font-size: 1.5rem; }
+  .note .where { color: var(--amber); }
+  .note label { display: flex; align-items: center; gap: 8px; color: var(--bone-dim); font-size: 0.92rem; cursor: pointer; }
+  .note input { accent-color: var(--amber); width: 16px; height: 16px; margin: 0; }
+  .card button.quiet { border-color: var(--seam); color: var(--bone-dim); font-size: 0.78rem; padding: 8px 14px; }
   .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.84); padding: 16px; overflow-y: auto; }
   .card { max-width: 34rem; display: grid; gap: 14px; justify-items: start; }
   .card h2 { font: 800 clamp(1.7rem, 5vw, 2.6rem)/1.05 var(--display); letter-spacing: 0.05em; margin: 0; text-wrap: balance; }
@@ -118,6 +125,7 @@
         <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>
       </dl>
       <button id="begin" type="button">Enter the liver</button>
+      <button id="tips-reset" type="button" class="quiet" hidden>Show all the info boxes again</button>
     </div>
   </div>
   <div class="veil" id="offer" hidden>
@@ -125,6 +133,15 @@
       <h2>Take one</h2>
       <p>There are no classes. What you take here is what you become.</p>
       <div id="offer-list"></div>
+    </div>
+  </div>
+  <div class="veil" id="tip" hidden>
+    <div class="card note">
+      <span class="where" id="tip-kind"></span>
+      <h2 id="tip-title"></h2>
+      <p id="tip-body"></p>
+      <label><input type="checkbox" id="tip-mute"> Don't show this again</label>
+      <button id="tip-ok" type="button">Got it</button>
     </div>
   </div>
   <div class="veil" id="over" hidden>
