@@ -1,50 +1,258 @@
-// Draws the liver in isometric view, lit only by what the player can see. Tissue you have
+// Draws the liver in isometric view, lit by the lamp the player carries. Tissue you have
 // visited but cannot see right now is drawn from memory: dim and drained of colour.
+//
+// Tiles are painted once into small off-screen images (with all their texture) and then
+// stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, cloaked, idx, stripTarget, vision } from './game';
+import { Enemy, Point, State, cloaked, idx, open, stripTarget, vision } from './game';
 
 export const TW = 64, TH = 32;
-const WALL = 24;
-type RGB = readonly [number, number, number];
-const INK: RGB = [10, 4, 7];
-const FLOOR: RGB = [112, 30, 40], CELL_TOP: RGB = [186, 108, 118], CELL_L: RGB = [128, 62, 78], CELL_R: RGB = [92, 42, 60];
-const NUCLEUS: RGB = [62, 34, 92], DEAD: RGB = [74, 58, 70], AMBER: RGB = [236, 180, 46];
+const WALL = 30;
+const INK = '#0a0407';
 
-export interface View { w: number; h: number; zoom: number; time: number; showMap: boolean; hover: Point | null; hoverEnemy: number | null; mark: Point | null }
+export interface View {
+  w: number; h: number; zoom: number; dpr: number; time: number; showMap: boolean;
+  hover: Point | null; hoverEnemy: number | null; mark: Point | null;
+}
 
 export const project = (x: number, y: number): Point => ({ x: ((x - y) * TW) / 2, y: ((x + y) * TH) / 2 });
-
-const cache = new Map<string, string>();
-/** A colour at a given brightness. Remembered tissue loses most of its colour. */
-function tint(c: RGB, light: number, memory = false): string {
-  const q = Math.round(light * 16);
-  const k = `${c[0]},${c[1]},${c[2]},${q},${memory ? 1 : 0}`;
-  let out = cache.get(k);
-  if (!out) {
-    const l = q / 16, grey = (c[0] + c[1] + c[2]) / 3;
-    const ch = (v: number, cold: number) => Math.round(INK[0] + ((memory ? v * 0.35 + grey * 0.65 + cold : v) - INK[0]) * l);
-    out = `rgb(${ch(c[0], -6)},${ch(c[1], 0)},${ch(c[2], 10)})`;
-    cache.set(k, out);
-  }
-  return out;
-}
 const hash = (x: number, y: number) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 1000 / 1000;
-
-function diamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, lift = 0, grow = 0) {
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - TH / 2 - lift - grow);
-  ctx.lineTo(cx + TW / 2 + grow * 2, cy - lift);
-  ctx.lineTo(cx, cy + TH / 2 - lift + grow);
-  ctx.lineTo(cx - TW / 2 - grow * 2, cy - lift);
+function rand(seed: number) {
+  let a = (seed * 2654435761) >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+type Ctx = CanvasRenderingContext2D;
+function oval(ctx: Ctx, x: number, y: number, rx: number, ry: number, rot = 0) {
+  ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, Math.PI * 2);
+}
+function poly(ctx: Ctx, pts: number[]) {
+  ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
   ctx.closePath();
 }
-function oval(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number) {
-  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+/** An isometric tile outline with softened corners, the way a real cell is never square. */
+function softDiamond(ctx: Ctx, cx: number, cy: number, hw: number, hh: number, r: number) {
+  const pts = [[cx, cy - hh], [cx + hw, cy], [cx, cy + hh], [cx - hw, cy]];
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const p = pts[i], a = pts[(i + 3) % 4], b = pts[(i + 1) % 4];
+    const la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+    const sx = p[0] + ((a[0] - p[0]) / la) * r, sy = p[1] + ((a[1] - p[1]) / la) * r;
+    const ex = p[0] + ((b[0] - p[0]) / lb) * r, ey = p[1] + ((b[1] - p[1]) / lb) * r;
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    ctx.quadraticCurveTo(p[0], p[1], ex, ey);
+  }
+  ctx.closePath();
 }
 
-export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
-  const p = s.player, R = vision(s);
-  ctx.fillStyle = `rgb(${INK[0]},${INK[1]},${INK[2]})`;
+// ---------- painted tiles ----------
+
+const sprites = new Map<string, HTMLCanvasElement>();
+let spriteScale = 0;
+function sprite(key: string, w: number, h: number, scale: number, memory: boolean, paint: (c: Ctx) => void): HTMLCanvasElement {
+  if (scale !== spriteScale) { sprites.clear(); spriteScale = scale; }
+  const k = key + (memory ? 'm' : '');
+  let cv = sprites.get(k);
+  if (!cv) {
+    cv = document.createElement('canvas');
+    cv.width = Math.ceil(w * scale); cv.height = Math.ceil(h * scale);
+    const c = cv.getContext('2d')!;
+    c.scale(scale, scale);
+    paint(c);
+    if (memory) {
+      // Remembered tissue: mostly darkness with a cold cast, only where the tile was painted.
+      c.globalCompositeOperation = 'source-atop';
+      c.fillStyle = 'rgba(20,15,24,0.78)';
+      c.fillRect(0, 0, w, h);
+    }
+    sprites.set(k, cv);
+  }
+  return cv;
+}
+
+const CELL_W = TW + 4, CELL_H = TH + WALL + 6, CELL_OX = CELL_W / 2, CELL_OY = WALL + TH / 2 + 3;
+
+/** A hepatocyte: a soft block of pink cytoplasm, granular with mitochondria, with a round nucleus. */
+function paintCell(c: Ctx, variant: number, mask: number) {
+  const r = rand(variant * 31 + mask * 7 + 3), ox = CELL_OX, oy = CELL_OY, top = oy - WALL, hw = TW / 2 + 0.5, hh = TH / 2 + 0.3;
+  // The two faces you can see: the lit one and the one in shadow.
+  let g = c.createLinearGradient(0, top, 0, oy + hh);
+  g.addColorStop(0, '#a35368'); g.addColorStop(0.55, '#7b3850'); g.addColorStop(1, '#3d1526');
+  c.fillStyle = g; poly(c, [ox - hw, top, ox, top + hh, ox, oy + hh, ox - hw, oy]); c.fill();
+  g = c.createLinearGradient(0, top, 0, oy + hh);
+  g.addColorStop(0, '#6e3350'); g.addColorStop(0.55, '#4e2039'); g.addColorStop(1, '#260c1b');
+  c.fillStyle = g; poly(c, [ox + hw, top, ox, top + hh, ox, oy + hh, ox + hw, oy]); c.fill();
+  // Membrane folds running down the faces.
+  for (let i = 0; i < 9; i++) {
+    const u = r(), left = i % 2 === 0, x = left ? ox - hw + u * hw : ox + u * hw;
+    const y0 = left ? top + u * hh : top + hh - u * hh, len = 6 + r() * (WALL - 8);
+    c.strokeStyle = `rgba(${left ? '255,190,200' : '20,5,15'},${0.05 + r() * 0.07})`; c.lineWidth = 0.8 + r();
+    c.beginPath(); c.moveTo(x, y0 + 2 + r() * 6); c.lineTo(x + (r() - 0.5) * 2, y0 + 2 + len); c.stroke();
+  }
+  // Red light off the blood pools at the foot of the cell.
+  g = c.createLinearGradient(0, oy - 6, 0, oy + hh);
+  g.addColorStop(0, 'rgba(200,40,50,0)'); g.addColorStop(1, 'rgba(200,40,50,0.22)');
+  c.fillStyle = g; poly(c, [ox - hw, oy - 8, ox, oy + hh - 8, ox + hw, oy - 8, ox + hw, oy, ox, oy + hh, ox - hw, oy]); c.fill();
+
+  // The top: cytoplasm, lit from the upper left.
+  softDiamond(c, ox, top, hw, hh, 6);
+  g = c.createRadialGradient(ox - 10, top - 5, 2, ox, top, 40);
+  g.addColorStop(0, '#e9aab2'); g.addColorStop(0.6, '#c57f8e'); g.addColorStop(1, '#9d5a70');
+  c.fillStyle = g; c.fill();
+  c.save(); c.clip();
+  // Granules: hepatocytes are stuffed with mitochondria and glycogen.
+  for (let i = 0; i < 70; i++) {
+    const u = r() * 2 - 1, v = r() * 2 - 1;
+    if (Math.abs(u) + Math.abs(v) > 0.93) continue;
+    c.fillStyle = r() < 0.6 ? `rgba(120,42,66,${0.18 + r() * 0.3})` : `rgba(255,226,220,${0.12 + r() * 0.22})`;
+    oval(c, ox + u * hw, top + v * hh, 0.5 + r() * 1.1, 0.35 + r() * 0.6, r() * 3); c.fill();
+  }
+  // A fat droplet or two.
+  for (let i = 0; i < 2 + Math.floor(r() * 3); i++) {
+    const u = r() * 1.3 - 0.65, v = r() * 1.3 - 0.65;
+    if (Math.abs(u) + Math.abs(v) > 0.75) continue;
+    c.fillStyle = 'rgba(255,238,225,0.3)'; oval(c, ox + u * hw, top + v * hh, 1.8 + r(), 1 + r() * 0.6); c.fill();
+    c.strokeStyle = 'rgba(120,50,70,0.3)'; c.lineWidth = 0.5; c.stroke();
+  }
+  c.restore();
+  // Nucleus, sometimes two: about a quarter of real hepatocytes are binucleate.
+  const two = variant % 4 === 3;
+  for (const off of two ? [-8, 8] : [0]) {
+    const nx = ox + off + (r() - 0.5) * (two ? 2 : 10), ny = top + (r() - 0.5) * (two ? 2 : 5), rx = two ? 6 : 8, ry = rx * 0.56;
+    c.fillStyle = 'rgba(60,20,50,0.25)'; oval(c, nx + 1, ny + 1.5, rx + 1, ry + 1); c.fill();
+    g = c.createRadialGradient(nx - rx * 0.35, ny - ry * 0.5, 0.5, nx, ny, rx);
+    g.addColorStop(0, '#8a66bd'); g.addColorStop(0.7, '#553784'); g.addColorStop(1, '#2f1c50');
+    c.fillStyle = g; oval(c, nx, ny, rx, ry); c.fill();
+    c.strokeStyle = 'rgba(25,12,45,0.7)'; c.lineWidth = 0.8; c.stroke();
+    c.fillStyle = '#1c0f33';
+    oval(c, nx + (r() - 0.5) * rx * 0.7, ny + (r() - 0.5) * ry * 0.6, 1.5, 1); c.fill();
+    if (r() < 0.6) { oval(c, nx + (r() - 0.5) * rx, ny + (r() - 0.5) * ry * 0.8, 1, 0.7); c.fill(); }
+  }
+  // Light catching the far edges of the membrane, and a soft crease where the top turns down.
+  c.lineWidth = 1.2; c.lineCap = 'round';
+  c.strokeStyle = 'rgba(255,228,224,0.4)';
+  c.beginPath(); c.moveTo(ox - hw + 5, top - 2); c.lineTo(ox, top - hh + 1); c.lineTo(ox + hw - 5, top - 2); c.stroke();
+  c.strokeStyle = 'rgba(255,205,210,0.22)';
+  c.beginPath(); c.moveTo(ox - hw + 4, top + 2.5); c.lineTo(ox, top + hh); c.lineTo(ox + hw - 4, top + 2.5); c.stroke();
+  // Bile canaliculi: the fine channels where two hepatocytes press together.
+  c.strokeStyle = 'rgba(96,98,34,0.75)'; c.lineWidth = 1.3;
+  if (mask & 1) { c.beginPath(); c.moveTo(ox + hw - 6, top + 3); c.lineTo(ox + 5, top + hh - 2.5); c.stroke(); }
+  if (mask & 2) { c.beginPath(); c.moveTo(ox - hw + 6, top + 3); c.lineTo(ox - 5, top + hh - 2.5); c.stroke(); }
+}
+
+const FLOOR_W = TW + 4, FLOOR_H = TH + 4;
+/** Sinusoid floor: the thin lining of a blood channel, perforated by clusters of pores. */
+function paintFloor(c: Ctx, variant: number, dead: boolean) {
+  const r = rand(variant * 17 + (dead ? 91 : 5)), ox = FLOOR_W / 2, oy = FLOOR_H / 2;
+  poly(c, [ox, oy - TH / 2 - 1, ox + TW / 2 + 1.5, oy, ox, oy + TH / 2 + 1, ox - TW / 2 - 1.5, oy]);
+  const g = c.createLinearGradient(ox - 20, oy - 14, ox + 20, oy + 14);
+  const shade = r() * 10;
+  g.addColorStop(0, `rgb(${128 + shade},${34 + shade * 0.3},${46 + shade * 0.3})`); g.addColorStop(1, `rgb(${92 + shade},${22},${34})`);
+  c.fillStyle = g; c.fill();
+  c.save(); c.clip();
+  // Slow streaks in the plasma.
+  for (let i = 0; i < 5; i++) {
+    c.strokeStyle = `rgba(${r() < 0.5 ? '255,150,150' : '40,5,12'},${0.05 + r() * 0.06})`; c.lineWidth = 1 + r() * 2.5;
+    const y = oy - 14 + r() * 28, x = ox - 30 + r() * 20;
+    c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 18, y + (r() - 0.5) * 8, x + 30 + r() * 16, y + 6 + r() * 8); c.stroke();
+  }
+  // Fenestrations: the sieve plates of a liver sinusoid.
+  for (let k = 0; k < 3; k++) {
+    const cx = ox + (r() - 0.5) * 34, cy = oy + (r() - 0.5) * 14;
+    for (let i = 0; i < 8; i++) {
+      c.fillStyle = `rgba(28,4,10,${0.3 + r() * 0.3})`;
+      oval(c, cx + (r() - 0.5) * 11, cy + (r() - 0.5) * 5.5, 0.9, 0.5); c.fill();
+    }
+  }
+  if (dead) {
+    // What is left of a hepatocyte: a collapsed membrane, spilled granules, a broken nucleus.
+    c.fillStyle = 'rgba(86,70,84,0.72)'; oval(c, ox, oy, 25, 11.5, 0.05); c.fill();
+    c.strokeStyle = 'rgba(190,168,180,0.4)'; c.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      const a = r() * 6.3, d = 6 + r() * 14;
+      c.beginPath(); c.moveTo(ox + Math.cos(a) * d, oy + Math.sin(a) * d * 0.5);
+      c.quadraticCurveTo(ox + Math.cos(a + 0.6) * d * 1.2, oy + Math.sin(a + 0.6) * d * 0.6, ox + Math.cos(a + 1.1) * d, oy + Math.sin(a + 1.1) * d * 0.5); c.stroke();
+    }
+    for (let i = 0; i < 26; i++) {
+      c.fillStyle = r() < 0.3 ? 'rgba(58,32,92,0.85)' : r() < 0.5 ? 'rgba(132,130,48,0.6)' : 'rgba(170,120,136,0.5)';
+      oval(c, ox + (r() - 0.5) * 44, oy + (r() - 0.5) * 20, 0.8 + r() * 1.8, 0.5 + r()); c.fill();
+    }
+  }
+  c.restore();
+}
+
+// ---------- red blood cells ----------
+
+// Purely for show, so they live here and not in the rules. They drift with the blood,
+// which in a liver always means toward the central vein.
+interface Rbc extends Point { z: number; spin: number; seed: number }
+let heroMoving = false, heroWas: Point = { x: 0, y: 0 };
+let rbcs: Rbc[] = [], flow: Int16Array | null = null, flowFor: State | null = null, flowKills = -1, lastTime = 0;
+
+function flowField(s: State): Int16Array {
+  if (flow && flowFor === s && flowKills === s.cellsKilled) return flow;
+  const N = s.size, d = new Int16Array(N * N).fill(-1), queue = [idx(s, s.vein.x, s.vein.y)];
+  d[queue[0]] = 0;
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head], cx = cur % N, cy = Math.floor(cur / N);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const i = idx(s, cx + dx, cy + dy);
+      if (open(s, cx + dx, cy + dy) && d[i] < 0) { d[i] = d[cur] + 1; queue.push(i); }
+    }
+  }
+  if (flowFor !== s) rbcs = [];
+  flow = d; flowFor = s; flowKills = s.cellsKilled;
+  return d;
+}
+
+function driftBlood(s: State, dt: number) {
+  const d = flowField(s), p = s.player, N = s.size;
+  while (rbcs.length < 54) rbcs.push({ x: -99, y: -99, z: 0, spin: 0, seed: Math.random() });
+  for (const b of rbcs) {
+    const tx = Math.floor(b.x), ty = Math.floor(b.y);
+    const lost = !open(s, tx, ty) || d[idx(s, tx, ty)] < 2 || Math.hypot(b.x - p.x, b.y - p.y) > 15;
+    if (lost) {
+      for (let tries = 0; tries < 12; tries++) {
+        const a = Math.random() * 6.283, r = 3 + Math.random() * 11, x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
+        if (open(s, Math.floor(x), Math.floor(y)) && d[idx(s, Math.floor(x), Math.floor(y))] > 3) { b.x = x; b.y = y; b.z = 5 + Math.random() * 16; b.spin = Math.random() * 6; break; }
+      }
+      continue;
+    }
+    // Step toward whichever neighbouring tile is closer to the vein.
+    let best = d[idx(s, tx, ty)], bx = tx, by = ty;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const v = open(s, tx + dx, ty + dy) ? d[(ty + dy) * N + tx + dx] : -1;
+      if (v >= 0 && v < best) { best = v; bx = tx + dx; by = ty + dy; }
+    }
+    const gx = bx + 0.25 + b.seed * 0.5 - b.x, gy = by + 0.25 + ((b.seed * 7) % 1) * 0.5 - b.y, len = Math.hypot(gx, gy) || 1;
+    const speed = 0.9 + b.seed * 0.9;
+    b.x += (gx / len) * speed * dt; b.y += (gy / len) * speed * dt;
+    b.spin += dt * (0.6 + b.seed);
+  }
+}
+
+/** A red blood cell: a disc with a dimple, tumbling slowly. About 7 micrometres across. */
+function bloodCell(ctx: Ctx, b: Rbc, time: number) {
+  const c = project(b.x, b.y), y = c.y - b.z - Math.sin(time * 1.3 + b.seed * 9) * 2.5;
+  const tilt = 0.35 + 0.5 * Math.abs(Math.sin(b.spin)), rx = 8.5, ry = rx * tilt, rot = Math.sin(b.spin * 0.7) * 0.5;
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; oval(ctx, c.x, c.y, 7, 3.2); ctx.fill();
+  const g = ctx.createRadialGradient(c.x - 2, y - ry * 0.4, 0.5, c.x, y, rx);
+  g.addColorStop(0, 'rgba(238,96,84,0.95)'); g.addColorStop(0.75, 'rgba(182,38,40,0.95)'); g.addColorStop(1, 'rgba(110,16,24,0.95)');
+  ctx.fillStyle = g; oval(ctx, c.x, y, rx, ry, rot); ctx.fill();
+  ctx.fillStyle = 'rgba(96,12,20,0.55)'; oval(ctx, c.x + 0.6, y + 0.4, rx * 0.42, ry * 0.42, rot); ctx.fill(); // the dimple
+  ctx.strokeStyle = 'rgba(255,170,150,0.35)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.ellipse(c.x, y, rx - 0.8, Math.max(0.2, ry - 0.8), rot, Math.PI * 1.05, Math.PI * 1.75); ctx.stroke();
+}
+
+// ---------- the scene ----------
+
+export function draw(ctx: Ctx, s: State, v: View) {
+  const p = s.player, R = vision(s), scale = v.zoom * v.dpr;
+  const dt = Math.min(0.05, Math.max(0, v.time - lastTime)); lastTime = v.time;
+  driftBlood(s, dt);
+  if (dt > 0) { heroMoving = Math.hypot(p.x - heroWas.x, p.y - heroWas.y) > dt * 0.5; heroWas = { x: p.x, y: p.y }; }
+
+  ctx.fillStyle = INK;
   ctx.fillRect(0, 0, v.w, v.h);
   ctx.save();
   const cam = project(p.x, p.y);
@@ -52,88 +260,121 @@ export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
   ctx.scale(v.zoom, v.zoom);
   ctx.translate(-cam.x, -cam.y);
 
-  const span = Math.ceil((v.w / v.zoom / TW + v.h / v.zoom / TH)) + 2;
+  const span = Math.ceil(v.w / v.zoom / TW + v.h / v.zoom / TH) + 2;
   const px = Math.floor(p.x), py = Math.floor(p.y);
-  const light = (x: number, y: number) => {
-    const d = Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y) / (R + 0.5);
-    return Math.max(0.34, 1 - 0.66 * d * d);
-  };
   const target = stripTarget(s);
   const things: { depth: number; draw: () => void }[] = [];
+  const isCell = (x: number, y: number) => !open(s, x, y);
+  const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
     for (let x = Math.max(0, px - span); x <= Math.min(s.size - 1, px + span); x++) {
       const i = idx(s, x, y);
       if (!s.explored[i]) continue;
       const c = project(x + 0.5, y + 0.5);
-      if (Math.abs(c.x - cam.x) > v.w / v.zoom / 2 + TW || Math.abs(c.y - cam.y) > v.h / v.zoom / 2 + TH * 2) continue;
-      const vis = s.visible[i] === 1, l = vis ? light(x, y) : 0.3, t = s.tiles[i];
+      if (Math.abs(c.x - cam.x) > v.w / v.zoom / 2 + TW || Math.abs(c.y - cam.y) > v.h / v.zoom / 2 + TH * 2.5) continue;
+      const vis = s.visible[i] === 1, t = s.tiles[i];
       if (t === 'cell') {
+        const variant = Math.floor(hash(x, y) * 8), mask = (isCell(x + 1, y) ? 1 : 0) | (isCell(x, y + 1) ? 2 : 0);
         const hit = !!target && target.x === x && target.y === y;
         const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
-        things.push({ depth: x + y + 1, draw: () => cell(ctx, c, x, y, l, !vis, hit, dying) });
+        things.push({ depth: x + y + 1, draw: () => {
+          const img = sprite(`c${variant}.${mask}`, CELL_W, CELL_H, scale, !vis, (cx) => paintCell(cx, variant, mask));
+          const squash = 1 - dying * 0.4, h = CELL_H * squash;
+          ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY + (CELL_H - h), CELL_W, h);
+          if (hit) {
+            ctx.strokeStyle = dying ? '#ff5a4d' : 'rgba(236,180,46,0.95)'; ctx.lineWidth = 2;
+            softDiamond(ctx, c.x, c.y - WALL * squash, TW / 2 - 3, TH / 2 - 1.5, 5); ctx.stroke();
+          }
+        } });
         continue;
       }
-      // Sinusoid floor: blood plasma, a little uneven from tile to tile.
-      ctx.fillStyle = tint(t === 'dead' ? DEAD : FLOOR, l * (0.86 + hash(x, y) * 0.14), !vis);
-      diamond(ctx, c.x, c.y, 0, 0.6); ctx.fill();
-      if (t === 'dead') {
-        ctx.fillStyle = tint(NUCLEUS, l, !vis);
-        for (let k = 0; k < 5; k++) { oval(ctx, c.x - 16 + hash(x + k, y) * 32, c.y - 6 + hash(x, y + k) * 12, 2.2, 1.2); ctx.fill(); }
-      }
+      const variant = Math.floor(hash(x, y) * 6), dead = t === 'dead';
+      const img = sprite(`f${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, !vis, (cx) => paintFloor(cx, variant, dead));
+      ctx.drawImage(img, c.x - FLOOR_W / 2, c.y - FLOOR_H / 2, FLOOR_W, FLOOR_H);
+      // Shadow gathers where the floor meets a wall of cells.
+      ctx.fillStyle = 'rgba(8,2,5,0.32)';
+      if (isCell(x - 1, y)) { poly(ctx, [c.x - TW / 2, c.y, c.x, c.y - TH / 2, c.x + 9, c.y - TH / 2 + 4.5, c.x - TW / 2 + 9, c.y + 4.5]); ctx.fill(); }
+      if (isCell(x, y - 1)) { poly(ctx, [c.x + TW / 2, c.y, c.x, c.y - TH / 2, c.x - 9, c.y - TH / 2 + 4.5, c.x + TW / 2 - 9, c.y + 4.5]); ctx.fill(); }
+
       const g = s.glucose.get(i);
       if (g !== undefined) {
-        for (let k = 0; k < CONFIG.energy.patchMax; k++) {
-          const gx = c.x - 12 + k * 12, gy = c.y + (k % 2 ? 3 : -3);
-          ctx.fillStyle = k < g ? tint(AMBER, vis ? 1 : 0.4, !vis) : tint(AMBER, 0.16, true);
-          ctx.beginPath(); ctx.moveTo(gx, gy - 7); ctx.lineTo(gx + 5, gy); ctx.lineTo(gx, gy + 4); ctx.lineTo(gx - 5, gy); ctx.closePath(); ctx.fill();
-        }
         if (vis && g > 0) {
           ctx.globalCompositeOperation = 'lighter';
-          const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 34);
-          glow.addColorStop(0, `rgba(236,180,46,${0.2 + 0.06 * Math.sin(v.time * 3)})`); glow.addColorStop(1, 'rgba(236,180,46,0)');
-          ctx.fillStyle = glow; oval(ctx, c.x, c.y, 34, 17); ctx.fill();
+          const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 36);
+          glow.addColorStop(0, `rgba(236,180,46,${0.22 + 0.06 * Math.sin(v.time * 3)})`); glow.addColorStop(1, 'rgba(236,180,46,0)');
+          ctx.fillStyle = glow; oval(ctx, c.x, c.y, 36, 18); ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
+        }
+        // Sugar crystallised out of the blood: small faceted prisms.
+        for (let k = 0; k < CONFIG.energy.patchMax; k++) {
+          const gx = c.x - 13 + k * 13, gy = c.y + (k % 2 ? 4 : -3), full = k < g, a = vis ? 1 : 0.35;
+          ctx.globalAlpha = full ? a : a * 0.22;
+          ctx.fillStyle = '#b5820f'; poly(ctx, [gx - 5, gy - 2, gx, gy + 2, gx, gy - 9, gx - 5, gy - 11]); ctx.fill();
+          ctx.fillStyle = '#8a5f08'; poly(ctx, [gx + 5, gy - 2, gx, gy + 2, gx, gy - 9, gx + 5, gy - 11]); ctx.fill();
+          ctx.fillStyle = '#ffe08a'; poly(ctx, [gx, gy - 14, gx + 5, gy - 11, gx, gy - 9, gx - 5, gy - 11]); ctx.fill();
+          ctx.globalAlpha = 1;
         }
       }
     }
   }
 
-  // Vessels: the vein you came for, and the portals the immune system arrives through.
-  const vessel = (at: Point, rgb: string, size: number) => {
+  // Vessels: openings in the floor that the blood pours into or out of.
+  const vessel = (at: Point, vein: boolean) => {
     if (!s.explored[idx(s, at.x, at.y)]) return;
-    const c = project(at.x + 0.5, at.y + 0.5), on = s.visible[idx(s, at.x, at.y)] === 1;
-    ctx.globalAlpha = on ? 1 : 0.35;
-    for (let k = 0; k < 3; k++) {
-      const r = size * (1 - ((v.time * 0.35 + k / 3) % 1));
-      ctx.strokeStyle = `rgba(${rgb},${0.25 + 0.5 * (r / size)})`; ctx.lineWidth = 2.5;
-      oval(ctx, c.x, c.y, r, r / 2); ctx.stroke();
+    const c = project(at.x + 0.5, at.y + 0.5), size = vein ? 62 : 40, rgb = vein ? '70,110,255' : '235,60,48';
+    ctx.globalAlpha = s.visible[idx(s, at.x, at.y)] === 1 ? 1 : 0.4;
+    const hole = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, size);
+    hole.addColorStop(0, vein ? 'rgba(4,6,26,0.98)' : 'rgba(255,150,120,0.9)');
+    hole.addColorStop(0.45, vein ? 'rgba(14,22,70,0.9)' : 'rgba(200,36,30,0.75)');
+    hole.addColorStop(0.8, `rgba(${rgb},0.22)`); hole.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.save(); ctx.translate(c.x, c.y); ctx.scale(1, 0.5); ctx.translate(-c.x, -c.y);
+    ctx.fillStyle = hole; oval(ctx, c.x, c.y, size, size); ctx.fill();
+    // The current: spiralling in at the vein, welling out at a portal.
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 7; k++) {
+      const turn = v.time * (vein ? 0.9 : -0.5) + (k / 7) * Math.PI * 2;
+      ctx.strokeStyle = `rgba(${vein ? '150,180,255' : '255,190,170'},${vein ? 0.4 : 0.3})`; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let j = 0; j <= 10; j++) {
+        const f = j / 10, rr = size * (0.92 - f * 0.72), a = turn + f * 2.4;
+        ctx.lineTo(c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr);
+      }
+      ctx.stroke();
     }
-    ctx.fillStyle = `rgba(${rgb},0.9)`; oval(ctx, c.x, c.y, size * 0.22, size * 0.11); ctx.fill();
+    ctx.strokeStyle = `rgba(${rgb},0.75)`; ctx.lineWidth = 3; oval(ctx, c.x, c.y, size * 0.5, size * 0.5); ctx.stroke();
+    ctx.restore();
     ctx.globalAlpha = 1;
   };
-  vessel(s.vein, '86,128,255', 58);
-  for (const portal of s.portals) vessel(portal, '226,58,48', 36);
+  vessel(s.vein, true);
+  for (const portal of s.portals) vessel(portal, false);
 
-  // Your own light on the floor.
+  // The lamp: a warm pool at your feet and a beam the way you are facing.
+  const f = project(p.face.x, p.face.y), fa = Math.atan2(f.y, f.x);
   ctx.globalCompositeOperation = 'lighter';
-  const lamp = ctx.createRadialGradient(cam.x, cam.y, 0, cam.x, cam.y, 150);
-  lamp.addColorStop(0, 'rgba(255,214,170,0.20)'); lamp.addColorStop(1, 'rgba(255,214,170,0)');
-  ctx.fillStyle = lamp; oval(ctx, cam.x, cam.y, 150, 75); ctx.fill();
+  const pool = ctx.createRadialGradient(cam.x, cam.y, 0, cam.x, cam.y, 120);
+  pool.addColorStop(0, 'rgba(255,214,170,0.16)'); pool.addColorStop(1, 'rgba(255,214,170,0)');
+  ctx.fillStyle = pool; oval(ctx, cam.x, cam.y, 120, 60); ctx.fill();
+  if (!cloaked(s)) {
+    ctx.save(); ctx.translate(cam.x, cam.y); ctx.scale(1, 0.5); ctx.rotate(Math.atan2(Math.sin(fa) * 2, Math.cos(fa)));
+    const beam = ctx.createRadialGradient(0, 0, 8, 0, 0, 250);
+    beam.addColorStop(0, 'rgba(255,228,190,0.24)'); beam.addColorStop(1, 'rgba(255,228,190,0)');
+    ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 250, -0.42, 0.42); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
   ctx.globalCompositeOperation = 'source-over';
 
-  if (v.hover && s.explored[idx(s, Math.floor(v.hover.x), Math.floor(v.hover.y))] && v.hoverEnemy === null) {
+  if (v.hover && s.explored[idx(s, Math.floor(v.hover.x), Math.floor(v.hover.y))] && v.hoverEnemy === null && !v.mark) {
     const c = project(Math.floor(v.hover.x) + 0.5, Math.floor(v.hover.y) + 0.5);
-    ctx.strokeStyle = 'rgba(255,236,210,0.35)'; ctx.lineWidth = 1.5; diamond(ctx, c.x, c.y, 0, -3); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,236,210,0.3)'; ctx.lineWidth = 1.5;
+    poly(ctx, [c.x, c.y - TH / 2 + 3, c.x + TW / 2 - 6, c.y, c.x, c.y + TH / 2 - 3, c.x - TW / 2 + 6, c.y]); ctx.stroke();
   }
 
-  for (const e of s.enemies) {
-    if (!s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) continue;
-    things.push({ depth: e.x + e.y, draw: () => enemy(ctx, e, v) });
-  }
+  for (const b of rbcs) if (b.x > 0 && seenAt(b)) things.push({ depth: b.x + b.y, draw: () => bloodCell(ctx, b, v.time) });
+  for (const e of s.enemies) if (seenAt(e)) things.push({ depth: e.x + e.y, draw: () => enemy(ctx, e, v) });
   for (const item of s.pickups) {
     if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
-    const seen = s.visible[idx(s, Math.floor(item.x), Math.floor(item.y))] === 1;
+    const seen = seenAt(item);
     things.push({ depth: item.x + item.y - 0.01, draw: () => pickup(ctx, item.x, item.y, item.kind, seen, v.time) });
   }
   things.push({ depth: p.x + p.y, draw: () => hero(ctx, s, v) });
@@ -141,24 +382,37 @@ export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
   for (const t of things) t.draw();
 
   for (const shot of s.shots) {
-    const c = project(shot.x, shot.y), tail = project(shot.x - shot.vx * 0.04, shot.y - shot.vy * 0.04);
-    ctx.strokeStyle = 'rgba(190,255,245,0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(tail.x, tail.y - 14); ctx.lineTo(c.x, c.y - 14); ctx.stroke();
+    const c = project(shot.x, shot.y), tail = project(shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(120,255,235,0.35)'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(tail.x, tail.y - 16); ctx.lineTo(c.x, c.y - 16); ctx.stroke();
+    ctx.strokeStyle = 'rgba(235,255,250,0.95)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(tail.x, tail.y - 16); ctx.lineTo(c.x, c.y - 16); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
   }
+
+  // Light falls off smoothly with distance from the lamp, on top of what the walls hide.
+  const reach = (R + 1.5) * TW * 0.5;
+  ctx.save(); ctx.translate(cam.x, cam.y); ctx.scale(1, 0.5);
+  const fall = ctx.createRadialGradient(0, 0, reach * 0.3, 0, 0, reach * 1.25);
+  fall.addColorStop(0, 'rgba(10,4,7,0)'); fall.addColorStop(0.7, 'rgba(10,4,7,0.5)'); fall.addColorStop(1, 'rgba(10,4,7,0.72)');
+  ctx.fillStyle = fall; ctx.fillRect(-4000, -8000, 8000, 16000);
+  ctx.restore();
+
   ctx.textAlign = 'center';
-  for (const f of s.floats) {
-    const c = project(f.x, f.y);
-    ctx.globalAlpha = 1 - f.age / 0.9;
+  for (const fl of s.floats) {
+    const c = project(fl.x, fl.y);
+    ctx.globalAlpha = 1 - fl.age / 0.9;
     ctx.font = '700 15px "IBM Plex Mono", ui-monospace, monospace';
-    ctx.fillStyle = f.color;
-    ctx.fillText(f.text, c.x, c.y - 34 - f.age * 34);
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(fl.text, c.x, c.y - 40 - fl.age * 34);
+    ctx.fillStyle = fl.color; ctx.fillText(fl.text, c.x, c.y - 40 - fl.age * 34);
   }
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  // Darkness closing in at the edge of what you can see.
-  const dark = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.2, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.62);
-  dark.addColorStop(0, 'rgba(10,4,7,0)'); dark.addColorStop(1, 'rgba(10,4,7,0.8)');
+  // Darkness closing in at the edge of the screen.
+  const dark = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.3, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.7);
+  dark.addColorStop(0, 'rgba(10,4,7,0)'); dark.addColorStop(1, 'rgba(10,4,7,0.7)');
   ctx.fillStyle = dark; ctx.fillRect(0, 0, v.w, v.h);
 
   if (v.mark) {
@@ -173,124 +427,191 @@ export function draw(ctx: CanvasRenderingContext2D, s: State, v: View) {
     ctx.globalAlpha = 1 - beat;
     oval(ctx, x, y, (34 + beat * 30) * v.zoom, (17 + beat * 15) * v.zoom); ctx.stroke();
     ctx.globalAlpha = 1;
-    const top = y - 62 * v.zoom - hop;
+    const top = y - 66 * v.zoom - hop;
     ctx.fillStyle = '#ffd35a';
-    ctx.beginPath(); ctx.moveTo(x, top + 22); ctx.lineTo(x - 13, top); ctx.lineTo(x - 5, top); ctx.lineTo(x - 5, top - 18); ctx.lineTo(x + 5, top - 18); ctx.lineTo(x + 5, top); ctx.lineTo(x + 13, top); ctx.closePath(); ctx.fill();
+    poly(ctx, [x, top + 22, x - 13, top, x - 5, top, x - 5, top - 18, x + 5, top - 18, x + 5, top, x + 13, top]); ctx.fill();
     ctx.restore();
   }
 
   if (v.showMap && !v.mark) automap(ctx, s, v);
 }
 
-function cell(ctx: CanvasRenderingContext2D, c: Point, x: number, y: number, l: number, memory: boolean, target: boolean, dying: number) {
-  const lift = WALL * (1 - dying * 0.5);
-  ctx.fillStyle = tint(CELL_L, l, memory);
-  ctx.beginPath(); ctx.moveTo(c.x - TW / 2 - 1, c.y); ctx.lineTo(c.x, c.y + TH / 2 + 0.6); ctx.lineTo(c.x, c.y + TH / 2 - lift); ctx.lineTo(c.x - TW / 2 - 1, c.y - lift); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = tint(CELL_R, l, memory);
-  ctx.beginPath(); ctx.moveTo(c.x + TW / 2 + 1, c.y); ctx.lineTo(c.x, c.y + TH / 2 + 0.6); ctx.lineTo(c.x, c.y + TH / 2 - lift); ctx.lineTo(c.x + TW / 2 + 1, c.y - lift); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = tint(CELL_TOP, l * (0.9 + hash(x, y) * 0.1), memory);
-  diamond(ctx, c.x, c.y, lift, 0.6); ctx.fill();
-  ctx.fillStyle = tint(NUCLEUS, l, memory);
-  oval(ctx, c.x + (hash(x, y) - 0.5) * 12, c.y - lift + (hash(y, x) - 0.5) * 5, 8, 4.2); ctx.fill();
-  if (target) {
-    ctx.strokeStyle = dying ? '#ff5a4d' : 'rgba(236,180,46,0.95)'; ctx.lineWidth = 2;
-    diamond(ctx, c.x, c.y, lift, -2); ctx.stroke();
+/** A wobbling outline: nothing alive in here holds a fixed shape. */
+function blob(ctx: Ctx, x: number, y: number, r: number, time: number, seed: number, lumps: number, depth: number, squash = 0.92) {
+  ctx.beginPath();
+  for (let k = 0; k <= 36; k++) {
+    const a = (k / 36) * Math.PI * 2;
+    const rr = r * (1 + depth * Math.sin(a * lumps + time * 2.1 + seed) + depth * 0.5 * Math.sin(a * (lumps + 3) - time * 1.3 + seed * 2));
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * squash);
   }
+  ctx.closePath();
 }
 
-function enemy(ctx: CanvasRenderingContext2D, e: Enemy, v: View) {
-  const c = project(e.x, e.y), kup = e.kind === 'kupffer';
-  const bob = Math.sin(v.time * (kup ? 2 : 5) + e.id) * (kup ? 1 : 2);
+function enemy(ctx: Ctx, e: Enemy, v: View) {
+  const c = project(e.x, e.y), kup = e.kind === 'kupffer', flash = e.flash > 0;
   const wind = e.windup >= 0 ? 1 - e.windup / CONFIG.enemies[e.kind].windup : 0;
-  const r = (kup ? 17 : 11) * (1 + wind * 0.25);
-  ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, r * 0.95, r * 0.42); ctx.fill();
-  const cy = c.y - r - 2 + bob;
-  const body = ctx.createRadialGradient(c.x - r * 0.35, cy - r * 0.4, 1, c.x, cy, r);
-  const flash = e.flash > 0;
-  if (kup) { body.addColorStop(0, flash ? '#fff' : '#f0bd72'); body.addColorStop(1, flash ? '#fff' : wind ? '#b3401f' : '#8a5a1e'); }
-  else { body.addColorStop(0, flash ? '#fff' : '#efe9ff'); body.addColorStop(1, flash ? '#fff' : wind ? '#b0688f' : '#8f7fc0'); }
-  ctx.fillStyle = body;
+  const r = (kup ? 19 : 12.5) * (1 + wind * 0.22);
+  const cy = c.y - r * 0.85 - 3 + Math.sin(v.time * (kup ? 1.6 : 4) + e.id) * (kup ? 1 : 1.8);
+  ctx.fillStyle = 'rgba(0,0,0,0.42)'; oval(ctx, c.x, c.y + 1, r * 0.95, r * 0.4); ctx.fill();
+
   if (kup) {
-    // A macrophage is never round: it reaches out in every direction at once.
-    ctx.beginPath();
-    for (let k = 0; k <= 28; k++) {
-      const a = (k / 28) * Math.PI * 2, rr = r * (1 + 0.2 * Math.sin(a * 7 + v.time * 2.2 + e.id));
-      ctx.lineTo(c.x + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
+    // A Kupffer cell is star-shaped: long arms feeling along the sinusoid wall.
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + e.id + Math.sin(v.time * 0.9 + k * 2) * 0.25, len = r * (1.45 + 0.25 * Math.sin(v.time * 1.7 + k));
+      const ex = c.x + Math.cos(a) * len, ey = cy + Math.sin(a) * len * 0.7 + 4;
+      const arm = ctx.createLinearGradient(c.x, cy, ex, ey);
+      arm.addColorStop(0, flash ? '#fff' : '#b9813a'); arm.addColorStop(1, flash ? '#fff' : 'rgba(120,70,24,0.55)');
+      ctx.strokeStyle = arm; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.4);
+      ctx.quadraticCurveTo(c.x + Math.cos(a + 0.35) * len * 0.7, cy + Math.sin(a + 0.35) * len * 0.5, ex, ey); ctx.stroke();
+      ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex + Math.cos(a) * 5, ey + Math.sin(a) * 3.5); ctx.stroke();
     }
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#3a1f10'; oval(ctx, c.x + 2, cy + 1, 6, 5); ctx.fill();
+    const body = ctx.createRadialGradient(c.x - r * 0.35, cy - r * 0.4, 1, c.x, cy, r * 1.1);
+    body.addColorStop(0, flash ? '#fff' : '#f3cf8f'); body.addColorStop(0.6, flash ? '#fff' : wind ? '#c2562a' : '#b0752c'); body.addColorStop(1, flash ? '#fff' : '#5e3a12');
+    ctx.fillStyle = body; blob(ctx, c.x, cy, r * 0.9, v.time, e.id, 5, 0.09); ctx.fill();
+    ctx.strokeStyle = 'rgba(50,25,8,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+    if (!flash) {
+      // Vacuoles full of whatever it last swallowed.
+      const rv = rand(e.id * 13);
+      for (let k = 0; k < 7; k++) {
+        const a = rv() * 6.3, d = rv() * r * 0.6, vr = 1.6 + rv() * 2.6;
+        ctx.fillStyle = 'rgba(255,240,205,0.4)'; oval(ctx, c.x + Math.cos(a) * d, cy + Math.sin(a) * d * 0.9, vr, vr); ctx.fill();
+        ctx.fillStyle = 'rgba(70,35,10,0.6)'; oval(ctx, c.x + Math.cos(a) * d + 0.5, cy + Math.sin(a) * d * 0.9 + 0.5, vr * 0.45, vr * 0.45); ctx.fill();
+      }
+      ctx.fillStyle = '#3a1d40'; oval(ctx, c.x + 3, cy + 1, 7, 4.6, 0.5); ctx.fill(); // bean-shaped nucleus
+      ctx.fillStyle = 'rgba(255,245,220,0.35)'; oval(ctx, c.x - r * 0.35, cy - r * 0.45, r * 0.3, r * 0.16, -0.5); ctx.fill();
+    }
   } else {
-    oval(ctx, c.x, cy, r, r); ctx.fill();
-    // The three-lobed nucleus is how you tell a neutrophil on a real slide.
-    ctx.fillStyle = '#3e225c';
-    for (const [dx, dy] of [[-4, 2], [0, -3.5], [4, 2]]) { oval(ctx, c.x + dx, cy + dy, 3.3, 3.3); ctx.fill(); }
+    // Neutrophil: a pale, grainy cell with a nucleus pinched into lobes.
+    const body = ctx.createRadialGradient(c.x - r * 0.35, cy - r * 0.45, 1, c.x, cy, r * 1.1);
+    body.addColorStop(0, flash ? '#fff' : '#fbeef4'); body.addColorStop(0.65, flash ? '#fff' : wind ? '#d88aa6' : '#d9bfdc'); body.addColorStop(1, flash ? '#fff' : '#8d6fa8');
+    ctx.fillStyle = body; blob(ctx, c.x, cy, r, v.time * 1.6, e.id, 4, 0.07 + wind * 0.05); ctx.fill();
+    ctx.strokeStyle = 'rgba(70,45,95,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+    if (!flash) {
+      const rg = rand(e.id * 29);
+      for (let k = 0; k < 22; k++) {
+        const a = rg() * 6.3, d = Math.sqrt(rg()) * r * 0.82;
+        ctx.fillStyle = `rgba(${rg() < 0.5 ? '170,90,140' : '120,95,170'},0.45)`; oval(ctx, c.x + Math.cos(a) * d, cy + Math.sin(a) * d * 0.92, 0.9, 0.9); ctx.fill();
+      }
+      const lobes = [[-4.6, 1.5], [-0.8, -3.6], [4, -0.6], [1.6, 3.6]].slice(0, 3 + (e.id % 2));
+      ctx.strokeStyle = '#3e225c'; ctx.lineWidth = 1.6; ctx.beginPath();
+      lobes.forEach(([dx, dy], k) => (k ? ctx.lineTo(c.x + dx, cy + dy) : ctx.moveTo(c.x + dx, cy + dy))); ctx.stroke();
+      for (const [dx, dy] of lobes) {
+        const lobe = ctx.createRadialGradient(c.x + dx - 1, cy + dy - 1, 0.3, c.x + dx, cy + dy, 3.6);
+        lobe.addColorStop(0, '#7650a8'); lobe.addColorStop(1, '#2e1848');
+        ctx.fillStyle = lobe; oval(ctx, c.x + dx, cy + dy, 3.5, 3.1); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'; oval(ctx, c.x - r * 0.38, cy - r * 0.48, r * 0.28, r * 0.15, -0.5); ctx.fill();
+    }
   }
   const max = CONFIG.enemies[e.kind].hp;
   if (e.hp < max || v.hoverEnemy === e.id) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(c.x - 14, cy - r - 9, 28, 4);
-    ctx.fillStyle = '#e23a30'; ctx.fillRect(c.x - 14, cy - r - 9, 28 * (e.hp / max), 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(c.x - 15, cy - r - 12, 30, 4);
+    ctx.fillStyle = '#e23a30'; ctx.fillRect(c.x - 15, cy - r - 12, 30 * Math.max(0, e.hp / max), 4);
   }
-  if (v.hoverEnemy === e.id) { ctx.strokeStyle = 'rgba(255,90,77,0.9)'; ctx.lineWidth = 2; oval(ctx, c.x, c.y, r * 1.15, r * 0.52); ctx.stroke(); }
+  if (v.hoverEnemy === e.id) { ctx.strokeStyle = 'rgba(255,90,77,0.9)'; ctx.lineWidth = 2; oval(ctx, c.x, c.y + 1, r * 1.2, r * 0.54); ctx.stroke(); }
 }
 
 /** A cache is a vesicle of loot; a patch is a pale knot of fibrin. */
-function pickup(ctx: CanvasRenderingContext2D, x: number, y: number, kind: 'cache' | 'patch', seen: boolean, time: number) {
+function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch', seen: boolean, time: number) {
   const c = project(x, y), hover = seen ? Math.sin(time * 2.4 + x) * 2 : 0;
   ctx.globalAlpha = seen ? 1 : 0.35;
   ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, 8, 4); ctx.fill();
   if (kind === 'cache') {
     if (seen) {
       ctx.globalCompositeOperation = 'lighter';
-      const glow = ctx.createRadialGradient(c.x, c.y - 12, 0, c.x, c.y - 12, 30);
+      const glow = ctx.createRadialGradient(c.x, c.y - 12, 0, c.x, c.y - 12, 32);
       glow.addColorStop(0, 'rgba(120,240,225,0.35)'); glow.addColorStop(1, 'rgba(120,240,225,0)');
-      ctx.fillStyle = glow; oval(ctx, c.x, c.y - 12, 30, 30); ctx.fill();
+      ctx.fillStyle = glow; oval(ctx, c.x, c.y - 12, 32, 32); ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
     }
-    const body = ctx.createRadialGradient(c.x - 3, c.y - 17 + hover, 1, c.x, c.y - 13 + hover, 10);
-    body.addColorStop(0, '#e9fffb'); body.addColorStop(1, '#2f9e97');
-    ctx.fillStyle = body; oval(ctx, c.x, c.y - 13 + hover, 9, 9); ctx.fill();
-    ctx.strokeStyle = 'rgba(233,255,251,0.7)'; ctx.lineWidth = 1.2; oval(ctx, c.x, c.y - 13 + hover, 9, 9); ctx.stroke();
+    // A membrane bubble with cargo showing through it.
+    const cy = c.y - 14 + hover;
+    const body = ctx.createRadialGradient(c.x - 3, cy - 4, 1, c.x, cy, 11);
+    body.addColorStop(0, 'rgba(233,255,251,0.95)'); body.addColorStop(0.6, 'rgba(70,190,180,0.7)'); body.addColorStop(1, 'rgba(24,110,108,0.85)');
+    ctx.fillStyle = body; oval(ctx, c.x, cy, 10, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(12,70,72,0.7)';
+    for (let k = 0; k < 4; k++) { const a = time * 0.8 + k * 1.57; oval(ctx, c.x + Math.cos(a) * 4, cy + Math.sin(a) * 3.2 + 1, 1.7, 1.7); ctx.fill(); }
+    ctx.strokeStyle = 'rgba(233,255,251,0.75)'; ctx.lineWidth = 1.2; oval(ctx, c.x, cy, 10, 10); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; oval(ctx, c.x - 4, cy - 5, 2.6, 1.5, -0.6); ctx.fill();
   } else {
-    ctx.strokeStyle = '#d9e8a8'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    for (let k = 0; k < 3; k++) {
-      const a = (k / 3) * Math.PI + 0.4;
-      ctx.beginPath(); ctx.moveTo(c.x - Math.cos(a) * 7, c.y - 8 + hover - Math.sin(a) * 5); ctx.lineTo(c.x + Math.cos(a) * 7, c.y - 8 + hover + Math.sin(a) * 5); ctx.stroke();
+    // Fibrin: a mesh of pale threads with a clot at the centre.
+    const cy = c.y - 9 + hover, rf = rand(Math.floor(x * 31 + y * 17));
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 7; k++) {
+      const a = rf() * Math.PI, len = 6 + rf() * 4;
+      ctx.strokeStyle = `rgba(226,236,180,${0.55 + rf() * 0.4})`; ctx.lineWidth = 1.2 + rf();
+      ctx.beginPath(); ctx.moveTo(c.x - Math.cos(a) * len, cy - Math.sin(a) * len * 0.6);
+      ctx.quadraticCurveTo(c.x + (rf() - 0.5) * 5, cy + (rf() - 0.5) * 4, c.x + Math.cos(a) * len, cy + Math.sin(a) * len * 0.6); ctx.stroke();
     }
-    ctx.fillStyle = '#7be08a'; oval(ctx, c.x, c.y - 8 + hover, 2.6, 2.6); ctx.fill();
+    ctx.fillStyle = '#7be08a'; oval(ctx, c.x, cy, 3, 2.6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; oval(ctx, c.x - 1, cy - 1, 1, 0.8); ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-function hero(ctx: CanvasRenderingContext2D, s: State, v: View) {
+/** You: a person in a pressure suit, about ten micrometres tall. */
+function hero(ctx: Ctx, s: State, v: View) {
   const p = s.player, c = project(p.x, p.y);
-  if (cloaked(s)) ctx.globalAlpha = 0.38;
   const f = project(p.face.x, p.face.y), fl = Math.hypot(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
-  const moving = p.path.length > 0, step = moving ? Math.sin(v.time * 16) * 1.5 : 0;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'; oval(ctx, c.x, c.y, 9, 4.5); ctx.fill();
+  const moving = heroMoving, stride = moving ? Math.sin(v.time * 14) : 0;
+  const k = 1.3, away = fy < -0.3; // facing up the screen shows the back
+  if (cloaked(s)) ctx.globalAlpha = 0.35;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; oval(ctx, c.x, c.y, 10, 5); ctx.fill();
   if (p.swing > 0) {
     const a = Math.atan2(fy, fx), t = 1 - p.swing / 0.18;
-    ctx.strokeStyle = `rgba(255,244,225,${0.9 - t * 0.6})`; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.ellipse(c.x, c.y - 10, 34, 19, 0, a - 1.1 + t * 0.5, a - 0.2 + t * 1.3); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(255,236,205,${0.85 - t * 0.6})`; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.ellipse(c.x, c.y - 13, 40, 22, 0, a - 1.1 + t * 0.5, a - 0.2 + t * 1.3); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
   }
-  const suit = p.hurt > 0 ? '#ff7a6e' : '#dfeee9';
-  ctx.strokeStyle = '#2a3b3d'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(c.x - 3, c.y - 8); ctx.lineTo(c.x - 3, c.y - 1 + step); ctx.moveTo(c.x + 3, c.y - 8); ctx.lineTo(c.x + 3, c.y - 1 - step); ctx.stroke();
-  ctx.fillStyle = suit; ctx.beginPath(); ctx.roundRect(c.x - 6, c.y - 21, 12, 15, 5); ctx.fill();
-  ctx.fillStyle = '#9fb6b1'; ctx.beginPath(); ctx.roundRect(c.x - 4 - fx * 5, c.y - 20 - fy * 2, 8, 10, 3); ctx.fill(); // air pack
-  ctx.fillStyle = suit; oval(ctx, c.x, c.y - 26, 6, 6); ctx.fill();
-  ctx.fillStyle = '#1c2b33'; oval(ctx, c.x + fx * 2.6, c.y - 26 + fy * 1.6, 3.6, 3.2); ctx.fill(); // visor
-  ctx.fillStyle = 'rgba(255,224,170,0.95)'; oval(ctx, c.x + fx * 7, c.y - 17 + fy * 4, 1.8, 1.8); ctx.fill(); // lamp
+  const hurt = p.hurt > 0, suit = hurt ? '#ff8a7e' : '#dbe6e2', shade = hurt ? '#b5544b' : '#8ea09c', dark = '#27353a';
+  ctx.save(); ctx.translate(c.x, c.y); ctx.scale(k, k);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // Legs and boots.
+  ctx.strokeStyle = shade; ctx.lineWidth = 3.4;
+  ctx.beginPath(); ctx.moveTo(-2.6, -9); ctx.lineTo(-2.8 - fx * stride * 2.4, -1.5 - Math.abs(stride)); ctx.moveTo(2.6, -9); ctx.lineTo(2.8 + fx * stride * 2.4, -1.5 - Math.abs(-stride) * 0.3); ctx.stroke();
+  ctx.fillStyle = dark; oval(ctx, -2.8 - fx * stride * 2.4, -0.8, 2.6, 1.5); ctx.fill(); oval(ctx, 2.8 + fx * stride * 2.4, -0.8, 2.6, 1.5); ctx.fill();
+  const pack = () => { ctx.fillStyle = '#6f827f'; ctx.beginPath(); ctx.roundRect(-4.5 - fx * 4.5, -20.5 - fy * 1.5, 9, 11, 3); ctx.fill(); ctx.fillStyle = '#4b5b59'; ctx.fillRect(-2.5 - fx * 4.5, -18.5 - fy * 1.5, 5, 1.6); };
+  if (!away) pack();
+  // Torso, shaded down one side.
+  const torso = ctx.createLinearGradient(-6, 0, 6, 0);
+  torso.addColorStop(0, suit); torso.addColorStop(1, shade);
+  ctx.fillStyle = torso; ctx.beginPath(); ctx.roundRect(-5.6, -21, 11.2, 13.5, 4.5); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,45,50,0.45)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-5, -12.5); ctx.lineTo(5, -12.5); ctx.stroke(); // belt
+  // Arms, swinging against the legs.
+  ctx.strokeStyle = suit; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-5.4, -19); ctx.lineTo(-7 + fx * stride * 2, -12 + stride); ctx.stroke();
+  ctx.strokeStyle = shade;
+  ctx.beginPath(); ctx.moveTo(5.4, -19); ctx.lineTo(7 + fx * 3, -13 + fy * 2 - stride); ctx.stroke();
+  if (away) pack();
+  // Helmet: a white shell with a dark glass visor.
+  const helm = ctx.createRadialGradient(-2, -29, 0.5, 0, -27, 7);
+  helm.addColorStop(0, '#ffffff'); helm.addColorStop(1, hurt ? '#d06a60' : '#aebfbb');
+  ctx.fillStyle = helm; oval(ctx, 0, -27, 6.4, 6.4); ctx.fill();
+  if (!away) {
+    ctx.fillStyle = '#101c24'; oval(ctx, fx * 2.6, -26.6 + fy * 1.4, 4, 3.6); ctx.fill();
+    ctx.fillStyle = 'rgba(160,220,255,0.55)'; oval(ctx, fx * 2.6 - 1.3, -27.8 + fy * 1.4, 1.5, 0.9, -0.5); ctx.fill();
+  }
+  // The lamp on the chest.
+  ctx.globalCompositeOperation = 'lighter';
+  const lamp = ctx.createRadialGradient(fx * 6, -17 + fy * 3, 0, fx * 6, -17 + fy * 3, 6);
+  lamp.addColorStop(0, 'rgba(255,236,190,0.95)'); lamp.addColorStop(1, 'rgba(255,236,190,0)');
+  ctx.fillStyle = lamp; oval(ctx, fx * 6, -17 + fy * 3, 6, 6); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
   if (p.channel) {
     const t = p.channel.t / p.channel.total;
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(c.x, c.y - 44, 9, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(c.x, c.y - 56, 9, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = p.channel.kind === 'strip' ? '#ff5a4d' : '#ecb42e'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(c.x, c.y - 44, 9, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(c.x, c.y - 56, 9, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
 
 /** The overlay map: only the tissue you have actually seen. */
-function automap(ctx: CanvasRenderingContext2D, s: State, v: View) {
+function automap(ctx: Ctx, s: State, v: View) {
   const u = Math.max(4, Math.min(8, Math.min(v.w, v.h) / 95)), p = s.player;
   const at = (x: number, y: number) => ({ x: v.w / 2 + (x - y - (p.x - p.y)) * u, y: v.h / 2 + (x + y - (p.x + p.y)) * u * 0.5 });
   const dot = (x: number, y: number, r: number, color: string) => { const c = at(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fill(); };
@@ -309,4 +630,14 @@ function automap(ctx: CanvasRenderingContext2D, s: State, v: View) {
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   dot(p.x, p.y, u * 0.8, '#ffffff');
+}
+
+/** The nearest red blood cell the player can see, for the info box about them. */
+export function nearestBloodCell(s: State): Point | null {
+  let best: Point | null = null, bestD = 5;
+  for (const b of rbcs) {
+    const d = Math.hypot(b.x - s.player.x, b.y - s.player.y);
+    if (d < bestD && d > 1.2 && s.visible[idx(s, Math.floor(b.x), Math.floor(b.y))]) { bestD = d; best = { x: b.x, y: b.y }; }
+  }
+  return best;
 }

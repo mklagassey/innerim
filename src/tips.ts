@@ -12,6 +12,8 @@ export const TIPS: Tip[] = [
     body: `A living liver cell, packed with mitochondria. Press F beside one to strip it: ${CONFIG.energy.strip.gain} energy at once. The cell dies, the host loses ${CONFIG.energy.strip.hostDamage} health, and the immune system comes looking. The gap it leaves can be walked through.` },
   { id: 'glucose', kind: 'Resource', title: 'Glucose-rich blood',
     body: 'Stand on the amber crystals and press E to skim energy. It is slow and it harms no one. A drained patch refills over time.' },
+  { id: 'rbc', kind: 'Blood', title: 'Red blood cells',
+    body: 'Harmless, and useful: they drift with the blood, and in a liver all blood drains toward the central vein. When you are lost, follow them.' },
   { id: 'neutrophil', kind: 'Immune cell', title: 'Neutrophil',
     body: 'A first responder: fast, numerous and short-lived. You can tell one by its three-lobed nucleus. It sprays oxidants at close range. Click it to close in and strike, or right-click to shoot.' },
   { id: 'kupffer', kind: 'Immune cell', title: 'Kupffer cell',
@@ -19,7 +21,7 @@ export const TIPS: Tip[] = [
   { id: 'cache', kind: 'Pickup', title: 'Vesicle',
     body: 'A bubble of cargo adrift in the blood. Walk into it to choose one upgrade from three.' },
   { id: 'patch', kind: 'Pickup', title: 'Fibrin patch',
-    body: `A knot of clotting protein. Walk over it to pick it up, then press H to heal ${CONFIG.items.patchHeal} life.` },
+    body: `A knot of clotting protein. Walk over it to pick it up. When your life runs low, one seals the wound on its own and heals ${CONFIG.items.patchHeal}. Press H to use one sooner.` },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
     body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
 ];
@@ -44,7 +46,7 @@ export function unmuteAll() {
 export const mutedCount = () => muted.size;
 
 /** What the player can see right now that they have not been told about yet, and where it is. */
-export function nextTip(s: State): { tip: Tip; at: Point } | null {
+export function nextTip(s: State, extra: Record<string, Point | null> = {}): { tip: Tip; at: Point } | null {
   const seen = (p: Point) => s.visible[idx(s, Math.floor(p.x), Math.floor(p.y))] === 1;
   const mid = (p: Point) => ({ x: p.x + 0.5, y: p.y + 0.5 });
   const nearest = (ps: Point[]) => ps.filter(seen).sort((a, b) => dist(a, s.player) - dist(b, s.player))[0] ?? null;
@@ -59,6 +61,7 @@ export function nextTip(s: State): { tip: Tip; at: Point } | null {
     cache: nearest(s.pickups.filter((i) => i.kind === 'cache')),
     patch: nearest(s.pickups.filter((i) => i.kind === 'patch')),
     vein: nearest([mid(s.vein)]),
+    ...extra,
   };
   for (const tip of TIPS) {
     const at = here[tip.id];

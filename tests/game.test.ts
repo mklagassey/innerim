@@ -97,7 +97,7 @@ test('a neutrophil hunts you down and can kill you; a strike kills it first', ()
   s.enemies.push({ id: 9, kind: 'neutrophil', x: t.x + 0.5, y: t.y + 1.4, hp: 8, mood: 'patrol', goal: null, home: t, path: [], repath: 0, cooldown: 0, windup: -1, idle: 0, unseen: 99, flash: 0 });
   const fight = structuredClone({ ...s, rng: undefined }) as unknown as G.State;
   fight.rng = s.rng;
-  s.player.hp = 3;
+  s.player.hp = 3; s.patches = 0;
   run(s, 8);
   assert.equal(s.status, 'dead');
   G.attack(fight, 9);
@@ -236,4 +236,30 @@ test('a dead Kupffer cell leaves an upgrade behind', () => {
   k.hp = 1;
   G.strike(s, k);
   assert.equal(s.pickups.filter((i) => i.kind === 'cache').length, 1);
+});
+
+test('the cloak deploys by itself when you are first spotted, and confuses the hunter', () => {
+  const s = quiet(21);
+  s.upgrades.cd47 = 1;
+  const e = foe(s, 1.6, 0);
+  run(s, 0.2);
+  assert.equal(G.cloaked(s), true);
+  assert.equal(s.player.energy, CONFIG.player.startEnergy - CONFIG.cloak.energy);
+  assert.equal(e.mood, 'patrol');
+  assert.ok(e.idle > 1.5, 'it stands there confused');
+  assert.equal(s.player.hp, G.maxHp(s));
+  const plain = quiet(21);
+  const e2 = foe(plain, 1.6, 0);
+  run(plain, 0.2);
+  assert.equal(e2.mood, 'chase', 'without the upgrade it just hunts you');
+});
+
+test('a fibrin patch applies itself when life runs low', () => {
+  const s = quiet(22);
+  s.player.hp = G.maxHp(s) * CONFIG.items.autoPatchBelow + 2;
+  const e = foe(s, 0.6, 0);
+  e.windup = 0.01;
+  run(s, 0.1);
+  assert.equal(s.patches, 0);
+  assert.ok(s.player.hp > G.maxHp(s) * CONFIG.items.autoPatchBelow);
 });

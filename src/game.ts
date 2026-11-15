@@ -178,6 +178,13 @@ export function cloak(s: State): boolean {
   s.cloak = cloakTime(s);
   s.cloakCd = CONFIG.cloak.cooldown + s.cloak;
   emit(s, 'cloak');
+  // Anything hunting you loses the thread and stands there working out what it saw.
+  for (const e of s.enemies) {
+    if (e.mood !== 'chase' && e.windup < 0) continue;
+    e.mood = 'patrol'; e.goal = null; e.path = []; e.windup = -1;
+    e.idle = CONFIG.cloak.confusion + s.rng();
+    float(s, e, '?', '#78f0e1');
+  }
   return true;
 }
 
@@ -453,6 +460,8 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
   p.hurt = 0.25;
   emit(s, 'hurt');
   float(s, p, `-${dmg}`, '#ff5a4d');
+  // A patch seals a bad wound without being asked.
+  if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
   if (p.hp <= 0) {
     p.hp = 0;
     s.status = 'dead';
@@ -600,6 +609,12 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const d = dist(e, p);
   const saw = !cloaked(s) && d <= c.sight && sees(s, tileOf(e), tileOf(p));
   if (saw) {
+    // The cloak answers a first sighting on its own, if it is ready and you can pay for it.
+    if (e.mood !== 'chase' && cloak(s)) {
+      e.mood = 'patrol'; e.goal = null; e.path = []; e.idle = CONFIG.cloak.confusion + s.rng();
+      float(s, e, '?', '#78f0e1');
+      return false;
+    }
     if (e.mood !== 'chase') { float(s, e, '!', '#ff5a4d'); emit(s, 'spot'); }
     e.mood = 'chase'; e.unseen = 0; e.goal = tileOf(p);
     raiseAlert(s, (e.kind === 'kupffer' ? CONFIG.alert.seenByKupffer : CONFIG.alert.seenByNeutrophil) * dt);

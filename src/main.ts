@@ -1,7 +1,7 @@
 // Input, the game loop and the heads-up display. All rules live in game.ts.
 import { CONFIG, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
-import { draw, TH, TW, View } from './render';
+import { draw, nearestBloodCell, TH, TW, View } from './render';
 import * as Tips from './tips';
 import * as Sound from './audio';
 
@@ -11,7 +11,7 @@ const ctx = canvas.getContext('2d')!;
 
 let s = G.createGame();
 let started = false;
-const view: View = { w: 800, h: 600, zoom: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null };
+const view: View = { w: 800, h: 600, zoom: 1, dpr: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null };
 const keys = new Set<string>();
 let held = false, pointer: { x: number; y: number } | null = null, retarget = 0;
 
@@ -20,6 +20,7 @@ function resize() {
   view.w = Math.max(1, r.width); view.h = Math.max(1, r.height);
   canvas.width = Math.round(view.w * dpr); canvas.height = Math.round(view.h * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  view.dpr = dpr;
   view.zoom = Math.max(0.75, Math.min(1.5, Math.min(view.w, view.h) / 520));
 }
 new ResizeObserver(resize).observe(canvas);
@@ -176,9 +177,9 @@ function hud() {
   set('act-f', 'hidden', playing && !harvesting && G.stripTarget(s) ? '0' : '1');
   set('need', 'hidden', playing && G.atVein(s) && !leaving ? '0' : '1');
   set('act-h', 'hidden', playing && s.patches > 0 ? '0' : '1');
-  set('act-h', 'text', `H  Fibrin patch \u00d7${s.patches}`);
+  set('act-h', 'text', `Fibrin patch \u00d7${s.patches}`);
   set('act-c', 'hidden', playing && s.upgrades.cd47 > 0 ? '0' : '1');
-  set('act-c', 'text', G.cloaked(s) ? `Unseen ${s.cloak.toFixed(0)}s` : s.cloakCd > 0 ? `Cloak ${Math.ceil(s.cloakCd)}s` : 'C  Cloak');
+  set('act-c', 'text', G.cloaked(s) ? `Unseen ${s.cloak.toFixed(0)}s` : s.cloakCd > 0 ? `Cloak ${Math.ceil(s.cloakCd)}s` : s.player.energy < CONFIG.cloak.energy ? 'Cloak needs 2 energy' : 'Cloak ready');
   const owned = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => s.upgrades[id] > 0);
   set('build', 'text', owned.map((id) => `${UPGRADES[id].name} ${roman(s.upgrades[id])}`).join('\n'));
   const tracks = owned.reduce<Record<string, number>>((a, id) => ({ ...a, [UPGRADES[id].track]: (a[UPGRADES[id].track] ?? 0) + s.upgrades[id] }), {});
@@ -225,7 +226,7 @@ function frame(now: number) {
   view.time += dt;
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
-    if (!tip && !s.offer) { const next = Tips.nextTip(s); if (next) showTip(next.tip, next.at); }
+    if (!tip && !s.offer) { const next = Tips.nextTip(s, { rbc: s.time > 9 ? nearestBloodCell(s) : null }); if (next) showTip(next.tip, next.at); }
     if (!tip) {
       const was = { x: s.player.x, y: s.player.y };
       G.update(s, dt, heldDirection());
