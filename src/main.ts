@@ -12,7 +12,7 @@ const ctx = canvas.getContext('2d')!;
 
 let s = G.createGame();
 let started = false;
-const view: View = { w: 800, h: 600, zoom: 1, dpr: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null };
+const view: View = { w: 800, h: 600, zoom: 1, dpr: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null, heat: 0, kick: 0, still: matchMedia('(prefers-reduced-motion: reduce)').matches };
 const keys = new Set<string>();
 let held = false, pointer: { x: number; y: number } | null = null, retarget = 0;
 
@@ -253,9 +253,12 @@ function frame(now: number) {
   const near = s.enemies.filter((e) => G.dist(e, s.player) < 10);
   const chasers = near.filter((e) => e.mood === 'chase').length;
   const heat = Math.max(tier / 3, chasers ? 0.5 + 0.17 * Math.min(3, chasers) : near.some((e) => e.mood === 'investigate') ? 0.3 : 0);
-  const bpm = Math.max([58, 76, 98, 124][tier], chasers ? 96 : 0);
+  const bpm = Math.max([58, 80, 108, 132][tier], chasers ? 100 : 0);
   Sound.pulse(started && s.status === 'playing' && !tip ? bpm : 0, s.player.hp / G.maxHp(s), heat);
   aimPointer();
+  const live = started && s.status === 'playing' && !tip;
+  view.heat = live ? Sound.intensity() : 0;
+  view.kick = live ? Sound.thump() : 0;
   draw(ctx, s, view);
   hud();
   requestAnimationFrame(frame);

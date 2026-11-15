@@ -104,19 +104,31 @@ export function play(name: string) {
 }
 
 let nextBeat = 0;
+const hits: number[] = []; // when each kick lands, for the picture
+
+/** 1 at the instant of a kick, fading to 0 before the next. */
+export function thump() {
+  if (!ac) return 0;
+  const now = ac.currentTime;
+  hits.sort((a, b) => a - b);
+  while (hits.length > 1 && hits[1] <= now) hits.shift();
+  return hits.length && hits[0] <= now ? Math.exp(-(now - hits[0]) / 0.14) : 0;
+}
+/** How wound-up the score is, 0 to 1. */
+export const intensity = () => (ac ? Music.level() : 0);
 /** Keeps the host's heart and the score going. Call every frame; bpm 0 lets them rest.
  *  `life` is 0 to 1 and `heat` (0 to 1) is how much trouble the player is in. */
 export function pulse(bpm: number, life: number, heat = 0) {
   if (!ac) return;
   const now = ac.currentTime;
   bed.gain.setTargetAtTime(bpm ? 0.38 : 0.1, now, 0.4);
-  if (!bpm || !on) { nextBeat = 0; Music.rest(); return; }
+  if (!bpm) { nextBeat = 0; Music.rest(); return; } // when muted this still runs, silently, so the picture keeps its beat
   if (nextBeat < now) nextBeat = now + 0.05;
   if (nextBeat - now > 0.12) return; // schedule just ahead of time
   const at = nextBeat - now, loud = 0.34 + (1 - Math.max(0, Math.min(1, life))) * 0.5; // louder as you weaken
   tone(62, 38, 0.16, loud, 'sine', at); // lub
   tone(84, 46, 0.12, loud * 0.7, 'sine', at + Math.min(0.3, 18 / bpm)); // dub
   hiss(140, 420, 0.3, 0.5, 'lowpass', at); // the surge of blood that follows
-  Music.beat(nextBeat, 60 / bpm, heat, life);
+  hits.push(...Music.beat(nextBeat, 60 / bpm, heat, life));
   nextBeat += 60 / bpm;
 }

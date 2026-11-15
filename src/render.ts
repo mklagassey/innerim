@@ -12,6 +12,9 @@ const INK = '#0a0407';
 export interface View {
   w: number; h: number; zoom: number; dpr: number; time: number; showMap: boolean;
   hover: Point | null; hoverEnemy: number | null; mark: Point | null;
+  heat: number; // 0 to 1: how wound-up the music is
+  kick: number; // 1 at each drum hit, fading to 0
+  still: boolean; // the player asked for reduced motion
 }
 
 export const project = (x: number, y: number): Point => ({ x: ((x - y) * TW) / 2, y: ((x + y) * TH) / 2 });
@@ -260,7 +263,9 @@ export function draw(ctx: Ctx, s: State, v: View) {
   ctx.save();
   const cam = project(p.x, p.y);
   ctx.translate(v.w / 2, v.h / 2);
-  ctx.scale(v.zoom, v.zoom);
+  // The whole view jumps a hair with each kick once the music is loud.
+  const hot = Math.max(0, (v.heat - 0.4) / 0.6), punch = v.still ? 0 : hot * v.kick;
+  ctx.scale(v.zoom * (1 + punch * 0.022), v.zoom * (1 + punch * 0.022));
   ctx.translate(-cam.x, -cam.y);
 
   const span = Math.ceil(v.w / v.zoom / TW + v.h / v.zoom / TH) + 2;
@@ -408,6 +413,20 @@ export function draw(ctx: Ctx, s: State, v: View) {
   ctx.fillStyle = fall; ctx.fillRect(-4000, -8000, 8000, 16000);
   ctx.restore();
 
+  if (hot > 0) {
+    // Each kick throws a neon ring out across the floor from where you stand.
+    const grow = 1 - v.kick, tint = hot < 0.55 ? '255,70,60' : '255,40,170';
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 2; k++) {
+      const r = (0.6 + grow * (R * 0.9) - k * 0.8) * TW * 0.5;
+      if (r <= 0) continue;
+      ctx.strokeStyle = `rgba(${k ? '90,230,255' : tint},${(k ? 0.35 : 0.6) * hot * v.kick})`;
+      ctx.lineWidth = (k ? 2 : 5) * (0.5 + hot);
+      oval(ctx, cam.x, cam.y, r, r * 0.5); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   ctx.textAlign = 'center';
   for (const fl of s.floats) {
     const c = project(fl.x, fl.y);
@@ -423,6 +442,21 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const dark = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.3, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.7);
   dark.addColorStop(0, 'rgba(10,4,7,0)'); dark.addColorStop(1, 'rgba(10,4,7,0.7)');
   ctx.fillStyle = dark; ctx.fillRect(0, 0, v.w, v.h);
+
+  if (hot > 0) {
+    // The edges of the screen glow and throb with the beat: red first, then hot pink.
+    const tint = hot < 0.55 ? '255,40,40' : '255,30,150', a = hot * (0.1 + (v.still ? 0.12 : 0.3 * v.kick));
+    ctx.globalCompositeOperation = 'lighter';
+    const edge = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.34, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.66);
+    edge.addColorStop(0, `rgba(${tint},0)`); edge.addColorStop(1, `rgba(${tint},${a})`);
+    ctx.fillStyle = edge; ctx.fillRect(0, 0, v.w, v.h);
+    if (hot > 0.55 && !v.still) { // scan lines sweep down at full tilt
+      ctx.fillStyle = `rgba(90,230,255,${0.05 * hot * (0.4 + v.kick)})`;
+      const gap = 46, off = (v.time * 90) % gap;
+      for (let y = off - gap; y < v.h; y += gap) ctx.fillRect(0, y, v.w, 1.5);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
 
   if (v.mark) {
     // Points out whatever the info box on screen is talking about.
