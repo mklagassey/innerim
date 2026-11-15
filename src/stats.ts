@@ -3,9 +3,9 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'liver-11'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'trip-1'; // bump when rules change so reports can be compared fairly
 
-const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
+const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
 
 interface Tally {
   events: Record<string, number>;
@@ -56,12 +56,14 @@ export function track(s: G.State, dt: number, moved: number) {
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
-export function report(s: G.State) {
+export function report(s: G.State, extra: Record<string, unknown> = {}) {
   const open = s.tiles.filter((x) => x !== 'cell').length;
   let explored = 0;
   for (let i = 0; i < s.tiles.length; i++) if (s.explored[i] && s.tiles[i] !== 'cell') explored++;
   return {
     build: BUILD,
+    place: s.place,
+    ...extra,
     at: new Date().toISOString(),
     result: s.status,
     endedBy: s.status === 'dead' ? t.lastHurtBy || 'unknown' : 'left by the vein',
@@ -71,6 +73,7 @@ export function report(s: G.State) {
     hostHealth: Math.round(s.hostHealth),
     cellsStripped: s.cellsKilled, skims: t.events.skim ?? 0,
     immuneKills: s.kills,
+    timesSnared: t.events.net ?? 0,
     timesSniffed: t.events.sniff ?? 0,
     timesSpotted: t.events.spot ?? 0, timesHurt: t.events.hurt ?? 0,
     swings: t.events.swing ?? 0, shots: t.events.shot ?? 0, hitsLanded: t.events.hit ?? 0,
@@ -89,8 +92,8 @@ export function report(s: G.State) {
 type Db = { collection(path: string): { add(data: Record<string, unknown>): Promise<unknown> } };
 
 /** Files the report. Resolves true when it was stored, false when this page has nowhere to store it. */
-export async function save(s: G.State): Promise<boolean> {
-  const data = report(s);
+export async function save(s: G.State, extra: Record<string, unknown> = {}): Promise<boolean> {
+  const data = report(s, extra);
   try {
     const claude = (window as unknown as { claude?: { use(name: string): Promise<Db | null> } }).claude;
     const db = await claude?.use('db');

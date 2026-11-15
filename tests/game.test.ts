@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { CONFIG, UPGRADES, UpgradeId } from '../src/config';
 import { generate } from '../src/map';
 import * as G from '../src/game';
+import * as T from '../src/trip';
+import { generateVessel } from '../src/map';
 
 const quiet = (seed = 1) => { const s = G.createGame(seed); s.enemies = []; s.pickups = []; return s; };
 const run = (s: G.State, seconds: number, dir: G.Point | null = null) => { for (let t = 0; t < seconds; t += 1 / 60) G.update(s, 1 / 60, dir); };
@@ -94,7 +96,7 @@ test('you leave only by the central vein with enough energy', () => {
 test('a neutrophil hunts you down and can kill you; a strike kills it first', () => {
   const s = quiet(7);
   const t = G.tileOf(s.player);
-  s.enemies.push({ id: 9, kind: 'neutrophil', x: t.x + 0.5, y: t.y + 1.4, hp: 8, mood: 'patrol', goal: null, home: t, path: [], repath: 0, cooldown: 0, windup: -1, idle: 0, unseen: 99, flash: 0 });
+  s.enemies.push({ id: 9, kind: 'neutrophil', x: t.x + 0.5, y: t.y + 1.4, hp: 8, mood: 'patrol', goal: null, home: t, path: [], repath: 0, cooldown: 0, windup: -1, idle: 0, unseen: 99, flash: 0, net: 9 });
   const fight = structuredClone({ ...s, rng: undefined }) as unknown as G.State;
   fight.rng = s.rng;
   s.player.hp = 3; s.patches = 0;
@@ -152,7 +154,7 @@ test('a bot mashing buttons never breaks the game', () => {
 });
 
 const foe = (s: G.State, dx: number, dy: number, kind: G.EnemyKind = 'neutrophil'): G.Enemy => {
-  const e: G.Enemy = { id: s.nextId++, kind, x: s.player.x + dx, y: s.player.y + dy, hp: CONFIG.enemies[kind].hp, mood: 'patrol', goal: null, home: G.tileOf(s.player), path: [], repath: 0, cooldown: 0, windup: -1, idle: 0, unseen: 99, flash: 0 };
+  const e: G.Enemy = { id: s.nextId++, kind, x: s.player.x + dx, y: s.player.y + dy, hp: CONFIG.enemies[kind].hp, mood: 'patrol', goal: null, home: G.tileOf(s.player), path: [], repath: 0, cooldown: 0, windup: -1, idle: 0, unseen: 99, flash: 0, net: 9 };
   s.enemies.push(e);
   return e;
 };
@@ -256,7 +258,7 @@ test('the cloak deploys by itself when you are first spotted, and confuses the h
 
 test('a fibrin patch applies itself when life runs low', () => {
   const s = quiet(22);
-  s.player.hp = G.maxHp(s) * CONFIG.items.autoPatchBelow + 2;
+  s.player.hp = G.maxHp(s) * CONFIG.items.autoPatchBelow + 0.5; // any hit at all takes it under
   const e = foe(s, 0.6, 0);
   e.windup = 0.01;
   run(s, 0.1);
@@ -350,7 +352,81 @@ test('a character and the host carry over into the next map', () => {
   assert.equal(b.player.hp, 33);
   assert.equal(b.patches, 3);
   assert.equal(b.hostHealth, 70);
-  assert.equal(b.player.energy, CONFIG.player.startEnergy, 'energy is spent on the ride');
+  assert.equal(b.player.energy, a.player.energy, 'what energy you have left comes too');
   b.upgrades.glycocalyx = 3;
   assert.equal(a.upgrades.glycocalyx, 2, 'the two maps do not share one build object');
+});
+
+test('every vessel map runs unbroken from where you enter to where you leave', () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const patrol = 3 + (seed % 4), m = generateVessel(seed, patrol);
+    assert.equal(m.neutrophils.length, patrol, `seed ${seed} patrol`);
+    const s = G.createGame(seed, undefined, 'vessel', patrol);
+    s.explored.fill(1);
+    assert.ok(G.findPath(s, m.start, m.vein), `seed ${seed} has a way through`);
+    for (const p of [...m.glucose, ...m.patches, ...m.neutrophils]) assert.ok(G.open(s, p.x, p.y), `seed ${seed} item on open floor`);
+    assert.ok(G.dist(m.start, m.vein) > 50);
+  }
+});
+
+test('a vessel lets you leave without paying, and has nothing to strip', () => {
+  const s = G.createGame(3, undefined, 'vessel', 3);
+  s.enemies = [];
+  assert.equal(G.stripTarget(s), null);
+  s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; s.player.energy = 1;
+  assert.ok(G.leave(s));
+  assert.equal(s.status, 'won');
+  assert.equal(s.player.energy, 1);
+});
+
+test('leaving the liver costs the fare, and the change comes with you', () => {
+  const s = G.createGame(3);
+  s.enemies = [];
+  s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; s.player.energy = CONFIG.energy.quota + 3;
+  assert.ok(G.leave(s));
+  assert.equal(G.carryOf(s).energy, 3);
+});
+
+test('the circulation runs one way: out by an artery, home by the veins', () => {
+  const t = T.newTrip(1);
+  assert.deepEqual(T.ways(t).map((l) => l.to).sort(), ['hepatic', 'mesenteric']);
+  assert.equal(T.depart(t, 'liver'), null, 'no jumping straight to the liver');
+  T.arrive(t, 'hepatic', null);
+  assert.deepEqual(T.depart(t, 'liver'), { kind: 'arrive' }, 'the last step into the liver is never patrolled');
+  T.arrive(t, 'liver', null);
+  assert.deepEqual(T.depart(t, 'hvein'), { kind: 'liver' });
+  assert.equal(T.arrive(t, 'hvein', null, 80), false);
+  assert.ok(t.fed && t.heat === 0.8);
+  const hot = T.riskOf(t, T.LEGS.find((l) => l.from === 'hvein')!);
+  assert.ok(hot > 0.6, 'an alarm in the liver follows you down the vein');
+  T.arrive(t, 'cava', null);
+  assert.equal(T.arrive(t, 'heart', null), true, 'home: one trip done');
+  assert.equal(t.trip, 2);
+  assert.equal(t.heat, 0);
+});
+
+test('patrols turn up about as often as the map says, and grow with each trip', () => {
+  let met = 0;
+  for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); if (T.depart(t, 'hepatic')!.kind === 'patrol') met++; }
+  assert.ok(met > 280 && met < 360, `hepatic artery patrols: ${met}/400`);
+  const t = T.newTrip(2); t.rng = () => 0;
+  const first = T.depart(t, 'hepatic') as { size: number };
+  t.trip = 3;
+  assert.ok((T.depart(t, 'hepatic') as { size: number }).size > first.size);
+});
+
+test('on the road a neutrophil nets you from a distance, and the net slows you', () => {
+  const s = G.createGame(4, undefined, 'vessel', 1);
+  const e = s.enemies[0];
+  s.player.x = e.x - 3; s.player.y = e.y; s.player.path = [];
+  e.mood = 'chase'; e.net = 0; e.cooldown = 9;
+  const fast = G.speed(s);
+  run(s, 0.3);
+  assert.ok(s.snare > 0, 'snared');
+  assert.ok(G.speed(s) < fast * 0.5);
+  run(s, 2);
+  assert.equal(s.snare, 0, 'it wears off');
+  const liver = quiet(4); const f = foe(liver, 3, 0); f.mood = 'chase'; f.net = 0;
+  run(liver, 0.5);
+  assert.equal(liver.snare, 0, 'tissue neutrophils do not throw nets');
 });

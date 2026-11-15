@@ -111,3 +111,45 @@ export function generate(seed: number): Layout {
 
   return { size: N, wall, vein, portals, start, glucose, kupffer, neutrophils, caches, patches, calms };
 }
+
+/** A stretch of blood vessel for an encounter on the road: a winding tube that runs one way,
+ *  from where the current carries you in (start) to where it carries you on (vein), with a
+ *  few dead-end side branches to duck into and a patrol working the middle of it. */
+export function generateVessel(seed: number, patrol: number): Layout {
+  const rng = mulberry32(seed);
+  const N = CONFIG.map.size, mid = Math.floor(N / 2);
+  const wall = new Uint8Array(N * N).fill(1);
+  const clear = (cx: number, cy: number, r: number) => {
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+      for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++)
+        if (x >= 2 && y >= 2 && x < N - 2 && y < N - 2 && Math.hypot(x - cx, y - cy) <= r + 0.3) wall[y * N + x] = 0;
+  };
+  const from = 8, to = N - 9, p1 = rng() * 6.28, p2 = rng() * 6.28, sway = 4 + rng() * 3;
+  const cy = (x: number) => Math.round(mid + sway * Math.sin(x / 9 + p1) + 2.5 * Math.sin(x / 4 + p2));
+  for (let x = from; x <= to; x++) clear(x, cy(x), 1.7 + 0.9 * (0.5 + 0.5 * Math.sin(x / 5 + p2)));
+  clear(from, cy(from), 2.4); clear(to, cy(to), 2.4);
+
+  // Dead-end side branches: out of the main current, so your scent stays put in them.
+  const nooks: Point[] = [];
+  for (let k = 0; k < 4; k++) {
+    const x0 = from + 10 + Math.floor(((to - from - 20) * (k + rng() * 0.7)) / 4), dir = rng() < 0.5 ? 1 : -1, len = 6 + Math.floor(rng() * 4);
+    let x = x0, y = cy(x0);
+    for (let i = 0; i < len; i++) { y += dir; if (rng() < 0.35) x -= 1; clear(x, y, i === len - 1 ? 1.2 : 0.6); }
+    nooks.push({ x, y });
+  }
+  // Clumps of stacked red cells stand in the stream here and there; the blood parts round them.
+  for (let k = 0; k < 5; k++) {
+    const x = from + 8 + Math.floor(rng() * (to - from - 16)), y = cy(x);
+    if (!wall[(y - 2) * N + x] && !wall[(y + 2) * N + x]) { wall[y * N + x] = 1; if (rng() < 0.5) wall[y * N + x + 1] = 1; }
+  }
+  const start = { x: from, y: cy(from) }, vein = { x: to, y: cy(to) };
+  wall[start.y * N + start.x] = 0; wall[vein.y * N + vein.x] = 0;
+
+  const open = (p: Point) => !wall[p.y * N + p.x];
+  const neutrophils: Point[] = [];
+  for (let tries = 0; neutrophils.length < patrol && tries < 400; tries++) {
+    const x = Math.floor(from + (to - from) * (0.45 + rng() * 0.35)), p = { x, y: cy(x) + Math.floor(rng() * 3) - 1 };
+    if (open(p) && neutrophils.every((q) => q.x !== p.x || q.y !== p.y)) neutrophils.push(p);
+  }
+  return { size: N, wall, vein, portals: [start], start, glucose: nooks.slice(0, 2), kupffer: [], neutrophils, caches: [], patches: nooks.slice(2, 3), calms: [] };
+}

@@ -61,6 +61,7 @@ export const CONFIG = {
     sniff: 1.6, // how close a cell must pass to a footprint to pick up the trail
     maskPerLevel: 0.2, // each CD47 level shortens plume and trail by this share
   },
+  vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {
     neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },

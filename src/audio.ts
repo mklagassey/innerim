@@ -87,6 +87,7 @@ const SOUNDS: Record<string, () => void> = {
   heal: () => { tone(330, 495, 0.3, 0.2); tone(495, 660, 0.35, 0.14, 'sine', 0.12); },
   calm: () => { [587, 440, 349, 294].forEach((f, i) => tone(f, f, 0.9, 0.13, 'sine', i * 0.16)); hiss(2400, 200, 1.2, 0.3, 'lowpass'); }, // a long breath out
   cloak: () => { hiss(4000, 300, 0.7, 0.5, 'bandpass', 0, 5); tone(880, 220, 0.6, 0.1); },
+  net: () => { hiss(3000, 500, 0.35, 0.7, 'bandpass', 0, 4); tone(240, 120, 0.3, 0.2, 'triangle'); },
   sniff: () => { tone(300, 420, 0.12, 0.1, 'triangle'); tone(420, 380, 0.1, 0.08, 'triangle', 0.1); },
   spot: () => { tone(520, 700, 0.07, 0.16, 'square'); tone(700, 930, 0.09, 0.16, 'square', 0.08); },
   alarm: () => { tone(98, 92, 0.9, 0.5, 'sawtooth'); tone(147, 139, 0.9, 0.35, 'sawtooth', 0.02); },

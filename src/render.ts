@@ -279,6 +279,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const things: { depth: number; draw: () => void }[] = [];
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
+  const road = s.place === 'vessel';
   if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); }
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
@@ -301,7 +302,14 @@ export function draw(ctx: Ctx, s: State, v: View) {
           for (const memory of [true, false]) {
             const a = memory ? (glow > 0.99 ? 0 : seen) : glow;
             if (a < 0.01) continue;
-            const img = sprite(`c${variant}`, CELL_W, CELL_H, scale, memory, (cx) => paintCell(cx, variant));
+            const img = sprite(`${road ? 'v' : 'c'}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
+              paintCell(cx, variant);
+              if (!road) return;
+              // Vessel wall: the same living cells, but soaked in arterial red rather than liver pink.
+              cx.globalCompositeOperation = 'source-atop';
+              cx.fillStyle = 'rgba(128,18,30,0.55)'; cx.fillRect(0, 0, CELL_W, CELL_H);
+              cx.globalCompositeOperation = 'source-over';
+            });
             ctx.globalAlpha = a;
             // Squash toward the floor as the cell is torn open.
             if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
@@ -450,6 +458,18 @@ export function draw(ctx: Ctx, s: State, v: View) {
     things.push({ depth: item.x + item.y - 0.01, draw: () => pickup(ctx, item.x, item.y, item.kind, seen, v.time) });
   }
   things.push({ depth: p.x + p.y, draw: () => hero(ctx, s, v) });
+  if (s.snare > 0) things.push({ depth: p.x + p.y + 0.01, draw: () => {
+    // A neutrophil's net: pale strands of DNA strung across you.
+    const c = project(p.x, p.y), rf = rand(77);
+    ctx.globalAlpha = Math.min(1, s.snare * 2) * 0.8;
+    ctx.strokeStyle = '#dfe6ff'; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
+    for (let k = 0; k < 9; k++) {
+      const a = rf() * Math.PI * 2, r = 16 + rf() * 12;
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(a) * r, c.y - 18 + Math.sin(a) * r * 0.8);
+      ctx.quadraticCurveTo(c.x + (rf() - 0.5) * 8, c.y - 18 + (rf() - 0.5) * 8, c.x - Math.cos(a + rf()) * r, c.y - 18 - Math.sin(a + rf()) * r * 0.8); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  } });
   things.sort((a, b) => a.depth - b.depth);
   for (const t of things) t.draw();
 

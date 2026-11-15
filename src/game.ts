@@ -1,7 +1,7 @@
 // The rules of the liver prototype, simulated in real time. No drawing and no browser
 // APIs in here, so the whole game can be run and tested from plain code.
 import { CONFIG, UPGRADES, UpgradeId } from './config';
-import { generate, mulberry32, Point } from './map';
+import { generate, generateVessel, mulberry32, Point } from './map';
 
 export type { Point };
 export type Tile = 'cell' | 'dead' | 'floor';
@@ -22,6 +22,7 @@ export interface Enemy extends Point {
   idle: number;
   unseen: number; // seconds since it last saw the player
   flash: number;
+  net: number; // seconds until it can throw another net
 }
 export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
@@ -31,6 +32,7 @@ export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
 
 export interface State {
+  place: Place;
   size: number;
   tiles: Tile[];
   explored: Uint8Array; // tiles you have ever seen
@@ -46,6 +48,7 @@ export interface State {
   patches: number;
   pickups: Pickup[];
   offer: UpgradeId[] | null; // a choice waiting to be made; the world holds still meanwhile
+  snare: number; // seconds you stay tangled in a neutrophil's net
   cloak: number; // seconds of invisibility left
   cloakCd: number;
   enemies: Enemy[];
@@ -79,13 +82,16 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth });
+/** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
+export type Place = 'liver' | 'vessel';
 
-export function createGame(seed = Date.now(), carry?: Carry): State {
-  const m = generate(seed);
+export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3): State {
+  const m = place === 'vessel' ? generateVessel(seed, patrol) : generate(seed);
   const N = m.size;
   const s: State = {
+    place,
     size: N,
     tiles: Array.from(m.wall, (w) => (w ? 'cell' : 'floor')),
     explored: new Uint8Array(N * N),
@@ -94,13 +100,14 @@ export function createGame(seed = Date.now(), carry?: Carry): State {
     portals: m.portals,
     vein: m.vein,
     player: {
-      ...mid(m.start), hp: carry?.hp ?? CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, face: { x: 1, y: 0 },
+      ...mid(m.start), hp: carry?.hp ?? CONFIG.player.maxHp, energy: carry?.energy ?? CONFIG.player.startEnergy, face: { x: 1, y: 0 },
       path: [], attackId: null, swingCd: 0, shotCd: 0, swing: 0, channel: null, hurt: 0,
     },
     upgrades: carry ? { ...carry.upgrades } : Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>,
     patches: carry?.patches ?? 1,
     pickups: [...m.caches.map((c) => ({ ...mid(c), kind: 'cache' as const })), ...m.patches.map((c) => ({ ...mid(c), kind: 'patch' as const })), ...m.calms.map((c) => ({ ...mid(c), kind: 'calm' as const }))],
     offer: null,
+    snare: 0,
     cloak: 0,
     cloakCd: 0,
     enemies: [],
@@ -129,7 +136,7 @@ export function createGame(seed = Date.now(), carry?: Carry): State {
   };
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
-  say(s, `Find ${CONFIG.energy.quota} energy, then find the central vein.`);
+  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : `Find ${CONFIG.energy.quota} energy, then find the central vein.`);
   look(s);
   return s;
 }
@@ -137,7 +144,7 @@ export function createGame(seed = Date.now(), carry?: Carry): State {
 function spawn(s: State, kind: EnemyKind, tile: Point): Enemy {
   const e: Enemy = {
     id: s.nextId++, kind, ...mid(tile), hp: CONFIG.enemies[kind].hp, mood: 'patrol', goal: null, home: { ...tile },
-    path: [], repath: 0, cooldown: s.rng(), windup: -1, idle: s.rng() * 2, unseen: 99, flash: 0,
+    path: [], repath: 0, cooldown: s.rng(), windup: -1, idle: s.rng() * 2, unseen: 99, flash: 0, net: 1 + s.rng() * 2,
   };
   s.enemies.push(e);
   return e;
@@ -158,7 +165,7 @@ const float = (s: State, at: Point, text: string, color: string) => s.floats.pus
 const bonus = (s: State, id: UpgradeId) => s.upgrades[id] * UPGRADES[id].per;
 export const maxHp = (s: State) => CONFIG.player.maxHp + bonus(s, 'glycocalyx');
 export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol');
-export const speed = (s: State) => CONFIG.player.speed * (1 + bonus(s, 'atp'));
+export const speed = (s: State) => CONFIG.player.speed * (1 + bonus(s, 'atp')) * (s.snare > 0 ? CONFIG.vessel.net.slow : 1);
 export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
 export const cloaked = (s: State) => s.cloak > 0;
 
@@ -362,10 +369,12 @@ function follow(s: State, b: Point & { path: Point[] }, speed: number, dt: numbe
 
 export const glucoseHere = (s: State) => s.glucose.get(idx(s, Math.floor(s.player.x), Math.floor(s.player.y))) ?? 0;
 export const atVein = (s: State) => dist(s.player, mid(s.vein)) < 1.6;
-export const canLeave = (s: State) => atVein(s) && s.player.energy >= CONFIG.energy.quota;
+/** Out of a liver you pay the fare in energy. Along a vessel the current simply takes you. */
+export const canLeave = (s: State) => atVein(s) && (s.place === 'vessel' || s.player.energy >= CONFIG.energy.quota);
 
 /** The nearest living hepatocyte within arm's reach, if any. */
 export function stripTarget(s: State): Point | null {
+  if (s.place !== 'liver') return null; // vessel walls are not worth eating
   const p = tileOf(s.player);
   let best: Point | null = null, bestD: number = CONFIG.energy.strip.reach;
   for (let y = p.y - 1; y <= p.y + 1; y++)
@@ -484,7 +493,8 @@ export function leave(s: State): boolean {
   if (s.status !== 'playing' || !canLeave(s)) return false;
   s.status = 'won';
   emit(s, 'win');
-  say(s, 'You slip into the central vein and ride the current back toward the heart.');
+  if (s.place === 'liver') s.player.energy -= CONFIG.energy.quota; // the fare
+  say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : 'The current takes you on.');
   return true;
 }
 
@@ -595,6 +605,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.time += dt;
   const p = s.player, pc = CONFIG.player;
   p.swingCd -= dt; p.shotCd -= dt; p.swing -= dt; p.hurt -= dt;
+  s.snare = Math.max(0, s.snare - dt);
   s.cloak = Math.max(0, s.cloak - dt); s.cloakCd = Math.max(0, s.cloakCd - dt);
   if (s.upgrades.clotting && p.hp < maxHp(s)) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
 
@@ -712,7 +723,9 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
 /** One enemy's share of a tick. Returns true if it knows where the player is. */
 function enemyActs(s: State, e: Enemy, dt: number): boolean {
-  const c = CONFIG.enemies[e.kind], p = s.player;
+  const base = CONFIG.enemies[e.kind], p = s.player;
+  // In open vessels they ride the same current you do, and they are better at it.
+  const c = s.place === 'vessel' ? { ...base, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost, cooldown: base.cooldown * CONFIG.vessel.cooldown } : base;
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   const d = dist(e, p);
   // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
@@ -745,6 +758,16 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
       if (e.mood === 'chase') e.unseen = Math.min(e.unseen, c.forget - 0.5); // still on the trail
       goTo(tileOf(print));
     }
+  }
+
+  // On the road, a neutrophil that cannot reach you throws its own DNA at you as a sticky net.
+  e.net -= dt;
+  const net = CONFIG.vessel.net;
+  if (s.place === 'vessel' && e.kind === 'neutrophil' && saw && e.net <= 0 && s.snare <= 0 && d > c.reach && d <= net.range && sees(s, tileOf(e), tileOf(p))) {
+    e.net = net.every;
+    s.snare = net.time;
+    float(s, p, 'Snared', '#dfe6ff');
+    emit(s, 'net');
   }
 
   // A blow in progress lands or whiffs depending on whether you got out of the way.

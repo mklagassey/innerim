@@ -26,6 +26,10 @@ export const TIPS: Tip[] = [
     body: `The body's own stand-down signal. Walk through it to drop the immune alert by ${CONFIG.items.calmDrop}. It stays put while the alert is empty, so remember where you saw it. Keeping off their noses for a few seconds also makes the alert drain quickly.` },
   { id: 'trail', kind: 'Danger', title: 'Your scent',
     body: 'You shed a scent. The yellow haze is how far it carries: a long way downstream toward the central vein, hardly at all upstream. Immune cells that catch it come looking, and any that cross your footprints will follow them to you until the dark prints fade. Approach from downstream and they will not know you are there. CD47 upgrades shorten both.' },
+  { id: 'road', kind: 'On the road', title: 'A patrol in the vessel',
+    body: 'Neutrophils are working this stretch. The current runs from where you came in to the far end, and it carries your scent ahead of you. Fight through, slip past, or wait in a side branch, where your scent stays out of the main stream. Reach the far end and the blood takes you on.' },
+  { id: 'net', kind: 'Danger', title: 'Neutrophil net',
+    body: 'In open blood a neutrophil that cannot reach you spits out its own DNA as a sticky web. It slows you to a crawl for a moment, which is usually long enough for the rest to arrive. Kill the thrower, break its line to you, or be gone before they know you are there.' },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
     body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
 ];
