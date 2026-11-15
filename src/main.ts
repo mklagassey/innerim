@@ -242,7 +242,12 @@ function frame(now: number) {
   s.events.length = 0;
   // The host's pulse quickens as the immune alert climbs.
   const tier = CONFIG.alert.tiers.findIndex((t) => t.name === G.alertTier(s).name);
-  Sound.pulse(started && s.status === 'playing' && !tip ? [58, 76, 98, 124][tier] : 0, s.player.hp / G.maxHp(s));
+  // The score follows the same heart: it thickens with the alert and when something is on your tail.
+  const near = s.enemies.filter((e) => G.dist(e, s.player) < 10);
+  const chasers = near.filter((e) => e.mood === 'chase').length;
+  const heat = Math.max(tier / 3, chasers ? 0.5 + 0.17 * Math.min(3, chasers) : near.some((e) => e.mood === 'investigate') ? 0.3 : 0);
+  const bpm = Math.max([58, 76, 98, 124][tier], chasers ? 96 : 0);
+  Sound.pulse(started && s.status === 'playing' && !tip ? bpm : 0, s.player.hp / G.maxHp(s), heat);
   aimPointer();
   draw(ctx, s, view);
   hud();
