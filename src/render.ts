@@ -252,6 +252,11 @@ function bloodCell(ctx: Ctx, b: Rbc, time: number) {
 
 // ---------- the scene ----------
 
+// How brightly each tile is currently drawn, eased toward what the rules say so nothing snaps on or off.
+let glowFor: Uint8Array | null = null;
+let lit = new Float32Array(0), known = new Float32Array(0);
+const FADE_IN = 0.45, FADE_OUT = 0.8, FADE_KNOWN = 0.5; // seconds
+
 export function draw(ctx: Ctx, s: State, v: View) {
   const p = s.player, R = vision(s), scale = v.zoom * v.dpr;
   const dt = Math.min(0.05, Math.max(0, v.time - lastTime)); lastTime = v.time;
@@ -274,6 +279,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const things: { depth: number; draw: () => void }[] = [];
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
+  if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); }
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
     for (let x = Math.max(0, px - span); x <= Math.min(s.size - 1, px + span); x++) {
@@ -282,16 +288,26 @@ export function draw(ctx: Ctx, s: State, v: View) {
       const c = project(x + 0.5, y + 0.5);
       if (Math.abs(c.x - cam.x) > v.w / v.zoom / 2 + TW || Math.abs(c.y - cam.y) > v.h / v.zoom / 2 + TH * 2.5) continue;
       const vis = s.visible[i] === 1, t = s.tiles[i];
+      lit[i] = vis ? Math.min(1, lit[i] + dt / FADE_IN) : Math.max(0, lit[i] - dt / FADE_OUT);
+      known[i] = Math.min(1, known[i] + dt / FADE_KNOWN);
+      const glow = lit[i] * lit[i] * (3 - 2 * lit[i]), seen = known[i]; // smoothstep: eases in and out
       if (t === 'cell') {
         const variant = Math.floor(hash(x, y) * CELL_VARIANTS);
         const hit = !!target && target.x === x && target.y === y;
         const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
         things.push({ depth: x + y + 1, draw: () => {
-          const img = sprite(`c${variant}`, CELL_W, CELL_H, scale, !vis, (cx) => paintCell(cx, variant));
           const squash = 1 - dying * 0.4, h = CELL_OY * squash;
-          // Squash toward the floor as the cell is torn open.
-          if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
-          else ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY, CELL_W, CELL_H);
+          // The remembered look underneath, the lit look faded in over it.
+          for (const memory of [true, false]) {
+            const a = memory ? (glow > 0.99 ? 0 : seen) : glow;
+            if (a < 0.01) continue;
+            const img = sprite(`c${variant}`, CELL_W, CELL_H, scale, memory, (cx) => paintCell(cx, variant));
+            ctx.globalAlpha = a;
+            // Squash toward the floor as the cell is torn open.
+            if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
+            else ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY, CELL_W, CELL_H);
+          }
+          ctx.globalAlpha = 1;
           if (hit) {
             ctx.strokeStyle = dying ? '#ff5a4d' : 'rgba(236,180,46,0.95)'; ctx.lineWidth = 2;
             oval(ctx, c.x + cellShift(variant), c.y - cellHeight(variant) * squash, cellRadius(variant) - 3, cellRadius(variant) / 2 - 1.5); ctx.stroke();
@@ -303,12 +319,26 @@ export function draw(ctx: Ctx, s: State, v: View) {
     }
   }
   // Remembered floor first, lit floor over it, so the edge of your sight is a soft boundary and not a staircase.
-  floors.sort((a, b) => Number(a.vis) - Number(b.vis));
+  // Each tile's lit look is faded in over its remembered one, so light arrives and leaves gradually.
+  const floorImg = (x: number, y: number, i: number, memory: boolean) => {
+    const variant = Math.floor(hash(x, y) * 6), dead = s.tiles[i] === 'dead';
+    return sprite(`f${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, memory, (cx) => paintFloor(cx, variant, dead));
+  };
+  const ease = (i: number) => lit[i] * lit[i] * (3 - 2 * lit[i]);
+  for (const { x, y, i, c } of floors) {
+    if (ease(i) > 0.99) continue;
+    ctx.globalAlpha = known[i];
+    ctx.drawImage(floorImg(x, y, i, true), c.x - FLOOR_W / 2, c.y - FLOOR_H / 2, FLOOR_W, FLOOR_H);
+  }
+  for (const { x, y, i, c } of floors) {
+    const a = ease(i);
+    if (a < 0.01) continue;
+    ctx.globalAlpha = a;
+    ctx.drawImage(floorImg(x, y, i, false), c.x - FLOOR_W / 2, c.y - FLOOR_H / 2, FLOOR_W, FLOOR_H);
+  }
+  ctx.globalAlpha = 1;
   for (const { x, y, i, c, vis } of floors) {
     {
-      const variant = Math.floor(hash(x, y) * 6), dead = s.tiles[i] === 'dead';
-      const img = sprite(`f${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, !vis, (cx) => paintFloor(cx, variant, dead));
-      ctx.drawImage(img, c.x - FLOOR_W / 2, c.y - FLOOR_H / 2, FLOOR_W, FLOOR_H);
 
       const g = s.glucose.get(i);
       // Drawn with the standing things, so a neighbouring floor tile cannot wash over it.

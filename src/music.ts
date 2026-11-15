@@ -147,7 +147,7 @@ export function beat(at: number, len: number, target: number, life: number): num
   if (h > 0.45) {
     const top = h > 0.7, drive = (h - 0.45) / 0.55; // 0 to 1 across the loud range
     kick(at, 0.5 + drive * 0.35); kicks.push(at);
-    if (top && (inBar === 1 || inBar === 3)) { kick(at + step * 3, 0.5); kicks.push(at + step * 3); }
+    if (top && (inBar === 1 || inBar === 3)) kick(at + step * 3, 0.5); // heard but not shown: the picture never flashes more than once a beat
     if (inBar === 1 || inBar === 3) snare(at, 0.4 + drive * 0.3);
     if (top && inBar === 3 && bar % 2 === 1) for (let i = 1; i < 4; i++) snare(at + i * step, 0.15 + i * 0.08); // a roll into the next phrase
     if (top && inBar === 0 && bar % 4 === 0) tick(at, 1.4, 0.3, 5000, 'highpass'); // crash
