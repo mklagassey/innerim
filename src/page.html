@@ -70,6 +70,11 @@
   #ask-list button { text-align: left; display: grid; gap: 0.2rem; padding: 0.7rem 0.9rem; }
   #ask-list button small { opacity: 0.75; font-weight: 400; text-transform: none; letter-spacing: 0; }
   #over-body { white-space: pre-line; }
+  #journal { display: grid; gap: 0.45rem; margin: 0 0 1.6rem; max-height: 40vh; overflow-y: auto; }
+  #journal p { margin: 0; font: 500 0.7rem/1.4 var(--data); color: #8fd6e8; }
+  #journal p.shepherd { color: #e8a25a; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+  #journal p.awake { font: italic 400 0.95rem/1.4 var(--body); color: #f1e6d6; }
+  #journal p.place { color: var(--bone-dim); margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.6rem; }
   #log { margin: 0; white-space: pre-line; text-align: center; font-style: italic; color: var(--bone); text-shadow: 0 1px 6px #000, 0 0 3px #000; min-height: 1.45em; }
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   #act-e { border-color: var(--amber); } #act-f { border-color: var(--blood); }
@@ -222,6 +227,9 @@
   </div>
   <div class="veil" id="notes" hidden>
     <div class="card">
+      <h2>Unit log</h2>
+      <p class="fine">What this unit has put on record, oldest first. Nobody asked it to keep the unlogged parts.</p>
+      <div id="journal"></div>
       <h2>Field notes</h2>
       <p class="fine">Everything you have been told so far.</p>
       <dl id="notes-list"></dl>

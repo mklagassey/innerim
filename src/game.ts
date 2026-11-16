@@ -30,7 +30,7 @@ export interface Float extends Point { text: string; color: string; age: number 
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
 export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling'; snooze?: boolean }
-export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number }
+export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number } // st: how awake the unit was when it said it
 export interface Ask { kind: 'sibling'; item: Pickup }
 /** An antibody adrift in the blood: made to fit you, and it sticks. */
 export interface Antibody extends Point { seed: number }
@@ -270,7 +270,7 @@ export function notice(s: State, what: string, line = what) {
   if (s.noticed.has(what)) return;
   s.noticed.add(what);
   const before = stage(s);
-  const say1 = (text: string, who: Thought['who'] = 'unit') => { if (text) s.thoughts.push({ text, who, t: Math.max(s.time + 0.6, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + CONFIG.story.gap) }); };
+  const say1 = (text: string, who: Thought['who'] = 'unit') => { if (text) s.thoughts.push({ text, who, st: stage(s), t: Math.max(s.time + 0.6, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + CONFIG.story.gap) }); };
   if (s.thoughts.filter((t) => t.t > s.time).length < 3) say1(Story.LINES[line]?.[before] ?? '');
   s.aware = Math.min(100, s.aware + (Story.GAIN[what] ?? 0));
   const now = stage(s);

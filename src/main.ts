@@ -130,7 +130,19 @@ $('offer-list').addEventListener('click', (ev) => {
   if (id) { G.choose(s, id); keys.clear(); release(); }
 });
 $('tip-ok').addEventListener('click', closeTip);
+// The unit's log outlives each map, so the player can read back what they missed in the heat of it.
+const JOURNAL = 'insiderim.journal';
+type Entry = { who: string; text: string };
+function journal(): Entry[] { try { return JSON.parse(localStorage.getItem(JOURNAL) ?? '[]') as Entry[]; } catch { return []; } }
+function keepJournal(add: Entry[]) { try { localStorage.setItem(JOURNAL, JSON.stringify([...journal(), ...add].slice(-160))); } catch { /* not kept */ } }
+function fileThoughts() {
+  const said = s.thoughts.filter((t) => t.t <= s.time).map((t) => ({ who: t.who === 'shepherd' ? 'shepherd' : (t.st ?? 0) >= 3 ? 'awake' : 'unit', text: t.who === 'shepherd' ? `Shepherd: ${t.text}` : t.text }));
+  if (said.length) keepJournal([{ who: 'place', text: `${(T.NODES[trip.at].kind === 'organ' && s.place !== 'vessel' && s.place !== 'lung' ? T.NODES[trip.at] : T.NODES[dest] ?? T.NODES[trip.at]).name} \u00b7 trip ${trip.trip}` }, ...said]);
+}
 function showNotes() {
+  const lines = journal();
+  $('journal').replaceChildren(...(lines.length ? lines : [{ who: 'unit', text: 'LOG: empty.' }]).map((e) => Object.assign(document.createElement('p'), { className: e.who, textContent: e.text })));
+  $('journal').scrollTop = 1e6;
   const notes = Tips.fieldNotes();
   $('notes-list').replaceChildren(...notes.flatMap((n) => [Object.assign(document.createElement('dt'), { textContent: `${n.title} \u00b7 ${n.kind}` }), Object.assign(document.createElement('dd'), { textContent: n.body })]));
   if (!notes.length) $('notes-list').append(Object.assign(document.createElement('dd'), { textContent: 'Nothing yet. Notes are added as you meet things.' }));
@@ -159,7 +171,7 @@ function savedTrip(): T.Trip | null {
 const kept = savedTrip();
 if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip ${kept.trip} from the ${T.NODES[kept.at].name.toLowerCase()}`; $('begin').textContent = 'Begin a new mission'; }
 $('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; $('intro').hidden = true; openWorld('Resuming', 'Unit restored from the last checkpoint.'); });
-$('begin').addEventListener('click', () => { forgetTrip(); Sound.start(); $('intro').hidden = true; openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.'); });
+$('begin').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.'); });
 $('again').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.'); });
 
 // ---------- the world map ----------
@@ -222,7 +234,7 @@ function openWorld(title: string, text: string) {
     openWorld(here.name, slept ? 'You drift for an hour while the host sleeps and mends.' : 'You drift for an hour.');
   });
   const notes = document.createElement('button');
-  notes.type = 'button'; notes.className = 'wait'; notes.textContent = 'Field notes';
+  notes.type = 'button'; notes.className = 'wait'; notes.textContent = 'Unit log and field notes';
   notes.addEventListener('click', showNotes);
   $('world-ways').append(wait, notes);
   if (c && trip.at === 'heart' && c.excised >= CONFIG.tumor.goal && Story.stageOf(c.aware ?? 0) >= 3) {
@@ -256,7 +268,7 @@ function market() {
     b.type = 'button'; b.disabled = !can || c.energy < cost;
     const add = (tag: string, text: string) => b.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
     add('small', `${cost} energy`); add('strong', title); add('span', what);
-    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); const line = said; said = ''; openWorld('Gut flora', `Done. You have ${c.energy} energy left.${line ? ` \u201c${line}\u201d` : ''}`); });
+    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); const line = said; said = ''; if (line) keepJournal([{ who: Story.stageOf(c.aware ?? 0) >= 3 ? 'awake' : 'unit', text: line }]); openWorld('Gut flora', `Done. You have ${c.energy} energy left.${line ? ` \u201c${line}\u201d` : ''}`); });
     return b;
   };
   box.replaceChildren(
@@ -466,7 +478,7 @@ function hud() {
 
   // The unit's own log, and its controller. One line at a time, eased in and out.
   const th = [...s.thoughts].reverse().find((x) => x.t <= s.time), dur = th ? 4 + th.text.length * 0.055 : 0, mind = $('mind');
-  if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(G.stage(s)); } }
+  if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s)); } }
   mind.classList.toggle('on', !!th && s.time < th.t + dur && s.status === 'playing');
   if (!!s.ask !== !$('ask').hidden) {
     $('ask').hidden = !s.ask;
@@ -493,6 +505,7 @@ function hud() {
   if (s.status === 'won' && !settled) {
     // Out the far end: file the report and go back to the map, one place further on.
     settled = true;
+    fileThoughts();
     void Stats.save(s, { trip: trip.trip, toward: dest });
     land(dest, G.carryOf(s), s.alert, s.place !== 'vessel'
       ? `${s.place === 'stomach' ? 'Out of the stomach and into the portal vein. ' : ''}${Math.round(s.time)} seconds inside, ${s.cellsKilled} host cell${s.cellsKilled === 1 ? '' : 's'} killed.`
@@ -500,6 +513,7 @@ function hud() {
   }
   if (s.status === 'dead' && !settled) {
     settled = true;
+    fileThoughts();
     forgetTrip();
     keepEcho(s.aware);
     $('over').hidden = false;
