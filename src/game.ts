@@ -36,10 +36,12 @@ export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: 
 export interface State {
   place: Place;
   vessel: Vessel | null; // which kind of vessel, when you are in one
-  host: { hour: number; surge: number; nextSurge: number; eating: boolean }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
+  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
   sizzle: number; // hull lost to acid since the last time it was shown
+  tumor: Set<number>; // tiles of tumor cells still standing
+  excised: number; // tumor cells cut out so far, across the whole mission
   memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
@@ -93,8 +95,8 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s) });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised });
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -108,6 +110,8 @@ export function hostState(s: State): HostState {
   return s.host.surge > 0 ? 'stressed' : s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil ? 'asleep' : 'awake';
 }
 
+/** How high a fever the host is running, 0 (none) to 3. */
+export const fever = (s: State) => CONFIG.host.fever.below.filter((h) => s.hostHealth < h).length;
 /** How busy the gut is with a meal: 1 as the host puts their fork down, fading to 0 over a few hours. */
 export function digesting(hour: number): number {
   let most = 0;
@@ -127,10 +131,12 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   const s: State = {
     place,
     vessel: place === 'vessel' ? vessel : null,
-    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0 },
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0 },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     sizzle: 0,
+    tumor: new Set((m.tumor ?? []).map((p) => p.y * N + p.x)),
+    excised: carry?.excised ?? 0,
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
@@ -187,7 +193,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
-  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `Find ${CONFIG.energy.quota} energy, then find the central vein.`);
+  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
   look(s);
   return s;
 }
@@ -512,6 +518,12 @@ export function attack(s: State, id: number) {
   s.player.attackId = id;
   interrupt(s);
 }
+/** Fire at the nearest immune cell you can see and reach. For screens with no right mouse button. */
+export function shootNearest(s: State): boolean {
+  const e = enemyNear(s, s.player, CONFIG.player.shot.range - 1);
+  return !!e && sees(s, tileOf(s.player), tileOf(e)) && shoot(s, e.x, e.y);
+}
+export const canShootNearest = (s: State) => { const e = enemyNear(s, s.player, CONFIG.player.shot.range - 1); return !!e && s.player.energy >= CONFIG.player.shot.energy && sees(s, tileOf(s.player), tileOf(e)); };
 export function stop(s: State) { s.player.path = []; s.player.attackId = null; }
 
 /** Swing at whatever is in front of you. */
@@ -567,7 +579,7 @@ export function startStrip(s: State): boolean {
   if (s.status !== 'playing' || s.player.channel || !cell) return false;
   stop(s);
   emit(s, 'tear');
-  s.player.channel = { kind: 'strip', t: 0, total: CONFIG.energy.strip.time, ...cell };
+  s.player.channel = { kind: 'strip', t: 0, total: s.tumor.has(idx(s, cell.x, cell.y)) ? CONFIG.tumor.time : CONFIG.energy.strip.time, ...cell };
   return true;
 }
 export function leave(s: State): boolean {
@@ -593,6 +605,18 @@ function finishChannel(s: State, ch: Channel) {
   }
   const rich = s.rich.has(i), c = rich ? { ...CONFIG.energy.strip, ...CONFIG.stomach.parietal } : CONFIG.energy.strip;
   if (s.tiles[i] !== 'cell') return;
+  if (s.tumor.delete(i)) {
+    // The job you came to do. A tumor hides itself from the immune system, so cutting it out makes little stir.
+    const t = CONFIG.tumor;
+    s.tiles[i] = 'dead'; s.flow = null;
+    p.energy += t.gain; s.excised++;
+    s.hostHealth = Math.min(CONFIG.host.maxHealth, s.hostHealth + t.heal);
+    float(s, p, `+${t.gain} energy`, '#e8b530');
+    emit(s, 'excise');
+    say(s, s.excised >= t.goal ? `Tumor cell excised: ${s.excised} of ${t.goal}. That is all of it. Get the crew home.` : `Tumor cell excised: ${s.excised} of ${t.goal}.${s.tumor.size ? '' : ' This nodule is gone.'}`);
+    raiseAlert(s, t.alert);
+    return;
+  }
   s.rich.delete(i);
   s.tiles[i] = 'dead';
   s.flow = null; // a new gap for the blood to run through
@@ -732,6 +756,13 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     emit(s, 'meal');
   }
   s.host.eating = eating;
+  // Sleep is when the host mends.
+  if (was === 'asleep' && s.hostHealth < h.maxHealth && (s.host.mend += dt) >= h.sleepHeals) { s.host.mend = 0; s.hostHealth++; }
+  if (fever(s) !== s.host.fever) {
+    say(s, fever(s) > s.host.fever ? `The host's temperature is climbing: ${h.fever.degrees[fever(s)]}\u00b0. Immune cells quicken.` : fever(s) ? 'The fever eases a little.' : 'The fever breaks.');
+    if (fever(s) > s.host.fever) emit(s, 'fever');
+    s.host.fever = fever(s);
+  }
   const now = hostState(s);
   if (now !== was) {
     if (now === 'stressed') {
@@ -850,7 +881,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.regen = 0;
     for (const [k, v] of s.glucose) if (v < en.patchMax) s.glucose.set(k, v + 1);
   }
-  s.metabolism += dt;
+  s.metabolism += dt * (1 + CONFIG.host.fever.burn * fever(s));
   if (s.metabolism >= en.metabolism) {
     s.metabolism = 0;
     if (p.energy > 0) p.energy--;
@@ -872,7 +903,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const base = CONFIG.enemies[e.kind], p = s.player;
   // In open vessels they ride the same current you do, and they are better at it.
-  const c = s.place === 'vessel' ? { ...base, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost, cooldown: base.cooldown * CONFIG.vessel.cooldown } : base;
+  const hot = 1 + CONFIG.host.fever.speed * fever(s);
+  const c = s.place === 'vessel' ? { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost * hot, cooldown: base.cooldown * CONFIG.vessel.cooldown } : { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * hot };
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   if (acidAt(s, e) === 2) { // acid is no kinder to them
     e.hp -= CONFIG.stomach.enemyBurn * acidLevel(s) * dt; e.flash = 0.1;

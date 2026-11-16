@@ -66,7 +66,7 @@
   #need { margin: 0; font-size: 0.9rem; color: var(--vein); text-shadow: 0 1px 6px #000; }
   #style { color: var(--amber); margin-top: 6px; }
   #build { white-space: pre-line; font: 400 0.82rem/1.35 var(--body); color: var(--bone-dim); text-shadow: 0 1px 4px #000; }
-  #act-h { border-color: #7be08a; } #act-c { border-color: #78f0e1; }
+  #act-h { border-color: #7be08a; } #act-c { border-color: #78f0e1; } #act-q { border-color: #e8eeff; }
   #offer-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; width: 100%; }
   #offer-list button { display: grid; gap: 6px; align-content: start; text-align: left; padding: 14px; color: var(--bone); border-color: var(--seam); letter-spacing: 0; }
   #offer-list button:hover { border-color: var(--amber); }
@@ -127,7 +127,7 @@
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
   </div>
   <div class="hud tools"><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="turn-l" type="button" aria-label="Turn the view left (Z)" title="Turn the view left (Z)">&#10226; Z</button><button id="turn-r" type="button" aria-label="Turn the view right (X)" title="Turn the view right (X)">X &#10227;</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
-  <div class="hud orb" id="hp"><u id="hp-fill"></u><b><span id="hp-val"></span><small>Life</small></b></div>
+  <div class="hud orb" id="hp"><u id="hp-fill"></u><b><span id="hp-val"></span><small>Hull</small></b></div>
   <div class="hud orb" id="energy"><u id="energy-fill"></u><b><span id="energy-val"></span><small>Energy</small></b></div>
   <div class="hud belt">
     <p id="log"></p>
@@ -135,6 +135,7 @@
     <div class="acts">
       <button id="act-h" type="button" hidden>H  Fibrin patch</button>
       <button id="act-c" type="button" hidden>C  Cloak</button>
+      <button id="act-q" type="button" hidden>Q  Fire at nearest</button>
       <button id="act-e" type="button" hidden>E  Skim glucose</button>
       <button id="act-f" type="button" hidden>F  Strip mitochondria</button>
     </div>
@@ -142,15 +143,15 @@
   <div class="veil" id="intro">
     <div class="card">
       <h2>Your ship is ten micrometres long and adrift in someone's blood</h2>
-      <p>The ship needs energy, and the liver is where it is. Ride the vessels there from the heart, feed, and get back. The host is a person with a day of their own: they sleep, they wake, and now and then something frightens them, and their body changes around you when it does. Leaving the liver by its central vein takes 20 energy. Sip glucose from the blood where it glows amber, or tear the mitochondria out of the host's own cells: five energy at once, and every immune cell nearby comes looking.</p>
+      <p>You are a surgical crew, shrunk and injected. The scan found a tumor seeded through the liver: 20 cells of it, in knots of nine or so. Cut it out. The ship runs on what it can take from the host, and the liver is where the energy is too. Ride the vessels there from the heart, work, feed, and get back. The host is a person with a day of their own: they sleep, they wake, and now and then something frightens them, and their body changes around you when it does. Leaving the liver by its central vein takes 20 energy. Sip glucose from the blood where it glows amber, or tear the mitochondria out of the host's own cells: five energy at once, and every immune cell nearby comes looking.</p>
       <dl>
         <dt>Click / hold</dt><dd>Steer. You can only see what your lamp reaches.</dd>
         <dt>W A S D</dt><dd>Steer, if you prefer keys.</dd>
         <dt>Click enemy</dt><dd>Close in and strike. <b>Space</b> swings at whatever is nearest.</dd>
-        <dt>Right-click</dt><dd>Fire toward the cursor. Costs 1 energy. <b>Q</b> does the same.</dd>
+        <dt>Right-click</dt><dd>Fire toward the cursor. Costs 1 energy. <b>Q</b> does the same, and on a touch screen a Fire button appears when something is in range.</dd>
         <dt>E</dt><dd>Skim glucose while standing on it. At the vein, leave.</dd>
         <dt>F</dt><dd>Strip the nearest living cell. It dies and leaves a gap you can walk through.</dd>
-        <dt>Pickups</dt><dd>Fibrin patches heal you by themselves when life runs low. Glowing vesicles hold upgrades.</dd>
+        <dt>Pickups</dt><dd>Fibrin patches repair the hull by themselves when it runs low. Glowing vesicles hold upgrades.</dd>
         <dt>Scent</dt><dd>Nothing in here has eyes. They smell you: your scent drifts downstream, and your wake lingers.</dd>
         <dt>Z / X</dt><dd>Turn the view a quarter turn, to look behind the cells.</dd>
         <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>

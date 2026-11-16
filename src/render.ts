@@ -318,14 +318,14 @@ export function draw(ctx: Ctx, s: State, v: View) {
           for (const memory of [true, false]) {
             const a = memory ? (glow > 0.99 ? 0 : seen) : glow;
             if (a < 0.01) continue;
-            const rich = s.rich.has(i), look = road ? 'v' : rich ? 'p' : gut ? 'g' : 'c';
+            const rich = s.rich.has(i), look = road ? 'v' : rich ? 'p' : gut ? 'g' : s.tumor.has(i) ? 't' : 'c';
             const img = sprite(`${look}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
               paintCell(cx, variant);
               if (look === 'c') return;
               // The same living cells in other tissues: soaked in arterial red in a vessel wall, pale and
               // slimy in the stomach, and amber where a parietal cell is busy making acid.
               cx.globalCompositeOperation = 'source-atop';
-              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'p' ? 'rgba(240,160,30,0.5)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
+              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'p' ? 'rgba(240,160,30,0.5)' : look === 't' ? 'rgba(38,30,70,0.72)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
               cx.globalCompositeOperation = 'source-over';
             });
             ctx.globalAlpha = a * glass;
@@ -817,6 +817,14 @@ function automap(ctx: Ctx, s: State, v: View) {
       ctx.fillStyle = sour ? (s.visible[i] ? 'rgba(190,235,70,0.5)' : 'rgba(190,235,70,0.26)') : s.visible[i] ? 'rgba(255,226,190,0.5)' : 'rgba(255,226,190,0.26)';
       ctx.beginPath(); ctx.moveTo(c.x, c.y - u * 0.5); ctx.lineTo(c.x + u, c.y); ctx.lineTo(c.x, c.y + u * 0.5); ctx.lineTo(c.x - u, c.y); ctx.closePath(); ctx.fill();
     }
+  if (s.tumor.size) {
+    // The pre-op scan: roughly where the nodule is, whether or not you have been there.
+    let tx = 0, ty = 0;
+    for (const k of s.tumor) { tx += (k % s.size) + 0.5; ty += Math.floor(k / s.size) + 0.5; if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.55, '#8a6ad8'); }
+    const c = at(tx / s.tumor.size, ty / s.tumor.size);
+    ctx.strokeStyle = 'rgba(160,130,240,0.8)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, u * 5, u * 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
   for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');

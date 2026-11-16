@@ -25,6 +25,9 @@ export const CONFIG = {
     maxHealth: 100,
     secondsPerHour: 30, // a whole day and night passes in twelve minutes of play
     startHour: 11,
+    // Hurt the host and they run a fever: each step down makes immune cells faster and burns your energy quicker.
+    fever: { below: [80, 60, 40], speed: 0.1, burn: 0.25, degrees: [37, 37.9, 38.8, 39.7] },
+    sleepHeals: 6, // seconds of sleep that give the host back one point of health
     meals: [7.5, 12.5, 19], // breakfast, lunch, dinner
     digestion: 3, // hours a meal keeps the gut busy
     fedGlucose: 1.5, // extra sugar in the blood at the height of digestion, as a share
@@ -98,6 +101,8 @@ export const CONFIG = {
     tagAlert: 4,
     reach: 0.55, drift: 0.7, pull: 3, homing: 0.9,
   },
+  // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
+  tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {
@@ -112,9 +117,9 @@ export interface Upgrade { name: string; track: Track; max: number; per: number;
 // No classes: a build is whatever mix of these the player picks. Each is a real thing
 // with one liberty taken, which is that you can carry it off and use it.
 export const UPGRADES = {
-  glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 12, what: '+12 maximum life, and heals that much now.',
+  glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 12, what: '+12 maximum hull, and repairs that much now.',
     real: 'The sugar coat that shields the lining of every blood vessel.' },
-  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.35, what: 'Slowly knit your wounds closed over time.',
+  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.35, what: 'Slowly seals breaches in the hull over time.',
     real: 'The liver makes most of the proteins that clot blood.' },
   elastase: { name: 'Elastase edge', track: 'Warrior', max: 3, per: 2, what: '+2 strike damage.',
     real: 'The enzyme neutrophils use to cut through tissue.' },

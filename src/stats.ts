@@ -3,9 +3,9 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'ship-3'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'ship-4'; // bump when rules change so reports can be compared fairly
 
-const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn', 'tag'];
+const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn', 'tag', 'excise'];
 
 interface Tally {
   events: Record<string, number>;
@@ -71,8 +71,8 @@ export function report(s: G.State, extra: Record<string, unknown> = {}) {
     seconds: Math.round(s.time),
     life: Math.round(s.player.hp), maxLife: G.maxHp(s), lowestLife: Math.round(Math.max(0, t.lowestLife)),
     energy: s.player.energy, quota: CONFIG.energy.quota,
-    hostHealth: Math.round(s.hostHealth),
-    cellsStripped: s.cellsKilled, skims: t.events.skim ?? 0,
+    hostHealth: Math.round(s.hostHealth), fever: G.fever(s),
+    cellsStripped: s.cellsKilled, tumorExcised: s.excised, tumorLeftHere: s.tumor.size, skims: t.events.skim ?? 0,
     immuneKills: s.kills,
     hostFrights: t.events.surge ?? 0, hostHourAtEnd: Math.round(s.host.hour * 10) / 10,
     timesSnared: t.events.net ?? 0, hullLostToAcid: t.events.burn ?? 0,

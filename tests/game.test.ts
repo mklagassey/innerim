@@ -585,3 +585,60 @@ test('an antibody that sticks makes you reek, blocks the cloak, and wears off', 
   G.strike(s);
   assert.equal(s.antibodies.length, 0, 'a strike clears them');
 });
+
+test('hurt the host and they run a fever; sleep mends them', () => {
+  const s = quiet(6); s.host.nextSurge = 999;
+  assert.equal(G.fever(s), 0);
+  s.hostHealth = 55;
+  assert.equal(G.fever(s), 2);
+  const cool = quiet(6); cool.host.nextSurge = 999;
+  cool.player.energy = 10; s.player.energy = 10;
+  run(cool, 30); run(s, 30);
+  assert.ok(s.player.energy < cool.player.energy, 'a fever burns your energy faster');
+  assert.equal(s.hostHealth, 55, 'no mending by day');
+  s.host.hour = 1;
+  run(s, CONFIG.host.sleepHeals * 3 + 0.5);
+  assert.equal(s.hostHealth, 58, 'sleep mends');
+  const hot = G.createGame(6, { ...G.carryOf(s), hostHealth: 30 });
+  assert.equal(G.fever(hot), 3, 'and it follows you from map to map');
+});
+
+test('the fire button picks the nearest immune cell in view', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.player.energy = 5;
+  assert.equal(G.canShootNearest(s), false);
+  const f = foe(s, 3, 0);
+  G.look(s);
+  assert.ok(G.canShootNearest(s));
+  assert.ok(G.shootNearest(s));
+  assert.equal(s.player.energy, 4);
+  run(s, 0.5);
+  assert.ok(f.hp < CONFIG.enemies[f.kind].hp, 'and hits it');
+});
+
+test('the tumor: every liver has a nodule, and cutting it out helps the host and counts toward the mission', () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const g = G.createGame(seed);
+    assert.ok(g.tumor.size >= CONFIG.tumor.cells - 2, `seed ${seed}: nodule of ${g.tumor.size}`);
+    for (const k of g.tumor) assert.equal(g.tiles[k], 'cell');
+  }
+  assert.equal(G.createGame(3, undefined, 'vessel').tumor.size, 0);
+  const s = quiet(5); s.host.nextSurge = 999; s.hostHealth = 70;
+  const N = s.size;
+  const k = [...s.tumor].find((t) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => G.open(s, (t % N) + dx, Math.floor(t / N) + dy)))!;
+  const side = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: (k % N) + dx, y: Math.floor(k / N) + dy })).find((p) => G.open(s, p.x, p.y))!;
+  Object.assign(s.player, { x: side.x + 0.5, y: side.y + 0.5, path: [] });
+  // Stand so that the tumor cell is the nearest one.
+  s.player.x += ((k % N) - side.x) * 0.2; s.player.y += (Math.floor(k / N) - side.y) * 0.2;
+  const target = G.stripTarget(s)!;
+  assert.ok(s.tumor.has(target.y * N + target.x), 'the tumor cell is in reach');
+  const energy = s.player.energy, left = s.tumor.size;
+  assert.ok(G.startStrip(s));
+  run(s, CONFIG.tumor.time + 0.2);
+  assert.equal(s.tumor.size, left - 1);
+  assert.equal(s.excised, 1);
+  assert.equal(s.hostHealth, 70 + CONFIG.tumor.heal, 'the host is better for it');
+  assert.equal(s.player.energy, energy + CONFIG.tumor.gain);
+  assert.equal(s.cellsKilled, 0, 'and it does not count as harm');
+  assert.ok(s.alert < 10, 'hardly any alarm');
+  assert.equal(G.createGame(8, G.carryOf(s)).excised, 1, 'progress carries from map to map');
+});

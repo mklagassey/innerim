@@ -17,6 +17,7 @@ export interface Layout {
   calms: Point[];
   acid?: Uint8Array; // stomach only: 1 = mucus, 2 = open acid
   rich?: Point[]; // stomach only: parietal cells worth stripping
+  tumor?: Point[]; // liver only: a nodule of tumor cells
 }
 
 export function mulberry32(seed: number): () => number {
@@ -111,7 +112,22 @@ export function generate(seed: number): Layout {
   const calms: Point[] = [];
   for (let i = 0; i < CONFIG.items.calms; i++) calms.push(pick((p) => far(p, start, 12) && calms.every((q) => far(p, q, 16))));
 
-  return { size: N, wall, vein, portals, start, glucose, kupffer, neutrophils, caches, patches, calms };
+  // A tumor nodule: a knot of cells in the wall of some channel well away from the way in and the way out.
+  const tumor: Point[] = [];
+  for (let tries = 0; tries < 60 && !tumor.length; tries++) {
+    const by = pick((p) => far(p, start, 18) && far(p, vein, 9));
+    const seedTile = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: by.x + dx, y: by.y + dy })).find((p) => wall[p.y * N + p.x] && p.x > 5 && p.y > 5 && p.x < N - 6 && p.y < N - 6);
+    if (!seedTile) continue;
+    const grown = [seedTile];
+    for (let k = 0; k < grown.length && grown.length < CONFIG.tumor.cells; k++)
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        const p = { x: grown[k].x + dx, y: grown[k].y + dy };
+        if (grown.length < CONFIG.tumor.cells && wall[p.y * N + p.x] && !far(p, seedTile, 2.3) && grown.every((q) => q.x !== p.x || q.y !== p.y)) grown.push(p);
+      }
+    if (grown.length >= CONFIG.tumor.cells - 2) tumor.push(...grown);
+  }
+
+  return { size: N, wall, vein, portals, start, glucose, kupffer, neutrophils, caches, patches, calms, tumor };
 }
 
 /** A stretch of blood vessel for an encounter on the road: a winding tube that runs one way,

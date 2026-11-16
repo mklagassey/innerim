@@ -119,6 +119,7 @@ const showSound = () => { $('sound').textContent = Sound.isOn() ? 'Sound on' : '
 $('sound').addEventListener('click', () => { Sound.setOn(!Sound.isOn()); showSound(); });
 showSound();
 $('act-h').addEventListener('click', () => G.usePatch(s));
+$('act-q').addEventListener('click', () => G.shootNearest(s));
 $('act-c').addEventListener('click', () => G.cloak(s));
 $('offer-list').addEventListener('click', (ev) => {
   const id = (ev.target as HTMLElement).closest('button')?.dataset.id as UpgradeId | undefined;
@@ -140,7 +141,7 @@ function openWorld(title: string, text: string) {
   const c = trip.carry, here = T.NODES[trip.at], ways = T.ways(trip);
   $('world-title').textContent = title;
   $('world-text').textContent = `${text} ${here.what}`;
-  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Life ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)}` : '');
+  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
@@ -204,6 +205,15 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
     $('over-body').textContent = 'You took too much. The heart you were riding back to has stopped, and you are still ten micrometres tall.';
     $('over-saved').textContent = '';
     $('over').hidden = false;
+    return;
+  }
+  if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) {
+    $('world').hidden = true;
+    $('over-title').textContent = 'The tumor is gone';
+    $('over-body').textContent = `Mission complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. The host is at ${trip.carry.hostHealth}% and will never know you were there${trip.carry.hostHealth < 60 ? ', though they will feel dreadful for a week' : ''}. The heart throws you toward the lungs, and the way out.`;
+    $('over-saved').textContent = '';
+    $('over').hidden = false;
+    Sound.play('win');
     return;
   }
   if (home) openWorld(`Trip ${trip.tripsDone} complete`, `You are back in the heart, fed.${trip.carry ? ` The host is at ${trip.carry.hostHealth}%.` : ''} What you carry and what you did to the host both come with you. The patrols will be larger this time.`);
@@ -270,8 +280,8 @@ function hud() {
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
   const mood = G.hostState(s);
-  set('host-state', 'text', `${mood === 'stressed' ? 'frightened' : mood}${G.digesting(s.host.hour) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
-  set('host', 'tier', mood === 'stressed' ? '2' : '0');
+  set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${G.digesting(s.host.hour) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
+  set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
@@ -283,9 +293,12 @@ function hud() {
   const leaving = G.canLeave(s), sip = G.glucoseHere(s) > 0, harvesting = !!p.channel;
   set('act-e', 'hidden', playing && !harvesting && (leaving || sip) ? '0' : '1');
   set('act-e', 'text', leaving ? (s.place === 'stomach' ? 'E  Leave by the gastric vein' : 'E  Ride the central vein out') : 'E  Skim glucose');
-  set('act-f', 'hidden', playing && !harvesting && G.stripTarget(s) ? '0' : '1');
+  const cell = G.stripTarget(s);
+  set('act-f', 'hidden', playing && !harvesting && cell ? '0' : '1');
+  set('act-f', 'text', cell && s.tumor.has(G.idx(s, cell.x, cell.y)) ? 'F  Cut out tumor cell' : 'F  Strip mitochondria');
   set('need', 'hidden', playing && G.atVein(s) && !leaving ? '0' : '1');
   set('act-h', 'hidden', playing && s.patches > 0 ? '0' : '1');
+  set('act-q', 'hidden', playing && G.canShootNearest(s) ? '0' : '1');
   set('act-h', 'text', `Fibrin patch \u00d7${s.patches}`);
   set('act-c', 'hidden', playing && s.upgrades.cd47 > 0 ? '0' : '1');
   set('act-c', 'text', G.cloaked(s) ? `Unseen ${s.cloak.toFixed(0)}s` : s.cloakCd > 0 ? `Cloak ${Math.ceil(s.cloakCd)}s` : s.player.energy < CONFIG.cloak.energy ? 'Cloak needs 2 energy' : 'Cloak ready');
@@ -351,7 +364,7 @@ function frame(now: number) {
     if (s.place === 'vessel' && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
     if (!tip && !s.offer) {
       const road = s.place === 'vessel';
-      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null };
+      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, fever: G.fever(s) ? s.player : null };
       if (s.place === 'stomach') Object.assign(host, { portal: null, vein: null, cell: null, stomach: s.time > 0.8 ? s.player : null, mucus: G.acidAt(s, s.player) === 1 ? s.player : null, parietal: Tips.nearestRich(s) });
       const next = Tips.nextTip(s, road ? { ...host, portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
       if (next) showTip(next.tip, next.at);
