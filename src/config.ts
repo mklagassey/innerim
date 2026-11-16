@@ -28,7 +28,10 @@ export const CONFIG = {
     // Hurt the host and they run a fever: each step down makes immune cells faster and burns your energy quicker.
     fever: { below: [80, 60, 40], speed: 0.1, burn: 0.25, degrees: [37, 37.9, 38.8, 39.7] },
     sleepHeals: 6, // seconds of sleep that give the host back one point of health
-    meals: [7.5, 12.5, 19], // breakfast, lunch, dinner
+    meals: [7.5, 12.5, 19],
+    // Habits. Coffee quickens the blood and makes the host jumpy; an evening drink dulls the immune system, makes the ship hard to hold straight, and leaves the liver with less to spare.
+    coffee: { at: [8, 15], lasts: 3, push: 0.35, jumpy: 1 },
+    drink: { at: [20.5], lasts: 3.5, immune: 0.2, sway: 0.9, liver: 1 }, // breakfast, lunch, dinner
     digestion: 3, // hours a meal keeps the gut busy
     fedGlucose: 1.5, // extra sugar in the blood at the height of digestion, as a share
     asleepFrom: 23, asleepUntil: 7,
@@ -116,6 +119,7 @@ export const CONFIG = {
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long
+  levers: { serotonin: { cost: 4, hours: 2 }, ghrelin: { cost: 3 } }, // ways to nudge the host from inside
   market: { repair: { cost: 3, hull: 15 }, patch: { cost: 4 }, upgrade: { cost: 8, stock: 3 }, butyrate: { cost: 5, forget: 0.2 } },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },

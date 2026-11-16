@@ -36,7 +36,7 @@ export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: 
 export interface State {
   place: Place;
   vessel: Vessel | null; // which kind of vessel, when you are in one
-  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
+  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean; nap: number; snack: number; habit: string }; // nap: hours of induced sleep left; snack: hour of an induced meal, or -1 // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
   riding: number; // seconds left inside a hijacked neutrophil
@@ -98,8 +98,8 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack });
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -110,19 +110,26 @@ export type HostState = 'asleep' | 'awake' | 'stressed';
 /** What the host is doing right now. A fright overrides everything, even sleep. */
 export function hostState(s: State): HostState {
   const h = CONFIG.host;
-  return s.host.surge > 0 ? 'stressed' : s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil ? 'asleep' : 'awake';
+  return s.host.surge > 0 ? 'stressed' : s.host.nap > 0 || s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil ? 'asleep' : 'awake';
 }
 
 /** How high a fever the host is running, 0 (none) to 3. */
 export const fever = (s: State) => CONFIG.host.fever.below.filter((h) => s.hostHealth < h).length;
 /** How busy the gut is with a meal: 1 as the host puts their fork down, fading to 0 over a few hours. */
-export function digesting(hour: number): number {
+const fading = (hour: number, at: readonly number[], lasts: number) => { let most = 0; for (const t of at) { const since = (hour - t + 24) % 24; if (since < lasts) most = Math.max(most, 1 - since / lasts); } return most; };
+/** How much coffee is in the host, 1 at the last sip fading to 0. */
+export const caffeine = (hour: number) => fading(hour, CONFIG.host.coffee.at, CONFIG.host.coffee.lasts);
+/** How much of an evening drink is in the host. */
+export const alcohol = (hour: number) => fading(hour, CONFIG.host.drink.at, CONFIG.host.drink.lasts);
+/** A line about the host's life outside, chosen by the clock so it is never the same twice running. */
+const outside = (s: State, lines: string[]) => lines[Math.floor(s.host.hour * 7 + s.time) % lines.length];
+export function digesting(hour: number, snack = -1): number {
   let most = 0;
-  for (const meal of CONFIG.host.meals) { const since = (hour - meal + 24) % 24; if (since < CONFIG.host.digestion) most = Math.max(most, 1 - since / CONFIG.host.digestion); }
+  for (const meal of snack >= 0 ? [...CONFIG.host.meals, snack] : CONFIG.host.meals) { const since = (hour - meal + 24) % 24; if (since < CONFIG.host.digestion) most = Math.max(most, 1 - since / CONFIG.host.digestion); }
   return most;
 }
 /** How strong the stomach's acid is right now, from its resting trickle up to 1. */
-export const acidLevel = (s: State) => CONFIG.stomach.resting + (1 - CONFIG.stomach.resting) * digesting(s.host.hour);
+export const acidLevel = (s: State) => CONFIG.stomach.resting + (1 - CONFIG.stomach.resting) * digesting(s.host.hour, s.host.snack);
 /** What the ship is sitting in: nothing special, mucus or acid. */
 export const acidAt = (s: State, p: Point) => s.acid?.[idx(s, Math.floor(p.x), Math.floor(p.y))] ?? 0;
 /** Hull lost per second in open acid right now. */
@@ -135,7 +142,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   const s: State = {
     place,
     vessel: place === 'vessel' ? vessel : null,
-    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false },
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '' },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     riding: 0,
@@ -268,7 +275,7 @@ function flowAt(s: State, at: Point): Point {
 /** How hard the blood pushes: gentle in tissue, strong in an artery, and worse when the host's heart is racing. */
 export function currentStrength(s: State): number {
   const where = s.vessel ?? (s.place === 'vessel' ? 'artery' : s.place);
-  return CONFIG.host.current[where] * CONFIG.host.push[hostState(s)][where];
+  return CONFIG.host.current[where] * CONFIG.host.push[hostState(s)][where] * (where === 'stomach' ? 1 : 1 + CONFIG.host.coffee.push * caffeine(s.host.hour));
 }
 /** Your speed over the ground: your engine, helped or hindered by the blood. */
 function drive(s: State): number {
@@ -650,7 +657,9 @@ function finishChannel(s: State, ch: Channel) {
     if (left - 1 > 0) p.channel = { ...ch, t: 0 }; // keep sipping until the patch runs dry
     return;
   }
-  const rich = s.rich.has(i), c = rich ? { ...CONFIG.energy.strip, ...CONFIG.stomach.parietal } : CONFIG.energy.strip;
+  const base = s.rich.has(i) ? { ...CONFIG.energy.strip, ...CONFIG.stomach.parietal } : CONFIG.energy.strip, rich = s.rich.has(i);
+  // A liver busy with a drink has less to spare.
+  const c = s.place === 'liver' ? { ...base, hostDamage: Math.round(base.hostDamage * (1 + CONFIG.host.drink.liver * alcohol(s.host.hour))) } : base;
   if (s.tiles[i] !== 'cell') return;
   if (s.tumor.delete(i)) {
     // The job you came to do. A tumor hides itself from the immune system, so cutting it out makes little stir.
@@ -788,6 +797,9 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (d) p.face = d;
   }
 
+  // With drink in the blood the ship will not hold a line.
+  const tipsy = alcohol(s.host.hour);
+  if (tipsy > 0 && dist(before, p) > 0) { const w = Math.sin(s.time * 2.1) * CONFIG.host.drink.sway * tipsy * dt; shift(s, p, -p.face.y * w, p.face.x * w, pc.radius); }
   // A strong enough current drags you with it whether your engine is running or not.
   const pull = currentStrength(s) - CONFIG.host.driftAbove;
   s.slam = Math.max(0, s.slam - dt);
@@ -811,18 +823,26 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   // The host's day goes on around you.
   const was = hostState(s), h = CONFIG.host;
   s.host.hour = (s.host.hour + dt / h.secondsPerHour) % 24;
+  s.host.nap = Math.max(0, s.host.nap - dt / h.secondsPerHour);
+  if (s.host.snack >= 0 && (s.host.hour - s.host.snack + 24) % 24 >= h.digestion) s.host.snack = -1;
   if (s.host.surge > 0) s.host.surge = Math.max(0, s.host.surge - dt);
-  else if (was === 'awake' && (s.host.nextSurge -= dt) <= 0) {
+  else if (was === 'awake' && (s.host.nextSurge -= dt * (1 + h.coffee.jumpy * caffeine(s.host.hour))) <= 0) {
     s.host.surge = h.surge.time;
     s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
   }
   if (s.place === 'lung' && breathingOut(s) !== s.host.out) { s.host.out = breathingOut(s); emit(s, s.host.out ? 'exhale' : 'inhale'); }
-  const eating = digesting(s.host.hour) > 0;
+  const eating = digesting(s.host.hour, s.host.snack) > 0;
   if (eating && !s.host.eating) {
-    say(s, s.place === 'stomach' ? 'The host is eating. The stomach floods with acid.' : 'The host is eating. Sugar will be pouring into the blood for a while.');
+    say(s, `${outside(s, s.host.hour < 10 ? ['Breakfast: toast, eaten standing up.', 'Breakfast, and the news.', 'Cereal, straight from the box.'] : s.host.hour < 16 ? ['Lunch at the desk again.', 'A sandwich in the car.', 'Lunch with someone who talks a lot.'] : ['Dinner. Seconds.', 'Takeaway on the sofa.', 'Dinner, late, and too much of it.'])} ${s.place === 'stomach' ? 'The stomach floods with acid.' : 'Sugar will be pouring into the blood for a while.'}`);
     emit(s, 'meal');
   }
   s.host.eating = eating;
+  const habit = alcohol(s.host.hour) > 0 ? 'drink' : caffeine(s.host.hour) > 0 ? 'coffee' : '';
+  if (habit !== s.host.habit) {
+    if (habit === 'coffee') { say(s, `${outside(s, ['The first coffee of the day.', 'Another coffee. A big one.', 'Coffee, black, too fast.'])} The blood runs quicker and the host is jumpy.`); emit(s, 'wake'); }
+    if (habit === 'drink') { say(s, `${outside(s, ['A drink after work. Then another.', 'Somebody opened a bottle.', 'One for the road, they said.'])} Immune cells go sluggish, and the ship is hard to hold straight.`); emit(s, 'meal'); }
+    s.host.habit = habit;
+  }
   // Sleep is when the host mends.
   if (was === 'asleep' && s.hostHealth < h.maxHealth && (s.host.mend += dt) >= h.sleepHeals) { s.host.mend = 0; s.hostHealth++; }
   if (fever(s) !== s.host.fever) {
@@ -833,7 +853,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   const now = hostState(s);
   if (now !== was) {
     if (now === 'stressed') {
-      say(s, s.vessel === 'artery' ? 'Something has frightened the host. The artery clenches and the blood tears through it.' : 'Something has frightened the host. Their heart is pounding.');
+      s.host.nap = 0;
+      say(s, `${outside(s, ['A car horn, very close.', 'They missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said their name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : 'Their heart is pounding.'}`);
       emit(s, 'surge');
       // Adrenaline first, cortisol after: droplets of it turn up in the blood around you.
       for (let n = CONFIG.cortisol.drops, tries = 0; n > 0 && tries < 600; tries++) {
@@ -842,8 +863,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       }
       if (s.place === 'vessel') arrive(s, 1); // adrenaline shakes neutrophils loose into the blood
     } else if (was === 'stressed') say(s, 'The fright passes. The blood slows.');
-    else if (now === 'asleep') { say(s, 'The host has fallen asleep. The blood slows, and the immune system goes to work.'); emit(s, 'sleep'); }
-    else { say(s, 'The host is waking up.'); emit(s, 'wake'); }
+    else if (now === 'asleep') { say(s, `${s.host.nap > 0 ? 'Their eyelids are heavy. A nap on the sofa.' : outside(s, ['Lights out.', 'They fell asleep with the television on.', 'Bed, finally.'])} The blood slows, and the immune system goes to work.`); emit(s, 'sleep'); }
+    else { say(s, outside(s, ['An alarm clock. They hit snooze, but they are awake.', 'They wake before the alarm.', 'Awake, and not happy about it.'])); emit(s, 'wake'); }
   }
 
   // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.
@@ -953,7 +974,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
 
   const en = CONFIG.energy;
-  s.regen += dt * CONFIG.host.glucose[hostState(s)] * (1 + CONFIG.host.fedGlucose * digesting(s.host.hour));
+  s.regen += dt * CONFIG.host.glucose[hostState(s)] * (1 + CONFIG.host.fedGlucose * digesting(s.host.hour, s.host.snack));
   if (s.regen >= en.patchRegen) {
     s.regen = 0;
     for (const [k, v] of s.glucose) if (v < en.patchMax) s.glucose.set(k, v + 1);
@@ -980,7 +1001,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const base = CONFIG.enemies[e.kind], p = s.player;
   // In open vessels they ride the same current you do, and they are better at it.
-  const hot = (1 + CONFIG.host.fever.speed * fever(s)) * (s.suppressed > 0 ? CONFIG.cortisol.slow : 1);
+  const hot = (1 + CONFIG.host.fever.speed * fever(s)) * (s.suppressed > 0 ? CONFIG.cortisol.slow : 1) * (1 - CONFIG.host.drink.immune * alcohol(s.host.hour));
   const c = s.place === 'vessel' ? { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost * hot, cooldown: base.cooldown * CONFIG.vessel.cooldown } : { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * hot };
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   if (acidAt(s, e) === 2) { // acid is no kinder to them

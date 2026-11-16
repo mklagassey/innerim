@@ -749,3 +749,27 @@ test('cortisol: a fright leaves droplets, and one makes the immune system sluggi
   assert.ok(Math.abs(slow.x - sx) + Math.abs(slow.y - (s.player.y)) >= 0);
   assert.ok(G.dist(slow, { x: sx, y: slow.y }) < G.dist(quick, { x: qx, y: quick.y }) + 1e-9, 'the dosed one covers less ground');
 });
+
+test('habits: coffee quickens the blood, a drink fades in the evening', () => {
+  assert.equal(G.caffeine(7), 0);
+  assert.ok(G.caffeine(8.1) > 0.9 && G.caffeine(10) < G.caffeine(8.1));
+  assert.equal(G.alcohol(12), 0);
+  assert.ok(G.alcohol(21) > 0);
+  const a = G.createGame(4, undefined, 'vessel'), b = G.createGame(4, undefined, 'vessel');
+  a.host.hour = 8.2; b.host.hour = 11.5;
+  assert.ok(G.currentStrength(a) > G.currentStrength(b));
+});
+
+test('levers: a nap puts the host to sleep until a fright, a snack starts digestion', () => {
+  const s = quiet(4); s.host.hour = 14; s.host.nextSurge = 999; s.host.nap = 2;
+  assert.equal(G.hostState(s), 'asleep');
+  assert.equal(G.carryOf(s).nap, 2);
+  s.host.nextSurge = 0; s.host.nap = 0; run(s, 0.1); s.host.nap = 2; run(s, 0.1);
+  assert.equal(G.hostState(s), 'stressed');
+  assert.equal(G.digesting(16), 0);
+  assert.ok(G.digesting(16.2, 16) > 0.9);
+  const t = quiet(4); t.host.hour = 16; t.host.snack = 16; t.host.nextSurge = 999;
+  assert.equal(G.carryOf(t).snack, 16);
+  run(t, 1);
+  assert.ok(t.host.eating);
+});
