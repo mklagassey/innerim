@@ -265,7 +265,7 @@ function bloodCell(ctx: Ctx, b: Rbc, time: number) {
 
 // How brightly each tile is currently drawn, eased toward what the rules say so nothing snaps on or off.
 let glowFor: Uint8Array | null = null;
-let lit = new Float32Array(0), known = new Float32Array(0), reek = new Float32Array(0);
+let lit = new Float32Array(0), known = new Float32Array(0), reek = new Float32Array(0), thin = new Float32Array(0);
 const FADE_IN = 0.45, FADE_OUT = 0.8, FADE_KNOWN = 0.5; // seconds
 
 export function draw(ctx: Ctx, s: State, v: View) {
@@ -291,7 +291,10 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
   const road = s.place === 'vessel';
-  if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); }
+  if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); thin = new Float32Array(s.size * s.size); }
+  // Whatever matters on screen: a cell standing in front of one of these goes glassy so you can see it.
+  const behind: Point[] = [p, ...s.enemies.filter(seenAt), ...s.pickups.filter(seenAt)].map((q) => project(q.x, q.y));
+  const hides = (c: Point) => behind.some((q) => c.y - q.y > 1 && c.y - q.y < 62 && Math.abs(c.x - q.x) < 42);
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
     for (let x = Math.max(0, px - span); x <= Math.min(s.size - 1, px + span); x++) {
@@ -307,6 +310,8 @@ export function draw(ctx: Ctx, s: State, v: View) {
         const variant = Math.floor(hash(x, y) * CELL_VARIANTS);
         const hit = !!target && target.x === x && target.y === y;
         const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
+        thin[i] = hides(c) ? Math.min(1, thin[i] + dt / 0.3) : Math.max(0, thin[i] - dt / 0.5);
+        const glass = 1 - 0.72 * thin[i] * thin[i] * (3 - 2 * thin[i]);
         things.push({ depth: depthOf(x + 0.5, y + 0.5), draw: () => {
           const squash = 1 - dying * 0.4, h = CELL_OY * squash;
           // The remembered look underneath, the lit look faded in over it.
@@ -321,7 +326,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
               cx.fillStyle = 'rgba(128,18,30,0.55)'; cx.fillRect(0, 0, CELL_W, CELL_H);
               cx.globalCompositeOperation = 'source-over';
             });
-            ctx.globalAlpha = a;
+            ctx.globalAlpha = a * glass;
             // Squash toward the floor as the cell is torn open.
             if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
             else ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY, CELL_W, CELL_H);
