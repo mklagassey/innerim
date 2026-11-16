@@ -126,6 +126,14 @@ $('offer-list').addEventListener('click', (ev) => {
   if (id) { G.choose(s, id); keys.clear(); release(); }
 });
 $('tip-ok').addEventListener('click', closeTip);
+function showNotes() {
+  const notes = Tips.fieldNotes();
+  $('notes-list').replaceChildren(...notes.flatMap((n) => [Object.assign(document.createElement('dt'), { textContent: `${n.title} \u00b7 ${n.kind}` }), Object.assign(document.createElement('dd'), { textContent: n.body })]));
+  if (!notes.length) $('notes-list').append(Object.assign(document.createElement('dd'), { textContent: 'Nothing yet. Notes are added as you meet things.' }));
+  $('notes').hidden = false; $('notes').scrollTop = 0;
+  $('notes-close').focus({ preventScroll: true });
+}
+$('notes-close').addEventListener('click', () => { $('notes').hidden = true; });
 $('tips-reset').addEventListener('click', () => { Tips.unmuteAll(); $('tips-reset').hidden = true; });
 $('tips-reset').hidden = Tips.mutedCount() === 0;
 // The trip so far is kept in the browser, so a reload or a phone that drops the tab does not cost you the mission.
@@ -209,7 +217,10 @@ function openWorld(title: string, text: string) {
     if (slept) k.hostHealth = Math.min(h.maxHealth, k.hostHealth + Math.round(h.secondsPerHour / h.sleepHeals));
     openWorld(here.name, slept ? 'You drift for an hour while the host sleeps and mends.' : 'You drift for an hour.');
   });
-  $('world-ways').append(wait);
+  const notes = document.createElement('button');
+  notes.type = 'button'; notes.className = 'wait'; notes.textContent = 'Field notes';
+  notes.addEventListener('click', showNotes);
+  $('world-ways').append(wait, notes);
   market();
   $('world').hidden = false;
   ($('world-ways').firstElementChild as HTMLElement | null)?.focus({ preventScroll: true });
@@ -250,7 +261,8 @@ function market() {
 /** What the host is up to and what is coming, so a trip can be timed. */
 function forecast(hour: number): string {
   const h = CONFIG.host, asleep = hour >= h.asleepFrom || hour < h.asleepUntil, fed = G.digesting(hour);
-  const next = [...h.meals].sort((a, b) => ((a - hour + 24) % 24) - ((b - hour + 24) % 24))[0];
+  const until = (meal: number) => ((meal - hour + 24) % 24) || 24;
+  const next = [...h.meals].sort((a, b) => until(a) - until(b))[0];
   const state = asleep ? `The host is asleep until ${clock(h.asleepUntil)}: slow blood, sharp noses, and they are mending.` : `The host is awake until ${clock(h.asleepFrom)}.`;
   const gut = fed > 0.5 ? 'They have just eaten: sugar is plentiful and stomach acid is at its worst.' : fed > 0 ? 'They are still digesting: extra sugar, strong acid.' : 'Their stomach is empty: acid is weak, sugar is ordinary.';
   return `${clock(hour)}. ${state} ${gut} Next meal ${clock(next)}.`;
@@ -267,7 +279,7 @@ function go(to: T.NodeId) {
   settled = false;
   Stats.begin(); shownOffer = '';
   $('world').hidden = true;
-  $('where').textContent = out.kind === 'liver' ? 'Liver lobule \u00b7 cell tier' : out.kind === 'stomach' ? 'Stomach lining \u00b7 cell tier' : `${T.NODES[to].name} \u00b7 cell tier`;
+  $('where').textContent = out.kind === 'liver' ? 'Liver lobule \u00b7 cell tier' : out.kind === 'stomach' ? 'Stomach lining \u00b7 cell tier' : out.kind === 'lung' ? 'Lung capillaries \u00b7 cell tier' : `${T.NODES[to].name} \u00b7 cell tier`;
   started = true;
   canvas.focus();
 }
@@ -292,11 +304,14 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
     $('over').hidden = false;
     return;
   }
-  if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) {
+  if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) { openWorld('The tumor is gone', 'All of it is out. One road is left: the heart will throw you at the lungs, and from there you leave on a breath. You can also stay and keep working, if you think you should.'); return; }
+  if (to === 'lungs' && trip.carry) {
+    const k = trip.carry, kept = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => k.upgrades[id] > 0).map((id) => `${UPGRADES[id].name} ${roman(k.upgrades[id])}`);
+    const grade = k.hostHealth >= 95 ? 'Textbook. The patient will never know you were there.' : k.hostHealth >= 75 ? 'A clean job. The patient will feel off for a day or two.' : k.hostHealth >= 50 ? 'It worked, but the patient will have a rough week.' : 'The tumor is gone. So is a good part of the liver.';
     $('world').hidden = true;
     forgetTrip();
-    $('over-title').textContent = 'The tumor is gone';
-    $('over-body').textContent = `Mission complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. The host is at ${trip.carry.hostHealth}% and will never know you were there${trip.carry.hostHealth < 60 ? ', though they will feel dreadful for a week' : ''}. The heart throws you toward the lungs, and the way out.`;
+    $('over-title').textContent = 'Breathed out';
+    $('over-body').textContent = `Mission complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. ${grade} Host health ${k.hostHealth}%. ${knows(k.memory)}. Hull ${Math.ceil(k.hp)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
     $('over-saved').textContent = '';
     $('over').hidden = false;
     Sound.play('win');
@@ -366,7 +381,7 @@ function hud() {
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
   const mood = G.hostState(s);
-  set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${G.digesting(s.host.hour) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
+  set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${s.place === 'lung' ? (G.breathingOut(s) ? ' \u00b7 breathing out' : ' \u00b7 breathing in') : G.digesting(s.host.hour) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
@@ -448,12 +463,13 @@ function frame(now: number) {
   setSpin(spin);
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
-    if (s.place === 'vessel' && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
+    if ((s.place === 'vessel' || s.place === 'lung') && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
     if (!tip && !s.offer) {
-      const road = s.place === 'vessel';
+      const road = s.place === 'vessel' || s.place === 'lung';
       const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, fever: G.fever(s) ? s.player : null };
+      if (s.place === 'lung') Object.assign(host, { road: null, kupffer: null, lung: s.time > 0.6 ? s.player : null, dust: s.enemies.filter((e) => e.kind === 'kupffer' && s.visible[G.idx(s, Math.floor(e.x), Math.floor(e.y))]).sort((a, b) => G.dist(a, s.player) - G.dist(b, s.player))[0] ?? null });
       if (s.place === 'stomach') Object.assign(host, { portal: null, vein: null, cell: null, stomach: s.time > 0.8 ? s.player : null, mucus: G.acidAt(s, s.player) === 1 ? s.player : null, parietal: Tips.nearestRich(s) });
-      const next = Tips.nextTip(s, road ? { ...host, portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
+      const next = Tips.nextTip(s, road ? { portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null, ...host } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
       if (next) showTip(next.tip, next.at);
     }
     if (!tip) {

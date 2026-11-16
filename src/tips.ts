@@ -46,6 +46,10 @@ export const TIPS: Tip[] = [
     body: `The amber cells make the acid, which takes so much power that they are the most mitochondria-rich cells in the body. Press F beside one to strip it: ${CONFIG.stomach.parietal.gain} energy for ${CONFIG.stomach.parietal.hostDamage} host health. The other cells of the stomach wall are not worth the trouble.` },
   { id: 'tumor', kind: 'The mission', title: 'Tumor cell',
     body: `This is what you were sent in for. The dark cells are tumor. Press F beside one to cut it out: the host gains ${CONFIG.tumor.heal} health and you get ${CONFIG.tumor.gain} energy, less than from a healthy cell because tumors burn sugar instead of running on mitochondria. Tumors hide from the immune system, so it raises little alarm. Each nodule has about ${CONFIG.tumor.cells} cells and the scan counted ${CONFIG.tumor.goal} in all, so it will take more than one trip.` },
+  { id: 'lung', kind: 'Place', title: 'The lung',
+    body: 'The last stretch. These capillaries are wrapped round air sacs, and every breath squeezes them. While the host breathes out the blood surges toward the far end and takes you with it. While they breathe in it drags you back. Ride the breath out and hold what you can on the breath in: side branches are a good place to wait. The clock at the top says which way the breath is going. A frightened host breathes fast, a sleeping one slow.' },
+  { id: 'dust', kind: 'Immune cell', title: 'Alveolar macrophage',
+    body: 'A dust cell: the lung\'s own macrophage, which spends its life eating whatever is breathed in. It is the same kind of slow, heavy hitter as a Kupffer cell in the liver, and it leaves an upgrade behind if you kill it.' },
   { id: 'tcell', kind: 'Immune cell', title: 'Killer T cell',
     body: 'The host knows you well enough now to send an assassin made for you. It is faster than your ship, it hits very hard, and within a few tiles the CD47 cloak does not fool it, because it reads what you are and not what you are wearing. It does wind up slowly before each blow, and it cannot follow you into acid. Kill it, or do not be found. Butyrate from the gut flora makes the host forget.' },
   { id: 'antibody', kind: 'Danger', title: 'Antibody',
@@ -59,6 +63,10 @@ function loadMuted(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[]); } catch { return new Set(); }
 }
 const muted = loadMuted();
+const NOTES = 'insiderim.tips.seen';
+const noted: Set<string> = (() => { try { return new Set(JSON.parse(localStorage.getItem(NOTES) ?? '[]') as string[]); } catch { return new Set<string>(); } })();
+/** Every info box the player has ever been shown, in the order they are listed, for reading again. */
+export const fieldNotes = (): Tip[] => TIPS.filter((t) => noted.has(t.id) || muted.has(t.id));
 let shownThisRun = new Set<string>();
 
 export const newRun = () => { shownThisRun = new Set(); };
@@ -110,6 +118,8 @@ export function nextTip(s: State, extra: Record<string, Point | null> = {}): { t
     const at = here[tip.id];
     if (!at || muted.has(tip.id) || shownThisRun.has(tip.id)) continue;
     shownThisRun.add(tip.id);
+    noted.add(tip.id);
+    try { localStorage.setItem(NOTES, JSON.stringify([...noted])); } catch { /* not kept */ }
     return { tip, at: { x: at.x, y: at.y } };
   }
   return null;

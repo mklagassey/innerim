@@ -101,6 +101,7 @@
   #world-map .place:focus { outline: none; }
   #world-map .you { fill: var(--bone); }
   #world-ways { justify-content: flex-start; flex-flow: row wrap; }
+  #notes { z-index: 5; background: rgba(10, 4, 7, 0.97); place-items: start center; } #notes-list { display: block; } #notes-list dt { margin-top: 14px; color: var(--amber); } #notes-list dd { margin: 4px 0 0; }
   #world-host { color: var(--bone-dim); font-size: 0.92em; margin-top: -4px; }
   #world-ways button.wait { border-color: var(--seam); color: var(--bone-dim); }
   #world-market { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 10px 0; }
@@ -195,6 +196,14 @@
       <span class="pointer">Marked in yellow on screen.</span>
       <label><input type="checkbox" id="tip-mute"> Don't show this again</label>
       <button id="tip-ok" type="button">Got it</button>
+    </div>
+  </div>
+  <div class="veil" id="notes" hidden>
+    <div class="card">
+      <h2>Field notes</h2>
+      <p class="fine">Everything you have been told so far.</p>
+      <dl id="notes-list"></dl>
+      <button id="notes-close" type="button">Back</button>
     </div>
   </div>
   <div class="veil" id="over" hidden>

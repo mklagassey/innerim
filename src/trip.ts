@@ -3,8 +3,11 @@
 // road back. No DOM here: main.ts draws this and plays the local maps it asks for.
 import { Carry } from './game';
 import { mulberry32 } from './map';
+import { CONFIG } from './config';
 
-export type NodeId = 'heart' | 'hepatic' | 'mesenteric' | 'gastric' | 'stomach' | 'gut' | 'portal' | 'liver' | 'hvein' | 'cava';
+const TUMOR_GOAL = CONFIG.tumor.goal;
+
+export type NodeId = 'heart' | 'hepatic' | 'mesenteric' | 'gastric' | 'stomach' | 'gut' | 'portal' | 'liver' | 'hvein' | 'cava' | 'lungs';
 
 export interface Node { name: string; x: number; y: number; kind: 'heart' | 'artery' | 'vein' | 'organ' | 'town'; what: string }
 // Positions are on a 640 x 380 drawing.
@@ -19,10 +22,11 @@ export const NODES: Record<NodeId, Node> = {
   liver: { name: 'Liver', x: 320, y: 290, kind: 'organ', what: 'Sugar in the blood and mitochondria in the cells. Feed here.' },
   hvein: { name: 'Hepatic vein', x: 482, y: 262, kind: 'vein', what: 'Where the central veins of the liver drain.' },
   cava: { name: 'Vena cava', x: 540, y: 132, kind: 'vein', what: 'The great vein home to the heart.' },
+  lungs: { name: 'Lungs', x: 585, y: 44, kind: 'organ', what: 'The way out: one breath from the open air.' },
 };
 
 /** One vessel between two places. `risk` is the chance a patrol is working it. */
-export interface Leg { from: NodeId; to: NodeId; risk: number }
+export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number } // after: only once this many tumor cells are out
 export const LEGS: Leg[] = [
   { from: 'heart', to: 'hepatic', risk: 0.8 },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
@@ -36,6 +40,7 @@ export const LEGS: Leg[] = [
   { from: 'liver', to: 'hvein', risk: 0 }, // travelled by playing the liver and leaving by its central vein
   { from: 'hvein', to: 'cava', risk: 0.3 },
   { from: 'cava', to: 'heart', risk: 0.2 },
+  { from: 'heart', to: 'lungs', risk: 0, after: TUMOR_GOAL }, // travelled by playing the lung and being breathed out
 ];
 
 export interface Trip {
@@ -55,19 +60,21 @@ export const riskOf = (t: Trip, leg: Leg) => (leg.risk === 0 ? 0 : Math.min(0.95
 export const riskWord = (r: number) => (r === 0 ? '' : r < 0.35 ? 'lightly patrolled' : r < 0.6 ? 'patrolled' : 'heavily patrolled');
 
 /** Vessels you could take from where you are. */
-export const ways = (t: Trip): Leg[] => LEGS.filter((l) => l.from === t.at);
+export const ways = (t: Trip): Leg[] => LEGS.filter((l) => l.from === t.at && (l.after === undefined || (t.carry?.excised ?? 0) >= l.after));
 
 export type Outcome =
   | { kind: 'arrive' } // nothing on the road
   | { kind: 'patrol'; size: number } // a vessel map to get through first
   | { kind: 'liver' } // the liver itself has to be played
-  | { kind: 'stomach' };
+  | { kind: 'stomach' }
+  | { kind: 'lung' };
 
 /** Sets out along a leg. The caller plays whatever comes back, then calls `arrive`. */
 export function depart(t: Trip, to: NodeId): Outcome | null {
   const leg = ways(t).find((l) => l.to === to);
   if (!leg) return null;
   if (leg.from === 'liver' || leg.from === 'stomach') return { kind: leg.from };
+  if (leg.to === 'lungs') return { kind: 'lung' };
   if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) };
   return { kind: 'arrive' };
 }

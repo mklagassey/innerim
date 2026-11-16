@@ -318,14 +318,14 @@ export function draw(ctx: Ctx, s: State, v: View) {
           for (const memory of [true, false]) {
             const a = memory ? (glow > 0.99 ? 0 : seen) : glow;
             if (a < 0.01) continue;
-            const rich = s.rich.has(i), look = road ? 'v' : rich ? 'p' : gut ? 'g' : s.tumor.has(i) ? 't' : 'c';
+            const rich = s.rich.has(i), look = s.place === 'lung' ? 'l' : road ? (s.vessel === 'vein' ? 'b' : 'v') : rich ? 'p' : gut ? 'g' : s.tumor.has(i) ? 't' : 'c';
             const img = sprite(`${look}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
               paintCell(cx, variant);
               if (look === 'c') return;
               // The same living cells in other tissues: soaked in arterial red in a vessel wall, pale and
               // slimy in the stomach, and amber where a parietal cell is busy making acid.
               cx.globalCompositeOperation = 'source-atop';
-              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'p' ? 'rgba(240,160,30,0.5)' : look === 't' ? 'rgba(38,30,70,0.72)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
+              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'b' ? 'rgba(44,40,120,0.5)' : look === 'l' ? 'rgba(214,180,205,0.42)' : look === 'p' ? 'rgba(240,160,30,0.5)' : look === 't' ? 'rgba(38,30,70,0.72)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
               cx.globalCompositeOperation = 'source-over';
             });
             ctx.globalAlpha = a * glass;

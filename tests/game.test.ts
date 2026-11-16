@@ -683,3 +683,25 @@ test('a frightened artery throws a drifting ship against its walls, but not to d
   }
   assert.ok(lost / 4 > 3 && lost / 4 < 24, `average hull lost drifting: ${lost / 4}`);
 });
+
+test('the lungs open only when the tumor is out, and breathing pushes both ways', () => {
+  const t = T.newTrip(1);
+  assert.ok(!T.ways(t).some((l) => l.to === 'lungs'));
+  t.carry = { ...G.carryOf(quiet(2)), excised: CONFIG.tumor.goal };
+  assert.ok(T.ways(t).some((l) => l.to === 'lungs'));
+  assert.deepEqual(T.depart(t, 'lungs'), { kind: 'lung' });
+  const s = G.createGame(3, undefined, 'lung'); s.host.nextSurge = 999;
+  assert.equal(s.enemies.filter((e) => e.kind === 'kupffer').length, CONFIG.lung.macrophages);
+  assert.equal(s.enemies.filter((e) => e.kind === 'neutrophil').length, 0);
+  s.enemies = [];
+  const period = CONFIG.host.breath.awake, x0 = s.player.x;
+  assert.equal(G.breathingOut(s), false, 'a breath in comes first');
+  const inward = G.currentAt(s, { x: s.player.x + 6, y: s.player.y });
+  run(s, period / 2 + 0.1);
+  assert.ok(G.breathingOut(s));
+  const outward = G.currentAt(s, { x: x0 + 6, y: s.player.y });
+  assert.ok(inward.x * outward.x + inward.y * outward.y < -0.9, 'the current turns round with the breath');
+  const x1 = s.player.x;
+  run(s, period / 2 - 0.2);
+  assert.ok(s.player.x > x1 + 1, `a breath out carries an idle ship toward the exit: ${x0} ${x1} ${s.player.x}`);
+});

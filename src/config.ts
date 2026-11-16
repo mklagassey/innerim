@@ -35,8 +35,9 @@ export const CONFIG = {
     surge: { first: [50, 80], every: [80, 140], time: 22 }, // a fright: seconds until the first, between them, and how long one lasts
     bpm: { asleep: 48, awake: 62, stressed: 120 },
     // How hard the blood pushes on you: by where you are, then scaled by what the host is doing.
-    current: { liver: 0.14, stomach: 0, vein: 0.3, artery: 0.5 },
-    push: { asleep: { liver: 0.7, stomach: 1, vein: 0.7, artery: 0.7 }, awake: { liver: 1, stomach: 1, vein: 1, artery: 1 }, stressed: { liver: 1.6, stomach: 1, vein: 1.3, artery: 2.4 } },
+    current: { liver: 0.14, stomach: 0, lung: 1.05, vein: 0.3, artery: 0.5 },
+    push: { asleep: { liver: 0.7, stomach: 1, lung: 0.95, vein: 0.7, artery: 0.7 }, awake: { liver: 1, stomach: 1, lung: 1, vein: 1, artery: 1 }, stressed: { liver: 1.6, stomach: 1, lung: 1.25, vein: 1.3, artery: 2.4 } },
+    breath: { asleep: 9, awake: 6.5, stressed: 3.2 }, // seconds for one breath in and out
     driftAbove: 0.85, // past this the current drags you along even when you are holding still
     swirl: 0.9, // how far a hard current rolls from side to side
     drag: 7, // tiles per second of drag for each point of current above that
@@ -109,6 +110,7 @@ export const CONFIG = {
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
   tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
   // The gut flora trade for sugar. Prices are in energy.
+  lung: { macrophages: 2 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long
   market: { repair: { cost: 3, hull: 15 }, patch: { cost: 4 }, upgrade: { cost: 8, stock: 3 }, butyrate: { cost: 5, forget: 0.2 } },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue

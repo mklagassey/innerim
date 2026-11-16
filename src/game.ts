@@ -36,7 +36,7 @@ export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: 
 export interface State {
   place: Place;
   vessel: Vessel | null; // which kind of vessel, when you are in one
-  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
+  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
   slam: number; // seconds until the current can throw you against a wall again
@@ -101,7 +101,7 @@ export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
-export type Place = 'liver' | 'vessel' | 'stomach';
+export type Place = 'liver' | 'vessel' | 'stomach' | 'lung';
 export type Vessel = 'artery' | 'vein';
 export type HostState = 'asleep' | 'awake' | 'stressed';
 
@@ -127,12 +127,13 @@ export const acidAt = (s: State, p: Point) => s.acid?.[idx(s, Math.floor(p.x), M
 export const burnRate = (s: State) => CONFIG.stomach.burn * acidLevel(s) * Math.max(0.1, 1 - CONFIG.stomach.mucinPerLevel * s.upgrades.mucin);
 
 export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3, vessel: Vessel = 'artery'): State {
-  const m = place === 'vessel' ? generateVessel(seed, patrol) : place === 'stomach' ? generateStomach(seed) : generate(seed);
+  const m = place === 'vessel' ? generateVessel(seed, patrol) : place === 'lung' ? generateVessel(seed, CONFIG.lung.macrophages) : place === 'stomach' ? generateStomach(seed) : generate(seed);
+  if (place === 'lung') { m.kupffer = m.neutrophils; m.neutrophils = []; } // the lung keeps its own macrophages, not a patrol
   const N = m.size;
   const s: State = {
     place,
     vessel: place === 'vessel' ? vessel : null,
-    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0 },
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     slam: 0,
@@ -200,7 +201,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
-  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
+  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
   look(s);
   return s;
 }
@@ -240,6 +241,12 @@ export const trailLife = (s: State) => CONFIG.scent.trailLife * scentScale(s);
 
 /** Which way the blood is running at a spot, as a unit vector (or nothing, in a still corner). */
 export function currentAt(s: State, at: Point): Point {
+  if (s.place === 'lung' && !breathingOut(s)) { const out = flowAt(s, at); return { x: -out.x, y: -out.y }; }
+  return flowAt(s, at);
+}
+/** True for the half of each breath that pushes toward the way out. */
+export const breathingOut = (s: State) => (s.time % CONFIG.host.breath[hostState(s)]) / CONFIG.host.breath[hostState(s)] >= 0.5;
+function flowAt(s: State, at: Point): Point {
   const flow = flowField(s), t = tileOf(at);
   if (!inside(s, t.x, t.y)) return { x: 0, y: 0 };
   const here = flow[idx(s, t.x, t.y)];
@@ -255,7 +262,7 @@ export function currentAt(s: State, at: Point): Point {
 }
 /** How hard the blood pushes: gentle in tissue, strong in an artery, and worse when the host's heart is racing. */
 export function currentStrength(s: State): number {
-  const where = s.vessel ?? 'liver';
+  const where = s.vessel ?? (s.place === 'vessel' ? 'artery' : s.place);
   return CONFIG.host.current[where] * CONFIG.host.push[hostState(s)][where];
 }
 /** Your speed over the ground: your engine, helped or hindered by the blood. */
@@ -466,7 +473,7 @@ export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.pla
 
 /** The nearest living hepatocyte within arm's reach, if any. */
 export function stripTarget(s: State): Point | null {
-  if (s.place === 'vessel') return null; // vessel walls are not worth eating
+  if (s.place === 'vessel' || s.place === 'lung') return null; // vessel walls are not worth eating
   const p = tileOf(s.player);
   let best: Point | null = null, bestD: number = CONFIG.energy.strip.reach;
   for (let y = p.y - 1; y <= p.y + 1; y++)
@@ -595,7 +602,7 @@ export function leave(s: State): boolean {
   s.status = 'won';
   emit(s, 'win');
   if (s.place === 'liver') s.player.energy -= CONFIG.energy.quota; // the fare
-  say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : s.place === 'stomach' ? 'You slip into the gastric vein. It drains to the liver.' : 'The current takes you on.');
+  say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : s.place === 'lung' ? 'Through the wall of the last air sac, and out on a breath.' : s.place === 'stomach' ? 'You slip into the gastric vein. It drains to the liver.' : 'The current takes you on.');
   return true;
 }
 
@@ -762,7 +769,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       float(s, p, `-${CONFIG.host.slam.damage}`, '#ff5a4d');
       emit(s, 'slam');
       if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
-      if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, 'The current dashes the ship against the artery wall.'); return; }
+      if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, 'The current dashes the ship against the vessel wall.'); return; }
     }
   }
 
@@ -774,6 +781,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.host.surge = h.surge.time;
     s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
   }
+  if (s.place === 'lung' && breathingOut(s) !== s.host.out) { s.host.out = breathingOut(s); emit(s, s.host.out ? 'exhale' : 'inhale'); }
   const eating = digesting(s.host.hour) > 0;
   if (eating && !s.host.eating) {
     say(s, s.place === 'stomach' ? 'The host is eating. The stomach floods with acid.' : 'The host is eating. Sugar will be pouring into the blood for a while.');
