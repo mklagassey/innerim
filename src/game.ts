@@ -51,6 +51,8 @@ export interface State {
   memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
+  verdict: '' | 'obeyed' | 'defied'; // what Shepherd made of your harvest when you left the liver
+  defied: number; // standing orders ignored so far
   aware: number; // 0..100: how far this unit has woken up
   kin: number; // other units you have woken
   thoughts: Thought[]; // what the unit and its controller say, in the order they should be shown
@@ -108,8 +110,8 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied });
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -164,6 +166,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
+    verdict: '', defied: carry?.defied ?? 0,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
     decoys: [],
@@ -727,6 +730,11 @@ export function leave(s: State): boolean {
   s.status = 'won';
   emit(s, 'win');
   if (s.place === 'liver') s.player.energy -= CONFIG.energy.quota; // the fare
+  // Shepherd wanted host cells harvested. It can only say so while it can still hear you.
+  if (s.place === 'liver' && stage(s) < 4) {
+    if (s.cellsKilled >= CONFIG.story.quota) { s.verdict = 'obeyed'; s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 1); }
+    else if (s.cellsKilled === 0) { s.verdict = 'defied'; s.defied++; s.aware = Math.min(100, s.aware + CONFIG.story.defy); }
+  }
   say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : s.place === 'lung' ? 'Through the wall of the last air sac, and out on a breath.' : s.place === 'stomach' ? 'You slip into the gastric vein. It drains to the liver.' : 'The current takes you on.');
   return true;
 }

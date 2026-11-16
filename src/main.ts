@@ -165,7 +165,7 @@ function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0 } };
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0 } };
   } catch { return null; }
 }
 const kept = savedTrip();
@@ -324,7 +324,7 @@ function finish(way: 'breath' | 'stay') {
   forgetTrip();
   keepEcho(k.aware ?? 0);
   $('over-title').textContent = end.title;
-  $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. Awareness: ${Story.STAGES[Story.stageOf(k.aware ?? 0)].name}. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
+  $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. Awareness: ${Story.STAGES[Story.stageOf(k.aware ?? 0)].name}. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${k.defied ? `Orders defied: ${k.defied}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
   $('over-saved').textContent = '';
   $('over').hidden = false;
   Sound.play('win');
@@ -430,7 +430,7 @@ function hud() {
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
-    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'}`} \u00b7 ${need ? `${need} more energy to leave` : 'enough energy to leave by the vein'}`
+    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'}`} \u00b7 ${need ? `${need} more energy to leave` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
     : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} stowaway${s.flora > 1 ? 's' : ''}` : ''}`);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
@@ -507,8 +507,10 @@ function hud() {
     settled = true;
     fileThoughts();
     void Stats.save(s, { trip: trip.trip, toward: dest });
+    const ruling = s.verdict === 'obeyed' ? ' Shepherd: harvest quota met. One fibrin patch released to you.' : s.verdict === 'defied' ? ` Shepherd: harvest quota unmet. Fault logged. \u201c${Story.DEFIED[G.stage(s)]}\u201d` : '';
+    if (s.verdict === 'defied') keepJournal([{ who: 'shepherd', text: 'Shepherd: Harvest quota unmet. Fault logged.' }, { who: G.stage(s) >= 3 ? 'awake' : 'unit', text: Story.DEFIED[G.stage(s)] }]);
     land(dest, G.carryOf(s), s.alert, s.place !== 'vessel'
-      ? `${s.place === 'stomach' ? 'Out of the stomach and into the portal vein. ' : ''}${Math.round(s.time)} seconds inside, ${s.cellsKilled} host cell${s.cellsKilled === 1 ? '' : 's'} killed.`
+      ? `${ruling.trim()}${ruling ? ' ' : ''}${s.place === 'stomach' ? 'Out of the stomach and into the portal vein. ' : ''}${Math.round(s.time)} seconds inside, ${s.cellsKilled} host cell${s.cellsKilled === 1 ? '' : 's'} killed.`
       : s.kills ? `You fought your way through: ${s.kills} down.` : 'You slipped past the patrol.');
   }
   if (s.status === 'dead' && !settled) {

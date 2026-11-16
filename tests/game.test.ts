@@ -864,3 +864,18 @@ test('story: wardens come for a woken unit, hunt by sight alone, and can be made
   assert.ok(s.pickups.some((i) => i.kind === 'sibling'), 'it goes dark instead of dying');
   assert.equal(s.kills, 0);
 });
+
+test('story: leaving the liver without harvesting defies Shepherd, and meeting the quota is rewarded', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.player.energy = CONFIG.energy.quota + 2;
+  s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5;
+  const a = s.aware;
+  assert.ok(G.leave(s));
+  assert.equal(s.verdict, 'defied');
+  assert.equal(s.aware, a + CONFIG.story.defy);
+  assert.equal(G.carryOf(s).defied, 1);
+  const o = quiet(4); o.player.energy = CONFIG.energy.quota; o.player.x = o.vein.x + 0.5; o.player.y = o.vein.y + 0.5; o.cellsKilled = CONFIG.story.quota;
+  const patches = o.patches;
+  assert.ok(G.leave(o));
+  assert.equal(o.verdict, 'obeyed');
+  assert.equal(o.patches, patches + 1);
+});

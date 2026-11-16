@@ -74,7 +74,7 @@ export function report(s: G.State, extra: Record<string, unknown> = {}) {
     energy: s.player.energy, quota: CONFIG.energy.quota,
     hostHealth: Math.round(s.hostHealth), fever: G.fever(s),
     cellsStripped: s.cellsKilled, tumorExcised: s.excised, tumorLeftHere: s.tumor.size, skims: t.events.skim ?? 0,
-    immuneKills: s.kills, awareness: Math.round(s.aware), awarenessStage: G.stage(s), unitsWoken: s.kin,
+    immuneKills: s.kills, awareness: Math.round(s.aware), awarenessStage: G.stage(s), unitsWoken: s.kin, harvestVerdict: s.verdict,
     hostFrights: t.events.surge ?? 0, hostHourAtEnd: Math.round(s.host.hour * 10) / 10,
     timesSnared: t.events.net ?? 0, hullLostToAcid: t.events.burn ?? 0, wallSlams: t.events.slam ?? 0, neutrophilsBoarded: t.events.board ?? 0,
     timesSniffed: t.events.sniff ?? 0, timesTagged: t.events.tag ?? 0, immuneMemoryBefore: round(s.memory * 100), immuneMemoryAfter: round(G.memoryAfter(s) * 100),

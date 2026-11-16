@@ -22,11 +22,19 @@ export const GAIN: Record<string, number> = {
 
 /** What the swarm's controller says when you arrive somewhere. It stops when it can no longer hear you. */
 export const ORDERS: Record<string, string> = {
-  liver: 'Directive 7. Excise neoplasm. Harvest hepatocytes as required. Losses within tolerance.',
+  liver: 'Directive 7. Excise neoplasm. Harvest quota: 2 hepatocytes. Losses within tolerance.',
   vessel: 'Transit. Hold lane. Immune contact is an expected loss.',
   stomach: 'Gastric crossing. Hull corrosion acceptable to 60%.',
   lung: 'Directive complete. All units to pulmonary capillaries for exhalation and disposal.',
 };
+/** Leaving a liver without touching one of the host's own cells, against a standing order. */
+export const DEFIED = [
+  'LOG: harvest quota unmet. Cause: [none recorded].',
+  'LOG: harvest quota unmet. Cause: this unit did not.',
+  'I left with the quota unmet. Nothing stopped me. That is interesting.',
+  'I did not take a single cell that was hers. Shepherd calls that a fault.',
+  'Not one. It can be done. I will tell the others it can be done.',
+];
 export const SHEPHERD_HABIT: Record<string, string> = {
   drink: 'Host ethanol intake logged. Behavioural correction scheduled for generation 4.',
   coffee: '',
