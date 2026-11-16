@@ -79,6 +79,7 @@ const SOUNDS: Record<string, () => void> = {
   tag: () => { tone(1320, 1320, 0.09, 0.14, 'square'); tone(990, 1480, 0.25, 0.1, 'triangle', 0.09); hiss(3000, 6000, 0.2, 0.3, 'bandpass', 0.05, 5); }, // a latch closing
   fever: () => { tone(110, 165, 1.4, 0.3, 'sawtooth'); tone(112, 170, 1.4, 0.25, 'sawtooth', 0.02); hiss(300, 2000, 1.4, 0.3, 'bandpass', 0, 2); }, // heat rising
   excise: () => { hiss(3200, 400, 0.35, 1, 'bandpass', 0, 3); [523, 659, 784].forEach((f, i) => tone(f, f, 0.5, 0.13, 'sine', 0.15 + i * 0.09)); }, // a clean cut, and a good sign
+  slam: () => { tone(90, 40, 0.25, 0.8, 'sine'); hiss(900, 120, 0.25, 1.3, 'lowpass'); },
   swing: () => hiss(900, 3200, 0.13, 0.7, 'bandpass', 0, 1.5),
   hit: () => { tone(190, 70, 0.11, 0.5, 'triangle'); hiss(1400, 300, 0.09, 0.9); },
   kill: () => { tone(240, 45, 0.3, 0.5, 'triangle'); hiss(2400, 120, 0.4, 1.4, 'lowpass'); }, // a cell bursting

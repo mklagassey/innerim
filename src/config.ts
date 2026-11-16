@@ -38,6 +38,9 @@ export const CONFIG = {
     current: { liver: 0.14, stomach: 0, vein: 0.3, artery: 0.5 },
     push: { asleep: { liver: 0.7, stomach: 1, vein: 0.7, artery: 0.7 }, awake: { liver: 1, stomach: 1, vein: 1, artery: 1 }, stressed: { liver: 1.6, stomach: 1, vein: 1.3, artery: 2.4 } },
     driftAbove: 0.85, // past this the current drags you along even when you are holding still
+    swirl: 0.9, // how far a hard current rolls from side to side
+    drag: 7, // tiles per second of drag for each point of current above that
+    slam: { damage: 2, every: 1 }, // being thrown against a wall by it
     glucose: { asleep: 0.6, awake: 1, stressed: 4 }, // how fast sugar comes back: fasting overnight, flooding out of the liver in a fright
     nose: { asleep: 1.25, awake: 1, stressed: 1 }, // the immune system does its best work while the host sleeps
   },

@@ -669,3 +669,17 @@ test('killer T cells come once the host knows you, and see through the cloak up 
   run(s, 0.4);
   assert.ok(G.dist(t, s.player) < far, 'and it keeps coming');
 });
+
+test('a frightened artery throws a drifting ship against its walls, but not to death', () => {
+  let lost = 0;
+  for (const seed of [1, 2, 3, 4]) {
+    const s = G.createGame(seed, undefined, 'vessel', 0, 'artery'); s.host.nextSurge = 999; s.host.surge = 15;
+    run(s, 15);
+    assert.equal(s.status, 'playing');
+    lost += 40 - s.player.hp;
+    const v = G.createGame(seed, undefined, 'vessel', 0, 'vein'); v.host.nextSurge = 999; v.host.surge = 15;
+    run(v, 15);
+    assert.equal(v.player.hp, 40, 'a vein never does');
+  }
+  assert.ok(lost / 4 > 3 && lost / 4 < 24, `average hull lost drifting: ${lost / 4}`);
+});

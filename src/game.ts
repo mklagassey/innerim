@@ -39,6 +39,7 @@ export interface State {
   host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
+  slam: number; // seconds until the current can throw you against a wall again
   sizzle: number; // hull lost to acid since the last time it was shown
   tumor: Set<number>; // tiles of tumor cells still standing
   excised: number; // tumor cells cut out so far, across the whole mission
@@ -134,6 +135,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0 },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
+    slam: 0,
     sizzle: 0,
     tumor: new Set((m.tumor ?? []).map((p) => p.y * N + p.x)),
     excised: carry?.excised ?? 0,
@@ -746,7 +748,23 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
   // A strong enough current drags you with it whether your engine is running or not.
   const pull = currentStrength(s) - CONFIG.host.driftAbove;
-  if (pull > 0) { const c = currentAt(s, p); shift(s, p, c.x * pull * 2.4 * dt, c.y * pull * 2.4 * dt, pc.radius); }
+  s.slam = Math.max(0, s.slam - dt);
+  if (pull > 0) {
+    // Blood driven this hard does not run straight: it rolls from side to side as it goes.
+    const along = currentAt(s, p), roll = Math.sin(s.time * 2.3 + (p.x + p.y) * 0.35) * CONFIG.host.swirl;
+    const cx = along.x - along.y * roll, cy = along.y + along.x * roll, len = Math.hypot(cx, cy) || 1;
+    const c = { x: cx / len, y: cy / len }, want = pull * CONFIG.host.drag * dt, from = { x: p.x, y: p.y };
+    shift(s, p, c.x * want, c.y * want, pc.radius);
+    // Thrown against the wall: the blood wanted you to go somewhere the vessel does not.
+    if ((along.x || along.y) && (p.x - from.x) * c.x + (p.y - from.y) * c.y < want * 0.6 && s.slam <= 0) {
+      s.slam = CONFIG.host.slam.every;
+      p.hp -= CONFIG.host.slam.damage; p.hurt = 0.25;
+      float(s, p, `-${CONFIG.host.slam.damage}`, '#ff5a4d');
+      emit(s, 'slam');
+      if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
+      if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, 'The current dashes the ship against the artery wall.'); return; }
+    }
+  }
 
   // The host's day goes on around you.
   const was = hostState(s), h = CONFIG.host;
