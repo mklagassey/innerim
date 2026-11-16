@@ -1,7 +1,7 @@
 // Input, the game loop and the heads-up display. All rules live in game.ts.
 import { CONFIG, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
-import { draw, nearestBloodCell, TH, TW, View } from './render';
+import { draw, nearestBloodCell, project, setSpin, TH, TW, unturn, View } from './render';
 import * as Tips from './tips';
 import * as Sound from './audio';
 import * as Stats from './stats';
@@ -34,7 +34,8 @@ new ResizeObserver(resize).observe(canvas);
 /** Where in the liver a point on the screen is. */
 function toWorld(px: number, py: number): G.Point {
   const sx = (px - view.w / 2) / view.zoom, sy = (py - view.h / 2) / view.zoom;
-  return { x: s.player.x + (sx / (TW / 2) + sy / (TH / 2)) / 2, y: s.player.y + (sy / (TH / 2) - sx / (TW / 2)) / 2 };
+  const d = unturn((sx / (TW / 2) + sy / (TH / 2)) / 2, (sy / (TH / 2) - sx / (TW / 2)) / 2);
+  return { x: s.player.x + d.x, y: s.player.y + d.y };
 }
 
 // Keys move you in screen directions: up the screen is a diagonal through the tissue.
@@ -44,8 +45,12 @@ const KEY_DIRS: Record<string, [number, number]> = {
 function heldDirection(): G.Point | null {
   let x = 0, y = 0;
   for (const k of keys) { const d = KEY_DIRS[k]; if (d) { x += d[0]; y += d[1]; } }
-  return x || y ? { x, y } : null;
+  return x || y ? unturn(x, y) : null; // keys mean screen directions whichever way the view is turned
 }
+
+// The view turns in quarter steps, and swings there instead of snapping.
+let quarter = 0, spin = 0;
+const turnView = (by: number) => { quarter += by; };
 
 function aimPointer() {
   if (!pointer) return;
@@ -92,6 +97,8 @@ window.addEventListener('keydown', (ev) => {
   if (!started || s.status !== 'playing') return;
   if (KEY_DIRS[k]) { ev.preventDefault(); keys.add(k); }
   else if (ev.repeat) return;
+  else if (k === 'z') turnView(1);
+  else if (k === 'x') turnView(-1);
   else if (k === 'e') useE();
   else if (k === 'f') G.startStrip(s);
   else if (k === ' ') { ev.preventDefault(); G.strike(s); }
@@ -106,6 +113,8 @@ window.addEventListener('blur', () => { keys.clear(); release(); });
 $('act-e').addEventListener('click', useE);
 $('act-f').addEventListener('click', () => G.startStrip(s));
 $('map').addEventListener('click', toggleMap);
+$('turn-l').addEventListener('click', () => turnView(1));
+$('turn-r').addEventListener('click', () => turnView(-1));
 const showSound = () => { $('sound').textContent = Sound.isOn() ? 'Sound on' : 'Sound off'; $('sound').setAttribute('aria-pressed', String(Sound.isOn())); };
 $('sound').addEventListener('click', () => { Sound.setOn(!Sound.isOn()); showSound(); });
 showSound();
@@ -215,8 +224,8 @@ function showTip(next: Tips.Tip, at: G.Point) {
   tip = next;
   view.mark = at;
   // Keep the box off the thing it is pointing at.
-  const markY = view.h / 2 + (at.x - s.player.x + at.y - s.player.y) * (TH / 2) * view.zoom;
-  const markX = view.w / 2 + (at.x - s.player.x - (at.y - s.player.y)) * (TW / 2) * view.zoom;
+  const a = project(at.x, at.y), c = project(s.player.x, s.player.y);
+  const markY = view.h / 2 + (a.y - c.y) * view.zoom, markX = view.w / 2 + (a.x - c.x) * view.zoom;
   $('tip').classList.toggle('high', markY > view.h * 0.5);
   $('tip').classList.toggle('right', markX < view.w * 0.5);
   Sound.play('tip');
@@ -326,6 +335,9 @@ function frame(now: number) {
   slowFrames = raw > 1 / 30 && raw < 0.25 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
   if (slowFrames > 90 && sharpness > 1) { sharpness = 1; slowFrames = 0; resize(); }
   view.time += dt;
+  const aim = quarter * (Math.PI / 2);
+  spin = Math.abs(aim - spin) < 0.002 ? aim : spin + (aim - spin) * (view.still ? 1 : 1 - Math.exp(-dt * 9));
+  setSpin(spin);
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
     if (s.place === 'vessel' && G.canLeave(s)) G.leave(s); // reaching the far end is getting away

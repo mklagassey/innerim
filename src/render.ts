@@ -17,7 +17,18 @@ export interface View {
   still: boolean; // the player asked for reduced motion
 }
 
-export const project = (x: number, y: number): Point => ({ x: ((x - y) * TW) / 2, y: ((x + y) * TH) / 2 });
+// The camera can be swung round the scene. Everything is turned by `spin` before it is laid out
+// on the isometric grid, so the same tissue can be looked at from any side.
+let cs = 1, sn = 0;
+export function setSpin(radians: number) { cs = Math.cos(radians); sn = Math.sin(radians); }
+export const project = (x: number, y: number): Point => {
+  const rx = x * cs - y * sn, ry = x * sn + y * cs;
+  return { x: ((rx - ry) * TW) / 2, y: ((rx + ry) * TH) / 2 };
+};
+/** How far toward the viewer a spot is: things further forward are drawn later, over the rest. */
+const depthOf = (x: number, y: number) => x * cs - y * sn + (x * sn + y * cs);
+/** Turns a direction on the screen's grid back into one in the world. */
+export const unturn = (x: number, y: number): Point => ({ x: x * cs + y * sn, y: -x * sn + y * cs });
 const hash = (x: number, y: number) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 1000 / 1000;
 function rand(seed: number) {
   let a = (seed * 2654435761) >>> 0;
@@ -296,7 +307,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
         const variant = Math.floor(hash(x, y) * CELL_VARIANTS);
         const hit = !!target && target.x === x && target.y === y;
         const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
-        things.push({ depth: x + y + 1, draw: () => {
+        things.push({ depth: depthOf(x + 0.5, y + 0.5), draw: () => {
           const squash = 1 - dying * 0.4, h = CELL_OY * squash;
           // The remembered look underneath, the lit look faded in over it.
           for (const memory of [true, false]) {
@@ -350,7 +361,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
 
       const g = s.glucose.get(i);
       // Drawn with the standing things, so a neighbouring floor tile cannot wash over it.
-      if (g !== undefined) things.push({ depth: x + y + 0.2, draw: () => {
+      if (g !== undefined) things.push({ depth: depthOf(x + 0.5, y + 0.5) - 0.8, draw: () => {
         if (vis && g > 0) {
           ctx.globalCompositeOperation = 'lighter';
           const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 36);
@@ -450,15 +461,15 @@ export function draw(ctx: Ctx, s: State, v: View) {
     oval(ctx, c.x, c.y, TW * 0.3, TH * 0.3); ctx.stroke();
   }
 
-  for (const b of rbcs) if (b.x > 0 && seenAt(b)) things.push({ depth: b.x + b.y, draw: () => bloodCell(ctx, b, v.time) });
-  for (const e of s.enemies) if (seenAt(e)) things.push({ depth: e.x + e.y, draw: () => enemy(ctx, e, v) });
+  for (const b of rbcs) if (b.x > 0 && seenAt(b)) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
+  for (const e of s.enemies) if (seenAt(e)) things.push({ depth: depthOf(e.x, e.y), draw: () => enemy(ctx, e, v) });
   for (const item of s.pickups) {
     if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
     const seen = seenAt(item);
-    things.push({ depth: item.x + item.y - 0.01, draw: () => pickup(ctx, item.x, item.y, item.kind, seen, v.time) });
+    things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => pickup(ctx, item.x, item.y, item.kind, seen, v.time) });
   }
-  things.push({ depth: p.x + p.y, draw: () => hero(ctx, s, v) });
-  if (s.snare > 0) things.push({ depth: p.x + p.y + 0.01, draw: () => {
+  things.push({ depth: depthOf(p.x, p.y), draw: () => hero(ctx, s, v) });
+  if (s.snare > 0) things.push({ depth: depthOf(p.x, p.y) + 0.01, draw: () => {
     // A neutrophil's net: pale strands of DNA strung across you.
     const c = project(p.x, p.y), rf = rand(77);
     ctx.globalAlpha = Math.min(1, s.snare * 2) * 0.8;
