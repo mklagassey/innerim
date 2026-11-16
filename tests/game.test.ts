@@ -650,3 +650,22 @@ test('the long way round goes through the gut', () => {
   T.arrive(t, 'gut', null);
   assert.deepEqual(T.depart(t, 'portal'), { kind: 'arrive' }, 'no patrols among the flora');
 });
+
+test('killer T cells come once the host knows you, and see through the cloak up close', () => {
+  const carry = (memory: number) => ({ ...G.carryOf(quiet(2)), memory });
+  const count = (g: G.State) => g.enemies.filter((e) => e.kind === 'tcell').length;
+  assert.equal(count(G.createGame(3, carry(0.3))), 0);
+  assert.equal(count(G.createGame(3, carry(0.6))), 1);
+  assert.equal(count(G.createGame(3, carry(0.9))), 2);
+  assert.equal(count(G.createGame(3, carry(0.9), 'stomach')), 0);
+  const s = quiet(4); s.host.nextSurge = 999; s.upgrades.cd47 = 1; s.player.energy = 10;
+  const t = foe(s, 2, 0, 'tcell'), n = foe(s, -2, 0);
+  t.mood = 'chase'; n.mood = 'chase'; t.cooldown = 9;
+  assert.ok(G.open(s, Math.floor(t.x), Math.floor(t.y)) && G.open(s, Math.floor(n.x), Math.floor(n.y)));
+  assert.ok(G.cloak(s));
+  assert.equal(n.mood, 'patrol', 'the neutrophil loses you');
+  assert.equal(t.mood, 'chase', 'the T cell does not');
+  const far = G.dist(t, s.player);
+  run(s, 0.4);
+  assert.ok(G.dist(t, s.player) < far, 'and it keeps coming');
+});

@@ -5,7 +5,7 @@ import { generate, generateStomach, generateVessel, mulberry32, Point } from './
 
 export type { Point };
 export type Tile = 'cell' | 'dead' | 'floor';
-export type EnemyKind = 'neutrophil' | 'kupffer';
+export type EnemyKind = 'neutrophil' | 'kupffer' | 'tcell';
 export type Mood = 'patrol' | 'investigate' | 'chase';
 
 export interface Enemy extends Point {
@@ -191,6 +191,11 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
       const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 9) s.antibodies.push({ x: x + 0.5, y: y + 0.5, seed: s.rng() * 100 });
     }
+  if (place !== 'stomach')
+    for (let n = CONFIG.memory.tcells.filter((m) => s.memory >= m).length, tries = 0; n > 0 && tries < 4000; tries++) {
+      const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
+      if (open(s, x, y) && dist(s.player, { x, y }) > 16) { spawn(s, 'tcell', { x, y }); n--; }
+    }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
@@ -355,6 +360,7 @@ export function cloak(s: State): boolean {
   emit(s, 'cloak');
   // Anything hunting you loses the thread and stands there working out what it saw.
   for (const e of s.enemies) {
+    if (e.kind === 'tcell' && dist(e, s.player) < CONFIG.memory.tcellSight) continue; // it knows your antigens, not your coat
     if (e.mood !== 'chase' && e.windup < 0) continue;
     e.mood = 'patrol'; e.goal = null; e.path = []; e.windup = -1;
     e.idle = CONFIG.cloak.confusion + s.rng();
@@ -668,7 +674,7 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
     p.hp = 0;
     s.status = 'dead';
     emit(s, 'dead');
-    say(s, by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : 'The neutrophils dissolve you where you stand.');
+    say(s, by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : by === 'tcell' ? 'The killer T cell punches holes in the hull until there is no hull.' : 'The neutrophils dissolve you where you stand.');
   }
 }
 
@@ -912,14 +918,16 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   }
   const d = dist(e, p);
   // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
-  const whiff = cloaked(s) ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)]);
-  const found = !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p))));
+  // A killer T cell reads your antigens directly, so up close the cloak does not fool it.
+  const through = cloaked(s) && e.kind === 'tcell' && d <= CONFIG.memory.tcellSight && sees(s, tileOf(e), tileOf(p));
+  const whiff = through ? 1 : cloaked(s) ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)]);
+  const found = through || (!cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
   const print = cloaked(s) ? null : freshPrint(s, e);
   // Once it is after you, any trace of scent keeps it on you.
   const saw = found || (e.mood === 'chase' && whiff > 0);
   if (saw) {
     // The cloak answers a first sighting on its own, if it is ready and you can pay for it.
-    if (e.mood !== 'chase' && cloak(s)) {
+    if (e.mood !== 'chase' && e.kind !== 'tcell' && cloak(s)) {
       e.mood = 'patrol'; e.goal = null; e.path = []; e.idle = CONFIG.cloak.confusion + s.rng();
       float(s, e, '?', '#78f0e1');
       return false;

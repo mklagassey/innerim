@@ -645,6 +645,23 @@ function enemy(ctx: Ctx, e: Enemy, v: View) {
       ctx.fillStyle = '#3a1d40'; oval(ctx, c.x + 3, cy + 1, 7, 4.6, 0.5); ctx.fill(); // bean-shaped nucleus
       ctx.fillStyle = 'rgba(255,245,220,0.35)'; oval(ctx, c.x - r * 0.35, cy - r * 0.45, r * 0.3, r * 0.16, -0.5); ctx.fill();
     }
+  } else if (e.kind === 'tcell') {
+    // Killer T cell: small and smooth, nearly all nucleus, bristling with receptors.
+    ctx.strokeStyle = flash ? '#fff' : wind ? '#ff9a7a' : '#7fd8d0'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    for (let k = 0; k < 12; k++) {
+      const a = (k / 12) * Math.PI * 2 + v.time * 0.7 + e.id, reach = r * (1.22 + wind * 0.25);
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(a) * r * 0.9, cy + Math.sin(a) * r * 0.85); ctx.lineTo(c.x + Math.cos(a) * reach, cy + Math.sin(a) * reach * 0.94); ctx.stroke();
+    }
+    const body = ctx.createRadialGradient(c.x - r * 0.35, cy - r * 0.45, 1, c.x, cy, r * 1.05);
+    body.addColorStop(0, flash ? '#fff' : '#e6fbf6'); body.addColorStop(0.7, flash ? '#fff' : wind ? '#e0907a' : '#7ec4c8'); body.addColorStop(1, flash ? '#fff' : '#2f6f84');
+    ctx.fillStyle = body; oval(ctx, c.x, cy, r * 0.95, r * 0.9); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,50,70,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+    if (!flash) {
+      const core = ctx.createRadialGradient(c.x - 2, cy - 2, 0.5, c.x, cy, r * 0.7);
+      core.addColorStop(0, '#5a4aa0'); core.addColorStop(1, '#231a4e');
+      ctx.fillStyle = core; oval(ctx, c.x + 0.6, cy + 0.6, r * 0.66, r * 0.62); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.45)'; oval(ctx, c.x - r * 0.4, cy - r * 0.5, r * 0.26, r * 0.14, -0.5); ctx.fill();
+    }
   } else {
     // Neutrophil: a pale, grainy cell with a nucleus pinched into lobes.
     const body = ctx.createRadialGradient(c.x - r * 0.35, cy - r * 0.45, 1, c.x, cy, r * 1.1);

@@ -100,6 +100,8 @@ export const CONFIG = {
     tagScent: 1.7, // how much further your scent carries while tagged
     tagAlert: 4,
     reach: 0.55, drift: 0.7, pull: 3, homing: 0.9,
+    tcells: [0.5, 0.85], // memory at which the first and second killer T cell join each map
+    tcellSight: 6, // how close one must be to track you through the cloak
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
   tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
@@ -109,6 +111,8 @@ export const CONFIG = {
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {
     neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
+    // Adaptive immunity's assassin. Only turns up once the host knows you, and the CD47 cloak means nothing to it.
+    tcell: { hp: 14, speed: 3, chaseSpeed: 4.5, radius: 0.3, nose: 1.4, reach: 1, windup: 0.6, cooldown: 1.6, min: 6, max: 9, forget: 7 },
     kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, nose: 1.25, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
   },
 } as const;
