@@ -555,3 +555,33 @@ test('the stomach is a detour on the way to the liver', () => {
   assert.equal(t.fed, false, 'the stomach does not count as feeding');
   assert.deepEqual(T.ways(t).map((l) => l.to), ['liver']);
 });
+
+test('the host remembers: alarms on one map mean antibodies on the next', () => {
+  const a = quiet(4);
+  assert.equal(a.antibodies.length, 0, 'a host that has never met you has none');
+  assert.equal(G.carryOf(a).memory, 0, 'and a quiet visit teaches it nothing');
+  a.peak = 100; a.kills = 4;
+  const carry = G.carryOf(a);
+  assert.ok(carry.memory > 0.3 && carry.memory < 0.45);
+  const b = G.createGame(9, carry);
+  assert.ok(b.antibodies.length >= 5, `antibodies waiting: ${b.antibodies.length}`);
+  assert.ok(b.antibodies.every((x) => G.dist(x, b.player) > 9), 'none on top of you at the start');
+  assert.equal(G.createGame(9, carry, 'stomach').antibodies.length, 0, 'acid takes them apart');
+  assert.ok(G.createGame(9, { ...carry, memory: 1 }).antibodies.length > b.antibodies.length);
+});
+
+test('an antibody that sticks makes you reek, blocks the cloak, and wears off', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.upgrades.cd47 = 1; s.player.energy = 10;
+  const calm = G.scentScale(s);
+  s.antibodies.push({ x: s.player.x + 0.3, y: s.player.y, seed: 1 });
+  run(s, 0.1);
+  assert.ok(s.tagged > 0 && s.antibodies.length === 0);
+  assert.ok(G.scentScale(s) > calm * 1.5);
+  assert.equal(G.cloak(s), false, 'no cloak while tagged');
+  run(s, CONFIG.memory.tagTime + 0.5);
+  assert.equal(s.tagged, 0);
+  assert.equal(G.scentScale(s), calm);
+  s.antibodies.push({ x: s.player.x + 0.9, y: s.player.y, seed: 1 });
+  G.strike(s);
+  assert.equal(s.antibodies.length, 0, 'a strike clears them');
+});

@@ -29,6 +29,8 @@ export interface Float extends Point { text: string; color: string; age: number 
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
 export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' }
+/** An antibody adrift in the blood: made to fit you, and it sticks. */
+export interface Antibody extends Point { seed: number }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
 
 export interface State {
@@ -38,6 +40,10 @@ export interface State {
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
   sizzle: number; // hull lost to acid since the last time it was shown
+  memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
+  peak: number; // highest the alert has been on this map
+  antibodies: Antibody[];
+  tagged: number; // seconds an antibody stays stuck to you
   size: number;
   tiles: Tile[];
   explored: Uint8Array; // tiles you have ever seen
@@ -87,8 +93,10 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s) });
+/** What the host will remember of you once you leave this map. */
+export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
 export type Place = 'liver' | 'vessel' | 'stomach';
 export type Vessel = 'artery' | 'vein';
@@ -123,6 +131,10 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     sizzle: 0,
+    memory: carry?.memory ?? 0,
+    peak: 0,
+    antibodies: [],
+    tagged: 0,
     size: N,
     tiles: Array.from(m.wall, (w) => (w ? 'cell' : 'floor')),
     explored: new Uint8Array(N * N),
@@ -167,6 +179,12 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   };
   const [lo, hi] = CONFIG.host.surge.first;
   s.host.nextSurge = lo + s.rng() * (hi - lo);
+  // Antibodies drift wherever blood runs. Stomach acid takes them apart.
+  if (place !== 'stomach')
+    for (let n = Math.round(s.memory * CONFIG.memory.most * (place === 'vessel' ? 0.5 : 1)), tries = 0; s.antibodies.length < n && tries < 4000; tries++) {
+      const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
+      if (open(s, x, y) && dist(s.player, { x, y }) > 9) s.antibodies.push({ x: x + 0.5, y: y + 0.5, seed: s.rng() * 100 });
+    }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `Find ${CONFIG.energy.quota} energy, then find the central vein.`);
@@ -203,7 +221,7 @@ export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
 export const cloaked = (s: State) => s.cloak > 0;
 
 /** 1 with no masking, down to 0.4 with a full CD47 coat. Scales the plume and the trail alike. */
-export const scentScale = (s: State) => 1 - CONFIG.scent.maskPerLevel * s.upgrades.cd47;
+export const scentScale = (s: State) => (1 - CONFIG.scent.maskPerLevel * s.upgrades.cd47) * (s.tagged > 0 ? CONFIG.memory.tagScent : 1);
 /** Seconds one of your footprints lasts. */
 export const trailLife = (s: State) => CONFIG.scent.trailLife * scentScale(s);
 
@@ -324,7 +342,7 @@ export function usePatch(s: State): boolean {
 }
 /** Show the 'do not eat me' signal: nothing can see you until it fades or you attack. */
 export function cloak(s: State): boolean {
-  if (s.status !== 'playing' || !s.upgrades.cd47 || s.cloakCd > 0 || s.player.energy < CONFIG.cloak.energy) return false;
+  if (s.status !== 'playing' || !s.upgrades.cd47 || s.cloakCd > 0 || s.player.energy < CONFIG.cloak.energy || s.tagged > 0) return false; // no hiding with a flag stuck to you
   s.player.energy -= CONFIG.cloak.energy;
   s.cloak = cloakTime(s);
   s.cloakCd = CONFIG.cloak.cooldown + s.cloak;
@@ -507,6 +525,8 @@ export function strike(s: State, toward?: Point): boolean {
   emit(s, 'swing');
   s.cloak = 0; // violence gives you away
   interrupt(s);
+  const swept = s.antibodies.filter((a) => dist(a, p) <= c.reach);
+  if (swept.length) { s.antibodies = s.antibodies.filter((a) => !swept.includes(a)); float(s, swept[0], 'cleared', '#b8c8ff'); }
   for (const e of [...s.enemies]) {
     const d = dist(e, p);
     if (d > c.reach + CONFIG.enemies[e.kind].radius) continue;
@@ -640,6 +660,7 @@ export function alertTier(s: State) {
 function raiseAlert(s: State, by: number) {
   const before = alertTier(s).name;
   s.alert = Math.max(0, Math.min(CONFIG.alert.max, s.alert + by));
+  s.peak = Math.max(s.peak, s.alert);
   const after = alertTier(s).name;
   if (by > 0 && after !== before) { say(s, `Immune alert: ${after}.`); emit(s, 'alarm'); }
 }
@@ -765,11 +786,37 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.pickups.splice(s.pickups.indexOf(item), 1);
   }
 
+  // Antibodies ride the blood, and lean toward you when you pass close.
+  s.tagged = Math.max(0, s.tagged - dt);
+  const mem = CONFIG.memory;
+  for (const a of [...s.antibodies]) {
+    const c = currentAt(s, a), d = dist(a, p), near = d < mem.pull && !cloaked(s);
+    const wob = s.time * 0.8 + a.seed;
+    let vx = c.x * mem.drift + Math.cos(wob) * 0.25, vy = c.y * mem.drift + Math.sin(wob * 1.3) * 0.25;
+    if (near && d > 0.01) { vx += ((p.x - a.x) / d) * mem.homing; vy += ((p.y - a.y) / d) * mem.homing; }
+    shift(s, a, vx * dt, vy * dt, 0.15);
+    if (d < mem.reach && !cloaked(s)) {
+      s.antibodies.splice(s.antibodies.indexOf(a), 1);
+      s.tagged = mem.tagTime;
+      float(s, p, 'Tagged', '#b8c8ff');
+      say(s, 'An antibody locks on to your hull. Everything can smell you now.');
+      emit(s, 'tag');
+      raiseAlert(s, mem.tagAlert);
+      s.scentClock = 0;
+    } else if (dist(a, mid(s.vein)) < 1.6) {
+      // Swept out with the blood, and back in with it somewhere else.
+      const door = s.portals[Math.floor(s.rng() * s.portals.length)];
+      if (dist(mid(door), p) > 6) { a.x = door.x + 0.5; a.y = door.y + 0.5; }
+    }
+  }
+
   for (const shot of [...s.shots]) {
     const step = Math.hypot(shot.vx, shot.vy) * dt;
     shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.left -= step;
     const hit = s.enemies.find((e) => dist(e, shot) < pc.shot.radius + CONFIG.enemies[e.kind].radius * 0.5);
     if (hit) hurtEnemy(s, hit, roll(s, pc.shot.min, pc.shot.max) + bonus(s, 'peroxidase'));
+    const stuck = s.antibodies.find((a) => dist(a, shot) < pc.shot.radius);
+    if (stuck) { s.antibodies.splice(s.antibodies.indexOf(stuck), 1); float(s, stuck, 'cleared', '#b8c8ff'); }
     if (hit || shot.left <= 0 || !open(s, Math.floor(shot.x), Math.floor(shot.y))) s.shots.splice(s.shots.indexOf(shot), 1);
   }
 

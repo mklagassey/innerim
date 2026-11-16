@@ -293,7 +293,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const road = s.place === 'vessel', gut = s.place === 'stomach';
   if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); thin = new Float32Array(s.size * s.size); }
   // Whatever matters on screen: a cell standing in front of one of these goes glassy so you can see it.
-  const behind: Point[] = [p, ...s.enemies.filter(seenAt), ...s.pickups.filter(seenAt)].map((q) => project(q.x, q.y));
+  const behind: Point[] = [p, ...s.enemies.filter(seenAt), ...s.pickups.filter(seenAt), ...s.antibodies.filter(seenAt)].map((q) => project(q.x, q.y));
   const hides = (c: Point) => behind.some((q) => c.y - q.y > 1 && c.y - q.y < 62 && Math.abs(c.x - q.x) < 42);
 
   for (let y = Math.max(0, py - span); y <= Math.min(s.size - 1, py + span); y++) {
@@ -488,6 +488,12 @@ export function draw(ctx: Ctx, s: State, v: View) {
 
   for (const b of rbcs) if (b.x > 0 && seenAt(b) && !s.acid?.[idx(s, Math.floor(b.x), Math.floor(b.y))]) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
   for (const e of s.enemies) if (seenAt(e)) things.push({ depth: depthOf(e.x, e.y), draw: () => enemy(ctx, e, v) });
+  for (const a of s.antibodies) if (seenAt(a)) things.push({ depth: depthOf(a.x, a.y), draw: () => { const c = project(a.x, a.y); antibody(ctx, c.x, c.y - 14 + Math.sin(v.time * 1.7 + a.seed) * 3, v.time * 0.6 + a.seed, 1); } });
+  if (s.tagged > 0) things.push({ depth: depthOf(p.x, p.y) + 0.02, draw: () => {
+    // The ones that caught you, stuck fast and waving for attention. They fade as they work loose.
+    const c = project(p.x, p.y), hold = Math.min(1, s.tagged / 1.5);
+    for (let k = 0; k < 3; k++) { const a = v.time * 0.9 + k * 2.1; antibody(ctx, c.x + Math.cos(a) * 15, c.y - 20 + Math.sin(a) * 7, a, hold); }
+  } });
   for (const item of s.pickups) {
     if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
     const seen = seenAt(item);
@@ -671,6 +677,18 @@ function enemy(ctx: Ctx, e: Enemy, v: View) {
 }
 
 /** A cache is a vesicle of loot; a patch is a pale knot of fibrin. */
+/** An antibody: a pale Y, two arms to grab with and a stem for immune cells to grab. */
+function antibody(ctx: Ctx, x: number, y: number, turn: number, alpha: number) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(turn) * 0.7); ctx.scale(1.35, 1.35);
+  ctx.globalAlpha = alpha; ctx.lineCap = 'round';
+  for (const [w, color] of [[5, 'rgba(20,16,50,0.7)'], [2.4, '#b8c8ff']] as const) {
+    ctx.strokeStyle = color; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 0); ctx.lineTo(-5.5, -7); ctx.moveTo(0, 0); ctx.lineTo(5.5, -7); ctx.stroke();
+  }
+  ctx.fillStyle = '#e8eeff'; oval(ctx, -5.5, -7, 1.6, 1.6); ctx.fill(); oval(ctx, 5.5, -7, 1.6, 1.6); ctx.fill();
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+
 function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch' | 'calm', seen: boolean, time: number) {
   const c = project(x, y), hover = seen ? Math.sin(time * 2.4 + x) * 2 : 0;
   ctx.globalAlpha = seen ? 1 : 0.35;
@@ -804,6 +822,7 @@ function automap(ctx: Ctx, s: State, v: View) {
   for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
+  for (const a of s.antibodies) if (s.visible[idx(s, Math.floor(a.x), Math.floor(a.y))]) dot(a.x, a.y, u * 0.35, '#b8c8ff');
   dot(p.x, p.y, u * 0.8, '#ffffff');
 }
 

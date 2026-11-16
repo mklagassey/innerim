@@ -140,7 +140,7 @@ function openWorld(title: string, text: string) {
   const c = trip.carry, here = T.NODES[trip.at], ways = T.ways(trip);
   $('world-title').textContent = title;
   $('world-text').textContent = `${text} ${here.what}`;
-  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Life ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)}` : '');
+  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Life ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)}` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
@@ -195,8 +195,9 @@ function go(to: T.NodeId) {
 
 /** Arrives somewhere and shows the map again. */
 function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
-  const fromLiver = trip.at === 'liver';
+  const fromLiver = trip.at === 'liver', knew = trip.carry?.memory ?? 0;
   const home = T.arrive(trip, to, carry, alert);
+  if (carry && knows(carry.memory) !== knows(knew)) how += ' The host is learning what you taste like: expect more antibodies from here on.';
   if (trip.carry && trip.carry.hostHealth <= 0) {
     $('world').hidden = true;
     $('over-title').textContent = 'The host is dead';
@@ -247,6 +248,8 @@ function closeTip() {
   canvas.focus();
 }
 const roman = (n: number) => 'I'.repeat(n);
+/** How well the host's immune system knows you, in words. */
+const knows = (m: number) => (m < 0.04 ? 'The host does not know you' : m < 0.3 ? 'A few antibodies about' : m < 0.65 ? 'Antibodies in the blood' : 'The host knows you well');
 const clock = (hour: number) => `${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 6) * 10).padStart(2, '0')}`;
 function set(id: string, prop: 'text' | 'height' | 'width' | 'hidden' | 'tier', value: string) {
   if (last[id + prop] === value) return;
@@ -272,7 +275,7 @@ function hud() {
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
-  set('alert-val', 'text', losing ? `${tier.name} \u00b7 losing them` : tier.name);
+  set('alert-val', 'text', s.tagged > 0 ? `${tier.name} \u00b7 tagged ${Math.ceil(s.tagged)}s` : losing ? `${tier.name} \u00b7 losing them` : tier.name);
   $('alert').classList.toggle('losing', losing);
   set('alert', 'tier', String(CONFIG.alert.tiers.findIndex((t) => t.name === tier.name)));
 

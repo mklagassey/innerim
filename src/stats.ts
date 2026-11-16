@@ -3,9 +3,9 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'ship-2'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'ship-3'; // bump when rules change so reports can be compared fairly
 
-const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn'];
+const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn', 'tag'];
 
 interface Tally {
   events: Record<string, number>;
@@ -76,7 +76,7 @@ export function report(s: G.State, extra: Record<string, unknown> = {}) {
     immuneKills: s.kills,
     hostFrights: t.events.surge ?? 0, hostHourAtEnd: Math.round(s.host.hour * 10) / 10,
     timesSnared: t.events.net ?? 0, hullLostToAcid: t.events.burn ?? 0,
-    timesSniffed: t.events.sniff ?? 0,
+    timesSniffed: t.events.sniff ?? 0, timesTagged: t.events.tag ?? 0, immuneMemoryBefore: round(s.memory * 100), immuneMemoryAfter: round(G.memoryAfter(s) * 100),
     timesSpotted: t.events.spot ?? 0, timesHurt: t.events.hurt ?? 0,
     swings: t.events.swing ?? 0, shots: t.events.shot ?? 0, hitsLanded: t.events.hit ?? 0,
     cloaks: t.events.cloak ?? 0, patchesUsed: t.events.heal ?? 0, patchesLeft: s.patches, calmsUsed: t.events.calm ?? 0,

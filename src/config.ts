@@ -88,6 +88,16 @@ export const CONFIG = {
     parietal: { gain: 8, hostDamage: 6 }, // acid-making cells: the richest in mitochondria in the body
     mucinPerLevel: 0.3,
   },
+  // Adaptive immunity: every alarm you raise teaches the host a little more about you, and it does not forget.
+  memory: {
+    perAlert: 0.3, // learned from one map whose alert peaked at 100
+    perKill: 0.015,
+    most: 18, // antibodies adrift in a map when the host knows you completely
+    tagTime: 9, // seconds one stays stuck to you
+    tagScent: 1.7, // how much further your scent carries while tagged
+    tagAlert: 4,
+    reach: 0.55, drift: 0.7, pull: 3, homing: 0.9,
+  },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {

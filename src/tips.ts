@@ -42,6 +42,8 @@ export const TIPS: Tip[] = [
     body: 'The stomach coats itself in alkaline slime so that it does not digest its own wall. In it the acid cannot touch you, but you move at about half speed.' },
   { id: 'parietal', kind: 'Host cell', title: 'Parietal cell',
     body: `The amber cells make the acid, which takes so much power that they are the most mitochondria-rich cells in the body. Press F beside one to strip it: ${CONFIG.stomach.parietal.gain} energy for ${CONFIG.stomach.parietal.hostDamage} host health. The other cells of the stomach wall are not worth the trouble.` },
+  { id: 'antibody', kind: 'Danger', title: 'Antibody',
+    body: `The host has met you before and remembers. These pale Y shapes were made to fit your hull exactly. They drift with the blood and lean toward you when you pass close. If one sticks, your scent carries much further for ${CONFIG.memory.tagTime} seconds and the cloak will not work. Steer round them, or clear them with a strike or a shot. The more alarm you raise on a trip, the more of them there will be on the next map.` },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
     body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
 ];
@@ -92,6 +94,7 @@ export function nextTip(s: State, extra: Record<string, Point | null> = {}): { t
     patch: nearest(s.pickups.filter((i) => i.kind === 'patch')),
     trail: s.trail.length >= 7 ? s.trail[s.trail.length - 5] : null,
     calm: nearest(s.pickups.filter((i) => i.kind === 'calm')),
+    antibody: nearest(s.antibodies),
     vein: nearest([mid(s.vein)]),
     ...extra,
   };
