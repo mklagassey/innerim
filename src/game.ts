@@ -28,7 +28,7 @@ export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
-export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' }
+export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' }
 /** An antibody adrift in the blood: made to fit you, and it sticks. */
 export interface Antibody extends Point { seed: number }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
@@ -39,6 +39,8 @@ export interface State {
   host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean }; // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
+  riding: number; // seconds left inside a hijacked neutrophil
+  suppressed: number; // seconds the immune system stays sluggish with cortisol
   slam: number; // seconds until the current can throw you against a wall again
   sizzle: number; // hull lost to acid since the last time it was shown
   tumor: Set<number>; // tiles of tumor cells still standing
@@ -136,6 +138,8 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
+    riding: 0,
+    suppressed: 0,
     slam: 0,
     sizzle: 0,
     tumor: new Set((m.tumor ?? []).map((p) => p.y * N + p.x)),
@@ -230,7 +234,8 @@ const float = (s: State, at: Point, text: string, color: string) => s.floats.pus
 const bonus = (s: State, id: UpgradeId) => s.upgrades[id] * UPGRADES[id].per;
 export const maxHp = (s: State) => CONFIG.player.maxHp + bonus(s, 'glycocalyx');
 export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol');
-export const speed = (s: State) => CONFIG.player.speed * (1 + bonus(s, 'atp')) * (s.snare > 0 ? CONFIG.vessel.net.slow : 1) * (acidAt(s, s.player) === 1 ? CONFIG.stomach.mucusSpeed : 1);
+export const riding = (s: State) => s.riding > 0 && s.cloak > 0;
+export const speed = (s: State) => CONFIG.player.speed * (riding(s) ? CONFIG.board.speed : 1) * (1 + bonus(s, 'atp')) * (s.snare > 0 ? CONFIG.vessel.net.slow : 1) * (acidAt(s, s.player) === 1 ? CONFIG.stomach.mucusSpeed : 1);
 export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
 export const cloaked = (s: State) => s.cloak > 0;
 
@@ -358,6 +363,33 @@ export function usePatch(s: State): boolean {
   const before = s.player.hp;
   s.player.hp = Math.min(maxHp(s), before + CONFIG.items.patchHeal);
   float(s, s.player, `+${Math.round(s.player.hp - before)}`, '#7be08a');
+  return true;
+}
+/** A wounded neutrophil close enough to climb into. */
+export function boardTarget(s: State): Enemy | null {
+  if (riding(s)) return null;
+  let best: Enemy | null = null, bestD: number = CONFIG.board.reach;
+  for (const e of s.enemies) {
+    const d = dist(e, s.player);
+    if (e.kind === 'neutrophil' && e.hp <= CONFIG.enemies.neutrophil.hp * CONFIG.board.below && d < bestD) { best = e; bestD = d; }
+  }
+  return best;
+}
+/** Climb inside it. Pathogens really do this: to everything else in the blood you are now one of their own. */
+export function board(s: State): boolean {
+  const e = s.status === 'playing' ? boardTarget(s) : null;
+  if (!e) return false;
+  s.player.x = e.x; s.player.y = e.y; s.player.path = []; s.player.attackId = null;
+  s.enemies = s.enemies.filter((o) => o !== e);
+  s.riding = s.cloak = CONFIG.board.time;
+  s.tagged = 0; // the antibodies are on the hull, and the hull is inside now
+  emit(s, 'board');
+  say(s, 'You are inside the neutrophil. Nothing out there can tell.');
+  for (const o of s.enemies) {
+    if (o.kind === 'tcell' && dist(o, s.player) < CONFIG.memory.tcellSight) continue;
+    if (o.mood === 'chase' || o.windup >= 0) { o.mood = 'patrol'; o.goal = null; o.path = []; o.windup = -1; o.idle = CONFIG.cloak.confusion + s.rng(); float(s, o, '?', '#78f0e1'); }
+  }
+  s.scentClock = 0;
   return true;
 }
 /** Show the 'do not eat me' signal: nothing can see you until it fades or you attack. */
@@ -728,7 +760,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   const p = s.player, pc = CONFIG.player;
   p.swingCd -= dt; p.shotCd -= dt; p.swing -= dt; p.hurt -= dt;
   s.snare = Math.max(0, s.snare - dt);
+  const rode = riding(s);
   s.cloak = Math.max(0, s.cloak - dt); s.cloakCd = Math.max(0, s.cloakCd - dt);
+  s.riding = Math.max(0, s.riding - dt); s.suppressed = Math.max(0, s.suppressed - dt);
+  if (rode && !riding(s)) { s.riding = 0; emit(s, 'kill'); say(s, 'The neutrophil comes apart around you.'); }
   if (s.upgrades.clotting && p.hp < maxHp(s)) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
 
   const before = { x: p.x, y: p.y };
@@ -800,6 +835,11 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (now === 'stressed') {
       say(s, s.vessel === 'artery' ? 'Something has frightened the host. The artery clenches and the blood tears through it.' : 'Something has frightened the host. Their heart is pounding.');
       emit(s, 'surge');
+      // Adrenaline first, cortisol after: droplets of it turn up in the blood around you.
+      for (let n = CONFIG.cortisol.drops, tries = 0; n > 0 && tries < 600; tries++) {
+        const x = Math.floor(p.x + (s.rng() - 0.5) * 28), y = Math.floor(p.y + (s.rng() - 0.5) * 28), d = dist(p, { x, y });
+        if (open(s, x, y) && d > 5 && d < 14 && s.acid?.[idx(s, x, y)] !== 2) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'cortisol' }); n--; }
+      }
       if (s.place === 'vessel') arrive(s, 1); // adrenaline shakes neutrophils loose into the blood
     } else if (was === 'stressed') say(s, 'The fright passes. The blood slows.');
     else if (now === 'asleep') { say(s, 'The host has fallen asleep. The blood slows, and the immune system goes to work.'); emit(s, 'sleep'); }
@@ -839,6 +879,11 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       s.patches++;
       float(s, p, 'Fibrin patch', '#7be08a');
       emit(s, 'pickup');
+    } else if (item.kind === 'cortisol') {
+      s.suppressed = CONFIG.cortisol.time;
+      float(s, p, 'Cortisol', '#ffd9a0');
+      say(s, 'Cortisol. For a little while the immune system has orders to stand down.');
+      emit(s, 'calm');
     } else if (item.kind === 'calm') {
       if (s.alert <= 0) continue; // nothing to soothe: leave it for later
       raiseAlert(s, -CONFIG.items.calmDrop);
@@ -935,7 +980,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const base = CONFIG.enemies[e.kind], p = s.player;
   // In open vessels they ride the same current you do, and they are better at it.
-  const hot = 1 + CONFIG.host.fever.speed * fever(s);
+  const hot = (1 + CONFIG.host.fever.speed * fever(s)) * (s.suppressed > 0 ? CONFIG.cortisol.slow : 1);
   const c = s.place === 'vessel' ? { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost * hot, cooldown: base.cooldown * CONFIG.vessel.cooldown } : { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * hot };
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   if (acidAt(s, e) === 2) { // acid is no kinder to them
@@ -946,7 +991,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
   // A killer T cell reads your antigens directly, so up close the cloak does not fool it.
   const through = cloaked(s) && e.kind === 'tcell' && d <= CONFIG.memory.tcellSight && sees(s, tileOf(e), tileOf(p));
-  const whiff = through ? 1 : cloaked(s) ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)]);
+  const whiff = through ? 1 : cloaked(s) ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)] * (s.suppressed > 0 ? CONFIG.cortisol.nose : 1));
   const found = through || (!cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
   const print = cloaked(s) ? null : freshPrint(s, e);
   // Once it is after you, any trace of scent keeps it on you.

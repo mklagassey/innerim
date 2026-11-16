@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, acidLevel, cloaked, hostState, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, acidLevel, cloaked, hostState, riding, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -497,7 +497,17 @@ export function draw(ctx: Ctx, s: State, v: View) {
   for (const item of s.pickups) {
     if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
     const seen = seenAt(item);
-    things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => pickup(ctx, item.x, item.y, item.kind, seen, v.time) });
+    const kind = item.kind;
+    if (kind === 'cortisol') things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => {
+      // A warm amber droplet with a slow halo.
+      const c = project(item.x, item.y), y = c.y - 12 + Math.sin(v.time * 2 + item.x) * 2, pulse = 0.5 + 0.5 * Math.sin(v.time * 1.6 + item.y);
+      ctx.globalAlpha = seen ? 1 : 0.35;
+      ctx.fillStyle = `rgba(255,200,120,${0.12 + 0.1 * pulse})`; oval(ctx, c.x, y, 13 + pulse * 3, 13 + pulse * 3); ctx.fill();
+      const g = ctx.createRadialGradient(c.x - 2, y - 2, 0.5, c.x, y, 7); g.addColorStop(0, '#fff3d8'); g.addColorStop(1, '#e09a3c');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(c.x, y - 9); ctx.quadraticCurveTo(c.x + 8, y + 1, c.x, y + 6); ctx.quadraticCurveTo(c.x - 8, y + 1, c.x, y - 9); ctx.fill();
+      ctx.globalAlpha = 1;
+    } });
+    else things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => pickup(ctx, item.x, item.y, kind, seen, v.time) });
   }
   things.push({ depth: depthOf(p.x, p.y), draw: () => hero(ctx, s, v) });
   if (s.snare > 0) things.push({ depth: depthOf(p.x, p.y) + 0.01, draw: () => {
@@ -768,8 +778,17 @@ function hero(ctx: Ctx, s: State, v: View) {
   const p = s.player, c = project(p.x, p.y);
   const f = project(p.face.x, p.face.y), fl = Math.hypot(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
   const moving = heroMoving, bob = Math.sin(v.time * 2.2) * 1.6, lift = 15 + bob, a = Math.atan2(fy, fx);
-  if (cloaked(s)) ctx.globalAlpha = 0.35;
-  ctx.fillStyle = 'rgba(0,0,0,0.42)'; oval(ctx, c.x, c.y, 13 - bob * 0.5, 5.5 - bob * 0.2); ctx.fill();
+  if (riding(s)) {
+    // Wearing a neutrophil: its pale body all round the ship, lobed nucleus pushed to one side.
+    const r = 21 + Math.sin(v.time * 3) * 1, cy = c.y - lift;
+    ctx.fillStyle = 'rgba(0,0,0,0.42)'; oval(ctx, c.x, c.y, 18, 7.5); ctx.fill();
+    const body = ctx.createRadialGradient(c.x - 6, cy - 8, 2, c.x, cy, r * 1.1);
+    body.addColorStop(0, 'rgba(251,238,244,0.8)'); body.addColorStop(0.65, 'rgba(217,191,220,0.62)'); body.addColorStop(1, 'rgba(141,111,168,0.7)');
+    ctx.fillStyle = body; blob(ctx, c.x, cy, r, v.time * 1.6, 7, 4, 0.08); ctx.fill();
+    for (const [dx, dy] of [[-11, -7], [-14, 0], [-10, 7]]) { ctx.fillStyle = 'rgba(62,34,92,0.8)'; oval(ctx, c.x + dx, cy + dy, 4, 3.6); ctx.fill(); }
+    ctx.globalAlpha = 0.75;
+  } else if (cloaked(s)) ctx.globalAlpha = 0.35;
+  if (!riding(s)) { ctx.fillStyle = 'rgba(0,0,0,0.42)'; oval(ctx, c.x, c.y, 13 - bob * 0.5, 5.5 - bob * 0.2); ctx.fill(); }
   if (p.swing > 0) {
     const t = 1 - p.swing / 0.18;
     ctx.globalCompositeOperation = 'lighter';
@@ -847,7 +866,7 @@ function automap(ctx: Ctx, s: State, v: View) {
   }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
-  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
+  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cortisol' ? '#ffc878' : item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   for (const a of s.antibodies) if (s.visible[idx(s, Math.floor(a.x), Math.floor(a.y))]) dot(a.x, a.y, u * 0.35, '#b8c8ff');

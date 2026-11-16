@@ -705,3 +705,47 @@ test('the lungs open only when the tumor is out, and breathing pushes both ways'
   run(s, period / 2 - 0.2);
   assert.ok(s.player.x > x1 + 1, `a breath out carries an idle ship toward the exit: ${x0} ${x1} ${s.player.x}`);
 });
+
+test('boarding: a wounded neutrophil can be worn, and the rest lose you', () => {
+  const s = quiet(4); s.host.nextSurge = 999;
+  const a = foe(s, 1, 0), b = foe(s, -2, 0);
+  assert.equal(G.boardTarget(s), null, 'a healthy one will not have you');
+  assert.equal(G.board(s), false);
+  a.hp = 3; b.mood = 'chase';
+  assert.equal(G.boardTarget(s), a);
+  assert.ok(G.board(s));
+  assert.equal(s.enemies.length, 1);
+  assert.ok(G.riding(s) && G.cloaked(s));
+  assert.equal(b.mood, 'patrol', 'its friend loses you');
+  assert.ok(G.speed(s) < CONFIG.player.speed);
+  assert.equal(s.kills, 0, 'and nobody counts it as a kill');
+  run(s, 1);
+  assert.equal(s.trail.length, 0, 'no wake from inside');
+  G.strike(s);
+  assert.equal(G.riding(s), false, 'striking tears it open');
+  const t = quiet(4); t.host.nextSurge = 999; foe(t, 1, 0).hp = 2;
+  G.board(t); t.enemies = [];
+  run(t, CONFIG.board.time + 0.5);
+  assert.equal(G.riding(t), false, 'it does not last');
+});
+
+test('cortisol: a fright leaves droplets, and one makes the immune system sluggish', () => {
+  const s = quiet(4); s.host.nextSurge = 0.1;
+  run(s, 0.5);
+  const drops = s.pickups.filter((i) => i.kind === 'cortisol');
+  assert.equal(drops.length, CONFIG.cortisol.drops);
+  s.pickups = [{ x: s.player.x, y: s.player.y, kind: 'cortisol' }];
+  run(s, 0.1);
+  assert.ok(s.suppressed > CONFIG.cortisol.time - 1);
+  const calm = quiet(4); calm.host.nextSurge = 999; calm.host.surge = 0;
+  s.host.surge = 0; s.pickups = [];
+  const far = (g: G.State) => { const e = foe(g, 2, 0); e.mood = 'chase'; e.cooldown = 99; g.player.x -= 0; return e; };
+  const slow = far(s), quick = far(calm);
+  // Both run from the same spot toward a player who steps away.
+  for (const g of [s, calm]) { g.player.x += 0; }
+  s.player.hp = calm.player.hp = 999;
+  const sx = slow.x, qx = quick.x;
+  for (let i = 0; i < 30; i++) { G.update(s, 1 / 60, { x: -1, y: 0 }); G.update(calm, 1 / 60, { x: -1, y: 0 }); }
+  assert.ok(Math.abs(slow.x - sx) + Math.abs(slow.y - (s.player.y)) >= 0);
+  assert.ok(G.dist(slow, { x: sx, y: slow.y }) < G.dist(quick, { x: qx, y: quick.y }) + 1e-9, 'the dosed one covers less ground');
+});

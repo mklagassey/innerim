@@ -111,6 +111,10 @@ export const CONFIG = {
   tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
   // The gut flora trade for sugar. Prices are in energy.
   lung: { macrophages: 2 },
+  // Boarding: climb inside a wounded neutrophil and wear it.
+  board: { reach: 1.5, below: 0.5, time: 12, speed: 0.8 },
+  // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
+  cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long
   market: { repair: { cost: 3, hull: 15 }, patch: { cost: 4 }, upgrade: { cost: 8, stock: 3 }, butyrate: { cost: 5, forget: 0.2 } },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue

@@ -1,7 +1,7 @@
 // The first time you meet something, the game stops and tells you what it is.
 // "Don't show again" is remembered in the browser between runs.
 import { CONFIG } from './config';
-import { Point, State, dist, idx, stripTarget } from './game';
+import { Point, State, boardTarget, dist, idx, stripTarget } from './game';
 
 export interface Tip { id: string; title: string; kind: string; body: string }
 
@@ -52,6 +52,10 @@ export const TIPS: Tip[] = [
     body: 'A dust cell: the lung\'s own macrophage, which spends its life eating whatever is breathed in. It is the same kind of slow, heavy hitter as a Kupffer cell in the liver, and it leaves an upgrade behind if you kill it.' },
   { id: 'tcell', kind: 'Immune cell', title: 'Killer T cell',
     body: 'The host knows you well enough now to send an assassin made for you. It is faster than your ship, it hits very hard, and within a few tiles the CD47 cloak does not fool it, because it reads what you are and not what you are wearing. It does wind up slowly before each blow, and it cannot follow you into acid. Kill it, or do not be found. Butyrate from the gut flora makes the host forget.' },
+  { id: 'board', kind: 'Trick', title: 'Board it',
+    body: `This neutrophil is hurt badly enough that you can force your way inside. Press B. For ${CONFIG.board.time} seconds you wear it: no scent, no wake, and antibodies slide off. Everything in the blood takes you for one of its own, except a killer T cell up close. You move a little slower, and striking or firing tears it open. Real pathogens do exactly this.` },
+  { id: 'cortisol', kind: 'Pickup', title: 'Cortisol',
+    body: `After adrenaline comes cortisol, the slower stress hormone, and its job is to tell the immune system to stand down so the body can deal with the emergency. Fly through an amber droplet and for ${CONFIG.cortisol.time} seconds every immune cell is slow and dull-nosed. A frightened host is a dangerous road and a quiet liver.` },
   { id: 'antibody', kind: 'Danger', title: 'Antibody',
     body: `The host has met you before and remembers. These pale Y shapes were made to fit your hull exactly. They drift with the blood and lean toward you when you pass close. If one sticks, your scent carries much further for ${CONFIG.memory.tagTime} seconds and the cloak will not work. Steer round them, or clear them with a strike or a shot. The more alarm you raise on a trip, the more of them there will be on the next map.` },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
@@ -109,6 +113,8 @@ export function nextTip(s: State, extra: Record<string, Point | null> = {}): { t
     patch: nearest(s.pickups.filter((i) => i.kind === 'patch')),
     trail: s.trail.length >= 7 ? s.trail[s.trail.length - 5] : null,
     calm: nearest(s.pickups.filter((i) => i.kind === 'calm')),
+    cortisol: nearest(s.pickups.filter((i) => i.kind === 'cortisol')),
+    board: boardTarget(s),
     antibody: nearest(s.antibodies),
     tumor: nearest([...s.tumor].map((k) => ({ x: (k % s.size) + 0.5, y: Math.floor(k / s.size) + 0.5 }))),
     vein: nearest([mid(s.vein)]),

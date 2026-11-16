@@ -106,6 +106,7 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'q' && view.hover) G.shoot(s, view.hover.x, view.hover.y);
   else if (k === 'h' || k === '1') G.usePatch(s);
   else if (k === 'c') G.cloak(s);
+  else if (k === 'b') G.board(s);
 });
 window.addEventListener('keyup', (ev) => keys.delete(ev.key.toLowerCase()));
 window.addEventListener('blur', () => { keys.clear(); release(); });
@@ -120,6 +121,7 @@ $('sound').addEventListener('click', () => { Sound.setOn(!Sound.isOn()); showSou
 showSound();
 $('act-h').addEventListener('click', () => G.usePatch(s));
 $('act-q').addEventListener('click', () => G.shootNearest(s));
+$('act-b').addEventListener('click', () => G.board(s));
 $('act-c').addEventListener('click', () => G.cloak(s));
 $('offer-list').addEventListener('click', (ev) => {
   const id = (ev.target as HTMLElement).closest('button')?.dataset.id as UpgradeId | undefined;
@@ -391,7 +393,7 @@ function hud() {
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
-  set('alert-val', 'text', s.tagged > 0 ? `${tier.name} \u00b7 tagged ${Math.ceil(s.tagged)}s` : losing ? `${tier.name} \u00b7 losing them` : tier.name);
+  set('alert-val', 'text', s.suppressed > 0 ? `${tier.name} \u00b7 cortisol ${Math.ceil(s.suppressed)}s` : s.tagged > 0 ? `${tier.name} \u00b7 tagged ${Math.ceil(s.tagged)}s` : losing ? `${tier.name} \u00b7 losing them` : tier.name);
   $('alert').classList.toggle('losing', losing);
   set('alert', 'tier', String(CONFIG.alert.tiers.findIndex((t) => t.name === tier.name)));
 
@@ -405,9 +407,10 @@ function hud() {
   set('need', 'hidden', playing && G.atVein(s) && !leaving ? '0' : '1');
   set('act-h', 'hidden', playing && s.patches > 0 ? '0' : '1');
   set('act-q', 'hidden', playing && G.canShootNearest(s) ? '0' : '1');
+  set('act-b', 'hidden', playing && G.boardTarget(s) ? '0' : '1');
   set('act-h', 'text', `Fibrin patch \u00d7${s.patches}`);
-  set('act-c', 'hidden', playing && s.upgrades.cd47 > 0 ? '0' : '1');
-  set('act-c', 'text', G.cloaked(s) ? `Unseen ${s.cloak.toFixed(0)}s` : s.cloakCd > 0 ? `Cloak ${Math.ceil(s.cloakCd)}s` : s.player.energy < CONFIG.cloak.energy ? 'Cloak needs 2 energy' : 'Cloak ready');
+  set('act-c', 'hidden', playing && (s.upgrades.cd47 > 0 || G.riding(s)) ? '0' : '1');
+  set('act-c', 'text', G.riding(s) ? `Inside ${s.cloak.toFixed(0)}s` : G.cloaked(s) ? `Unseen ${s.cloak.toFixed(0)}s` : s.cloakCd > 0 ? `Cloak ${Math.ceil(s.cloakCd)}s` : s.player.energy < CONFIG.cloak.energy ? 'Cloak needs 2 energy' : 'Cloak ready');
   const owned = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => s.upgrades[id] > 0);
   set('build', 'text', owned.map((id) => `${UPGRADES[id].name} ${roman(s.upgrades[id])}`).join('\n'));
   const tracks = owned.reduce<Record<string, number>>((a, id) => ({ ...a, [UPGRADES[id].track]: (a[UPGRADES[id].track] ?? 0) + s.upgrades[id] }), {});
