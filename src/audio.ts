@@ -82,6 +82,7 @@ const SOUNDS: Record<string, () => void> = {
   slam: () => { tone(90, 40, 0.25, 0.8, 'sine'); hiss(900, 120, 0.25, 1.3, 'lowpass'); },
   inhale: () => hiss(300, 1500, 1.6, 0.5, 'bandpass', 0, 1.2),
   exhale: () => hiss(1500, 250, 1.8, 0.55, 'bandpass', 0, 1.2),
+  aware: () => { tone(330, 330, 1.6, 0.07, 'sine'); tone(495, 495, 1.8, 0.06, 'sine', 0.35); tone(660, 664, 2.2, 0.05, 'sine', 0.8); }, // three soft notes, one after another: something new is running
   bait: () => { tone(520, 300, 0.25, 0.12, 'triangle'); hiss(900, 400, 0.3, 0.25, 'bandpass', 0.05, 2); }, // a small wet plop
   board: () => { hiss(500, 2600, 0.5, 0.9, 'bandpass', 0, 3); tone(140, 90, 0.45, 0.4, 'sine'); tone(330, 440, 0.4, 0.12, 'triangle', 0.3); }, // a wet squeeze, then quiet
   swing: () => hiss(900, 3200, 0.13, 0.7, 'bandpass', 0, 1.5),

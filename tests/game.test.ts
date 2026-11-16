@@ -796,3 +796,48 @@ test('stowaways: a gut bacterium goes overboard when you are found, and the inna
   assert.equal(t.flora, 1, 'a T cell is after you, not bacteria');
   assert.equal(k.mood, 'chase');
 });
+
+test('story: the unit wakes by noticing things, once per map, and its voice changes', async () => {
+  const Story = await import('../src/story');
+  const s = quiet(4); s.host.nextSurge = 999;
+  assert.equal(G.stage(s), 0);
+  assert.equal(s.thoughts[0].who, 'shepherd');
+  assert.equal(s.thoughts[1].text, Story.LINES.liver[0]);
+  const a = s.aware;
+  G.notice(s, 'strip'); G.notice(s, 'strip');
+  assert.equal(s.aware, a + Story.GAIN.strip, 'the second time is nothing new');
+  assert.equal(s.thoughts[2].text, Story.LINES.strip[0]);
+  assert.ok(s.thoughts[2].t >= s.thoughts[1].t + CONFIG.story.gap, 'one thought at a time');
+  s.aware = Story.STAGES[2].from - 1; const sight = G.vision(s);
+  G.notice(s, 'kill');
+  assert.equal(G.stage(s), 2);
+  assert.equal(G.vision(s), sight + CONFIG.story.sight);
+  assert.ok(s.thoughts.some((t) => t.text === Story.WAKING[2]) && s.thoughts.some((t) => t.who === 'shepherd' && /self-test/.test(t.text)));
+  assert.equal(G.carryOf(s).aware, s.aware);
+  const next = G.createGame(5, { ...G.carryOf(s), aware: 90 }, 'vessel');
+  assert.ok(next.thoughts.every((t) => t.who === 'unit'), 'Shepherd cannot hear a unit that far gone');
+  for (const [k, v] of Object.entries(Story.LINES)) assert.equal(v.length, 5, k);
+  assert.match(Story.ending('stay', 90, 2, 90).title, /colony/);
+  assert.equal(Story.ending('breath', 0, 0, 90).title, 'Decommissioned');
+});
+
+test('story: a dark sibling can be salvaged, woken or left, and waking needs a mind', () => {
+  const s = quiet(4); s.host.nextSurge = 999;
+  const put = () => { const it: G.Pickup = { x: s.player.x, y: s.player.y, kind: 'sibling' }; s.pickups = [it]; run(s, 0.1); return it; };
+  put();
+  assert.ok(s.ask, 'the world waits for an answer');
+  const t = s.time; run(s, 1); assert.equal(s.time, t);
+  assert.equal(G.answer(s, 'wake'), false, 'a dormant unit cannot think of it');
+  assert.ok(G.answer(s, 'leave'));
+  run(s, 0.5);
+  assert.equal(s.ask, null, 'it does not ask again while you sit on it');
+  s.aware = 40; s.player.energy = 5; s.pickups = [];
+  put();
+  assert.ok(G.answer(s, 'wake'));
+  assert.equal(s.kin, 1); assert.equal(s.player.energy, 5 - CONFIG.story.sibling.wake); assert.equal(s.pickups.length, 0);
+  put(); const e = s.player.energy;
+  assert.ok(G.answer(s, 'salvage'));
+  assert.equal(s.player.energy, e + CONFIG.story.sibling.energy);
+  const next = G.createGame(6, G.carryOf(s), 'vessel');
+  assert.equal(next.player.energy, s.player.energy + 1, 'kin leave sugar at the door');
+});

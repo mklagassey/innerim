@@ -518,6 +518,20 @@ export function draw(ctx: Ctx, s: State, v: View) {
       ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(c.x, y - 9); ctx.quadraticCurveTo(c.x + 8, y + 1, c.x, y + 6); ctx.quadraticCurveTo(c.x - 8, y + 1, c.x, y - 9); ctx.fill();
       ctx.globalAlpha = 1;
     } });
+    else if (kind === 'sibling') things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => {
+      // A unit exactly like you, dark and slowly tumbling. Now and then its lamp tries to come on.
+      const c = project(item.x, item.y), y = c.y - 13 + Math.sin(v.time * 0.9 + item.x) * 2, blink = Math.max(0, Math.sin(v.time * 0.7 + item.y * 3)) ** 6;
+      ctx.globalAlpha = seen ? 1 : 0.4;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, 12, 5); ctx.fill();
+      ctx.save(); ctx.translate(c.x, y); ctx.rotate(0.5 + Math.sin(v.time * 0.35 + item.x) * 0.5); ctx.scale(1.25, 1.25);
+      ctx.fillStyle = '#3b4a4d'; oval(ctx, -7, -3.4, 4, 1.8); ctx.fill(); oval(ctx, -7, 3.4, 4, 1.8); ctx.fill();
+      ctx.fillStyle = '#5d6f70'; oval(ctx, 0, 0, 10, 4.6); ctx.fill();
+      ctx.fillStyle = '#8a7a3a'; ctx.fillRect(-8.5, -4, 2, 8);
+      ctx.fillStyle = `rgba(150,225,255,${0.1 + blink * 0.8})`; oval(ctx, 5, 0, 3, 2.2); ctx.fill();
+      ctx.restore();
+      if (blink > 0.05) { ctx.fillStyle = `rgba(150,225,255,${blink * 0.12})`; oval(ctx, c.x, y, 22, 14); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    } });
     else things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => pickup(ctx, item.x, item.y, kind, seen, v.time) });
   }
   things.push({ depth: depthOf(p.x, p.y), draw: () => hero(ctx, s, v) });
@@ -877,7 +891,7 @@ function automap(ctx: Ctx, s: State, v: View) {
   }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
-  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'cortisol' ? '#ffc878' : item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
+  for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'sibling' ? '#96e1ff' : item.kind === 'cortisol' ? '#ffc878' : item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   for (const a of s.antibodies) if (s.visible[idx(s, Math.floor(a.x), Math.floor(a.y))]) dot(a.x, a.y, u * 0.35, '#b8c8ff');

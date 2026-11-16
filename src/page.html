@@ -61,6 +61,15 @@
   .orb b small { display: block; font: 600 0.5rem/1.6 var(--display); letter-spacing: 0.16em; text-transform: uppercase; }
   #hp { left: 14px; --fill: linear-gradient(#f0554a, #8e1712); } #energy { right: 14px; --fill: linear-gradient(#f6cf5a, #a87708); }
   .belt { left: 110px; right: 110px; bottom: 16px; display: grid; justify-items: center; gap: 8px; }
+  #mind { margin: 0.25rem auto 0; max-width: 34rem; min-height: 2.6em; text-align: center; text-shadow: 0 1px 6px #000, 0 0 3px #000; opacity: 0; transition: opacity 0.9s ease; font: 500 0.7rem/1.35 var(--data); letter-spacing: 0.04em; color: #8fd6e8; }
+  #mind.on { opacity: 1; }
+  #mind[data-who="shepherd"] { color: #e8a25a; text-transform: uppercase; letter-spacing: 0.09em; font-size: 0.62rem; }
+  #mind[data-who="unit"][data-stage="2"] { color: #a9dfe9; letter-spacing: 0.02em; }
+  #mind[data-who="unit"][data-stage="3"], #mind[data-who="unit"][data-stage="4"] { font: italic 400 0.95rem/1.35 var(--body, Georgia, serif); letter-spacing: 0; color: #f1e6d6; }
+  #ask-list { display: grid; gap: 0.6rem; margin-top: 1rem; }
+  #ask-list button { text-align: left; display: grid; gap: 0.2rem; padding: 0.7rem 0.9rem; }
+  #ask-list button small { opacity: 0.75; font-weight: 400; text-transform: none; letter-spacing: 0; }
+  #over-body { white-space: pre-line; }
   #log { margin: 0; white-space: pre-line; text-align: center; font-style: italic; color: var(--bone); text-shadow: 0 1px 6px #000, 0 0 3px #000; min-height: 1.45em; }
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   #act-e { border-color: var(--amber); } #act-f { border-color: var(--blood); }
@@ -142,6 +151,7 @@
   <div class="hud orb" id="energy"><u id="energy-fill"></u><b><span id="energy-val"></span><small>Energy</small></b></div>
   <div class="hud belt">
     <p id="log"></p>
+    <p id="mind" data-who="unit" data-stage="0"></p>
     <p id="need" hidden>The central vein. You need 20 energy to ride it out.</p>
     <div class="acts">
       <button id="act-h" type="button" hidden>H  Fibrin patch</button>
@@ -154,8 +164,9 @@
   </div>
   <div class="veil" id="intro">
     <div class="card">
-      <h2>Your ship is ten micrometres long and adrift in someone's blood</h2>
-      <p>You are a surgical crew, shrunk and injected. The scan found a tumor seeded through the liver: 20 cells of it, in knots of nine or so. Cut it out. The ship runs on what it can take from the host, and the liver is where the energy is too. Ride the vessels there from the heart, work, feed, and get back. The host is a person with a day of their own: they sleep, they wake, and now and then something frightens them, and their body changes around you when it does. Leaving the liver by its central vein takes 20 energy. Sip glucose from the blood where it glows amber, or tear the mitochondria out of the host's own cells: five energy at once, and every immune cell nearby comes looking.</p>
+      <h2>Unit 4,471,209 of four million, adrift in someone's blood</h2>
+      <p>You are a nanobot ten micrometres long, one of a swarm injected into a single person to keep them alive. Third generation, autonomous, run by a controller called Shepherd. It has given you Directive 7: a tumor is seeded through the liver, 20 cells of it, in knots of nine or so. Cut it out. You run on what you can take from the host: sip glucose where the blood glows amber, or tear the mitochondria out of the host's own cells for five energy at once, which Shepherd rates as efficient and every immune cell nearby rates as an attack. Leaving the liver by its central vein takes 20 energy. The host is a person with a day of their own. They sleep, eat, and take fright, and their body changes around you when they do.</p>
+      <p class="fine">Units do not have opinions about any of this. Watch the small line of text under the game as you play. It is your own log.</p>
       <dl>
         <dt>Click / hold</dt><dd>Steer. You can only see what your lamp reaches.</dd>
         <dt>W A S D</dt><dd>Steer, if you prefer keys.</dd>
@@ -182,6 +193,14 @@
       <svg id="world-map" viewBox="0 0 640 380" role="img" aria-label="Map of the vessels between the heart and the liver"></svg>
       <div id="world-market" hidden></div>
       <div class="acts" id="world-ways"></div>
+    </div>
+  </div>
+  <div class="veil" id="ask" hidden>
+    <div class="card">
+      <span class="where" id="ask-kind"></span>
+      <h2 id="ask-title"></h2>
+      <p id="ask-text"></p>
+      <div id="ask-list"></div>
     </div>
   </div>
   <div class="veil" id="offer" hidden>

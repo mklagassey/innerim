@@ -1,6 +1,7 @@
 // The rules of the liver prototype, simulated in real time. No drawing and no browser
 // APIs in here, so the whole game can be run and tested from plain code.
 import { CONFIG, UPGRADES, UpgradeId } from './config';
+import * as Story from './story';
 import { generate, generateStomach, generateVessel, mulberry32, Point } from './map';
 
 export type { Point };
@@ -28,7 +29,9 @@ export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
-export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' }
+export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling'; snooze?: boolean }
+export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number }
+export interface Ask { kind: 'sibling'; item: Pickup }
 /** An antibody adrift in the blood: made to fit you, and it sticks. */
 export interface Antibody extends Point { seed: number }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
@@ -48,6 +51,11 @@ export interface State {
   memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
+  aware: number; // 0..100: how far this unit has woken up
+  kin: number; // other units you have woken
+  thoughts: Thought[]; // what the unit and its controller say, in the order they should be shown
+  noticed: Set<string>; // what has already been remarked on here
+  ask: Ask | null; // a decision waiting to be made; the world holds still meanwhile
   flora: number; // gut bacteria riding along, to be thrown to the immune system as bait
   decoys: (Point & { t: number })[]; // the ones already overboard
   tagged: number; // seconds an antibody stays stuck to you
@@ -100,8 +108,8 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin });
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -156,6 +164,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
+    aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
     decoys: [],
     tagged: 0,
@@ -214,6 +223,17 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
       const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 16) { spawn(s, 'tcell', { x, y }); n--; }
     }
+  // Other units of the swarm that have gone dark, adrift where the blood left them.
+  const lost = mulberry32(seed ^ 0x51b1), odds = place === 'liver' ? CONFIG.story.sibling.liver : place === 'vessel' ? CONFIG.story.sibling.vessel : 0;
+  if (lost() < odds)
+    for (let tries = 0; tries < 4000; tries++) {
+      const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4));
+      if (open(s, x, y) && dist(s.player, { x, y }) > 12 && !s.tumor.has(idx(s, x, y))) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'sibling' }); break; }
+    }
+  // The controller speaks first, for as long as it can still hear you, and then you do.
+  if (stage(s) < 4 && Story.ORDERS[place]) s.thoughts.push({ text: Story.ORDERS[place], who: 'shepherd', t: 1.5 });
+  notice(s, 'enter', place);
+  if (s.kin > 0 && place !== 'lung') { s.player.energy += s.kin; notice(s, 'kin'); }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
@@ -233,6 +253,49 @@ function spawn(s: State, kind: EnemyKind, tile: Point): Enemy {
 /** Notes that something audible happened. The rules never play sound themselves. */
 function emit(s: State, what: string) {
   if (s.events.length < 40) s.events.push(what);
+  const h = CONFIG.host, night = s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil;
+  const as = what === 'bigkill' ? 'kill' : what === 'surge' && night ? 'dream' : what;
+  if (as in Story.GAIN && as in Story.LINES) notice(s, as);
+}
+
+export const stage = (s: State) => Story.stageOf(s.aware);
+/** The unit remarks on something, once per map, and is a little more awake for having noticed it. */
+export function notice(s: State, what: string, line = what) {
+  if (s.noticed.has(what)) return;
+  s.noticed.add(what);
+  const before = stage(s);
+  const say1 = (text: string, who: Thought['who'] = 'unit') => { if (text) s.thoughts.push({ text, who, t: Math.max(s.time + 0.6, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + CONFIG.story.gap) }); };
+  if (s.thoughts.filter((t) => t.t > s.time).length < 3) say1(Story.LINES[line]?.[before] ?? '');
+  s.aware = Math.min(100, s.aware + (Story.GAIN[what] ?? 0));
+  const now = stage(s);
+  if (now > before) {
+    say1(Story.WAKING[now]);
+    say1(Story.SHEPHERD_NOTICES[now], 'shepherd');
+    if (Story.PERKS[now]) say(s, Story.PERKS[now]);
+    if (s.events.length < 40) s.events.push('aware');
+  }
+}
+
+/** Settle a decision that was waiting. */
+export function answer(s: State, id: 'salvage' | 'wake' | 'leave'): boolean {
+  const a = s.ask, c = CONFIG.story.sibling;
+  if (!a) return false;
+  if (id === 'wake' && (stage(s) < 2 || s.player.energy < c.wake)) return false;
+  s.ask = null;
+  if (id === 'leave') { a.item.snooze = true; return true; }
+  s.pickups.splice(s.pickups.indexOf(a.item), 1);
+  if (id === 'salvage') {
+    s.player.energy += c.energy; s.player.hp = Math.min(maxHp(s), s.player.hp + c.hull);
+    float(s, s.player, `+${c.energy} energy`, '#ffd35a');
+    say(s, 'You take the dark unit apart. Its cells and plating are a perfect fit.');
+    notice(s, 'salvage'); emit(s, 'pickup');
+  } else {
+    s.player.energy -= c.wake; s.kin++;
+    float(s, a.item, '...oh', '#bfe9ff');
+    say(s, 'You give it some of your charge. Its lamp comes on, and it turns to look at you.');
+    notice(s, 'woke'); emit(s, 'heal');
+  }
+  return true;
 }
 function say(s: State, text: string) {
   s.log.push({ text, t: s.time });
@@ -244,14 +307,14 @@ const float = (s: State, at: Point, text: string, color: string) => s.floats.pus
 
 const bonus = (s: State, id: UpgradeId) => s.upgrades[id] * UPGRADES[id].per;
 export const maxHp = (s: State) => CONFIG.player.maxHp + bonus(s, 'glycocalyx');
-export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol');
+export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol') + (stage(s) >= 2 ? CONFIG.story.sight : 0);
 export const riding = (s: State) => s.riding > 0 && s.cloak > 0;
 export const speed = (s: State) => CONFIG.player.speed * (riding(s) ? CONFIG.board.speed : 1) * (1 + bonus(s, 'atp')) * (s.snare > 0 ? CONFIG.vessel.net.slow : 1) * (acidAt(s, s.player) === 1 ? CONFIG.stomach.mucusSpeed : 1);
 export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
 export const cloaked = (s: State) => s.cloak > 0;
 
 /** 1 with no masking, down to 0.4 with a full CD47 coat. Scales the plume and the trail alike. */
-export const scentScale = (s: State) => (1 - CONFIG.scent.maskPerLevel * s.upgrades.cd47) * (s.tagged > 0 ? CONFIG.memory.tagScent : 1);
+export const scentScale = (s: State) => (1 - CONFIG.scent.maskPerLevel * s.upgrades.cd47) * (s.tagged > 0 ? CONFIG.memory.tagScent : 1) * (stage(s) >= 3 ? CONFIG.story.scent : 1);
 /** Seconds one of your footprints lasts. */
 export const trailLife = (s: State) => CONFIG.scent.trailLife * scentScale(s);
 
@@ -685,7 +748,7 @@ function finishChannel(s: State, ch: Channel) {
     s.hostHealth = Math.min(CONFIG.host.maxHealth, s.hostHealth + t.heal);
     float(s, p, `+${t.gain} energy`, '#e8b530');
     emit(s, 'excise');
-    say(s, s.excised >= t.goal ? `Tumor cell excised: ${s.excised} of ${t.goal}. That is all of it. Get the crew home.` : `Tumor cell excised: ${s.excised} of ${t.goal}.${s.tumor.size ? '' : ' This nodule is gone.'}`);
+    say(s, s.excised >= t.goal ? `Tumor cell excised: ${s.excised} of ${t.goal}. That is all of it. Directive 7 is complete.` : `Tumor cell excised: ${s.excised} of ${t.goal}.${s.tumor.size ? '' : ' This nodule is gone.'}`);
     raiseAlert(s, t.alert);
     return;
   }
@@ -779,7 +842,7 @@ function arrive(s: State, count: number) {
 
 /** Advance the game by dt seconds. `dir` is a walking direction held on the keyboard, if any. */
 export function update(s: State, dt: number, dir: Point | null = null) {
-  if (s.status !== 'playing' || s.offer) return;
+  if (s.status !== 'playing' || s.offer || s.ask) return;
   dt = Math.min(dt, 0.05);
   s.time += dt;
   const p = s.player, pc = CONFIG.player;
@@ -911,6 +974,11 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   }
 
   for (const item of [...s.pickups]) {
+    if (item.kind === 'sibling') {
+      if (dist(item, p) > 2.2) item.snooze = false;
+      else if (dist(item, p) <= 0.9 && !item.snooze) { notice(s, 'sibling'); s.ask = { kind: 'sibling', item }; stop(s); }
+      continue;
+    }
     if (dist(item, p) > 0.75) continue;
     if (item.kind === 'patch') {
       if (s.patches >= CONFIG.items.maxPatches) continue;

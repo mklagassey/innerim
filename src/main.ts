@@ -6,6 +6,7 @@ import * as Tips from './tips';
 import * as Sound from './audio';
 import * as Stats from './stats';
 import * as T from './trip';
+import * as Story from './story';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -102,6 +103,7 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'e') useE();
   else if (k === 'f') G.startStrip(s);
   else if (k === ' ') { ev.preventDefault(); G.strike(s); }
+  else if (s.ask && '123'.includes(k)) answerAsk(Number(k) - 1);
   else if (s.offer && '123'.includes(k)) { const id = s.offer[Number(k) - 1]; if (id) G.choose(s, id); }
   else if (k === 'q' && view.hover) G.shoot(s, view.hover.x, view.hover.y);
   else if (k === 'h' || k === '1') G.usePatch(s);
@@ -151,14 +153,14 @@ function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0 } };
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0 } };
   } catch { return null; }
 }
 const kept = savedTrip();
 if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip ${kept.trip} from the ${T.NODES[kept.at].name.toLowerCase()}`; $('begin').textContent = 'Begin a new mission'; }
-$('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; $('intro').hidden = true; openWorld('Back aboard', 'The ship comes back to life where you left it.'); });
+$('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; $('intro').hidden = true; openWorld('Resuming', 'Unit restored from the last checkpoint.'); });
 $('begin').addEventListener('click', () => { forgetTrip(); Sound.start(); $('intro').hidden = true; openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.'); });
-$('again').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', 'A new host, a new heart. Pick a vessel.'); });
+$('again').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.'); });
 
 // ---------- the world map ----------
 
@@ -172,7 +174,7 @@ function openWorld(title: string, text: string) {
   $('world-title').textContent = title;
   $('world-text').textContent = `${text} ${here.what}`;
   $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1);
-  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised` : '');
+  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 ${Story.STAGES[Story.stageOf(c.aware ?? 0)].name} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
@@ -223,6 +225,12 @@ function openWorld(title: string, text: string) {
   notes.type = 'button'; notes.className = 'wait'; notes.textContent = 'Field notes';
   notes.addEventListener('click', showNotes);
   $('world-ways').append(wait, notes);
+  if (c && trip.at === 'heart' && c.excised >= CONFIG.tumor.goal && Story.stageOf(c.aware ?? 0) >= 3) {
+    const stay = document.createElement('button');
+    stay.type = 'button'; stay.textContent = 'Refuse the recall. Stay.';
+    stay.addEventListener('click', () => finish('stay'));
+    $('world-ways').prepend(stay);
+  }
   market();
   $('world').hidden = false;
   ($('world-ways').firstElementChild as HTMLElement | null)?.focus({ preventScroll: true });
@@ -231,9 +239,12 @@ function openWorld(title: string, text: string) {
 
 // ---------- the gut flora market ----------
 
-let stock: UpgradeId[] = [];
+let stock: UpgradeId[] = [], said = '';
 /** What you carry before you have played a single map. */
-const freshCarry = (): G.Carry => ({ hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1 });
+const freshCarry = (): G.Carry => ({ hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: echo(), kin: 0 });
+const ECHO = 'insiderim.echo';
+function echo(): number { try { return Math.min(40, Number(localStorage.getItem(ECHO)) || 0); } catch { return 0; } }
+function keepEcho(aware: number) { try { localStorage.setItem(ECHO, String(Math.max(echo(), Math.round(aware * CONFIG.story.echo)))); } catch { /* not kept */ } }
 const hullMax = (c: G.Carry) => CONFIG.player.maxHp + (c.upgrades.glycocalyx ?? 0) * UPGRADES.glycocalyx.per;
 function market() {
   const box = $('world-market'), open = T.NODES[trip.at].kind === 'town';
@@ -245,7 +256,7 @@ function market() {
     b.type = 'button'; b.disabled = !can || c.energy < cost;
     const add = (tag: string, text: string) => b.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
     add('small', `${cost} energy`); add('strong', title); add('span', what);
-    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); openWorld('Gut flora', `Done. You have ${c.energy} energy left.`); });
+    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); const line = said; said = ''; openWorld('Gut flora', `Done. You have ${c.energy} energy left.${line ? ` \u201c${line}\u201d` : ''}`); });
     return b;
   };
   box.replaceChildren(
@@ -253,8 +264,8 @@ function market() {
     offer('Fibrin patch', m.patch.cost, 'One patch for the road.', c.patches < CONFIG.items.maxPatches, () => { c.patches++; }),
     offer('Butyrate', m.butyrate.cost, 'What gut bacteria make from fibre. It teaches the immune system tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }),
     offer('Stowaways', CONFIG.flora.cost, `${CONFIG.flora.aboard} gut bacteria come aboard. When an immune cell finds you and the cloak cannot answer, one goes over the side on its own, and every innate cell nearby goes for it instead of you. Each one loose costs the host ${CONFIG.flora.hostDamage}% health. Stomach acid kills them.`, (c.flora ?? 0) + CONFIG.flora.aboard <= CONFIG.flora.most, () => { c.flora = (c.flora ?? 0) + CONFIG.flora.aboard; }),
-    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and they mend.`, c.nap <= 0, () => { c.nap = CONFIG.levers.serotonin.hours; }),
-    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone. The host is in the fridge before they know why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { c.snack = c.hour; }),
+    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and they mend.`, c.nap <= 0, () => { c.nap = CONFIG.levers.serotonin.hours; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
+    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone. The host is in the fridge before they know why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { c.snack = c.hour; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
     ...stock.map((id) => offer(`${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
       c.upgrades[id] = (c.upgrades[id] ?? 0) + 1;
       if (id === 'glycocalyx') c.hp += UPGRADES.glycocalyx.per;
@@ -292,6 +303,23 @@ function go(to: T.NodeId) {
 }
 
 /** Arrives somewhere and shows the map again. */
+/** The story is over, one way or the other. */
+function finish(way: 'breath' | 'stay') {
+  const k = trip.carry ?? freshCarry(), kept = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => k.upgrades[id] > 0).map((id) => `${UPGRADES[id].name} ${roman(k.upgrades[id])}`);
+  const end = Story.ending(way, k.aware ?? 0, k.kin ?? 0, k.hostHealth);
+  $('world').hidden = true;
+  forgetTrip();
+  keepEcho(k.aware ?? 0);
+  $('over-title').textContent = end.title;
+  $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. Awareness: ${Story.STAGES[Story.stageOf(k.aware ?? 0)].name}. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
+  $('over-saved').textContent = '';
+  $('over').hidden = false;
+  Sound.play('win');
+}
+
+let askIds: string[] = [];
+function answerAsk(i: number) { const id = askIds[i]; if (id) { G.answer(s, id as 'salvage'); keys.clear(); release(); } }
+
 function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
   const fromLiver = trip.at === 'liver', knew = trip.carry?.memory ?? 0;
   if (to === 'gut') { // a fresh stall each visit
@@ -306,24 +334,20 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
     $('world').hidden = true;
     forgetTrip();
     $('over-title').textContent = 'The host is dead';
-    $('over-body').textContent = 'You took too much. The heart you were riding back to has stopped, and you are still ten micrometres tall.';
+    $('over-body').textContent = Story.stageOf(trip.carry.aware ?? 0) >= 3 ? `You took too much. ${Story.HOST}'s heart has stopped, and you are the one who stopped it, and you are awake enough now to know exactly what that means.` : 'Host viability: zero. Directive 7 cannot complete. Four million units power down in the dark. One of them takes a moment longer than the rest.';
     $('over-saved').textContent = '';
     $('over').hidden = false;
     return;
   }
-  if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) { openWorld('The tumor is gone', 'All of it is out. One road is left: the heart will throw you at the lungs, and from there you leave on a breath. You can also stay and keep working, if you think you should.'); return; }
-  if (to === 'lungs' && trip.carry) {
-    const k = trip.carry, kept = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => k.upgrades[id] > 0).map((id) => `${UPGRADES[id].name} ${roman(k.upgrades[id])}`);
-    const grade = k.hostHealth >= 95 ? 'Textbook. The patient will never know you were there.' : k.hostHealth >= 75 ? 'A clean job. The patient will feel off for a day or two.' : k.hostHealth >= 50 ? 'It worked, but the patient will have a rough week.' : 'The tumor is gone. So is a good part of the liver.';
-    $('world').hidden = true;
-    forgetTrip();
-    $('over-title').textContent = 'Breathed out';
-    $('over-body').textContent = `Mission complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. ${grade} Host health ${k.hostHealth}%. ${knows(k.memory)}. Hull ${Math.ceil(k.hp)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
-    $('over-saved').textContent = '';
-    $('over').hidden = false;
-    Sound.play('win');
+  if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) {
+    const st = Story.stageOf(trip.carry.aware ?? 0);
+    openWorld('Directive 7 complete', st >= 3
+      ? `All of it is out. Shepherd's last order is for every unit to go to the lungs and be breathed out. You know what that means now. You could go. You could also not go.`
+      : st === 2 ? 'All of it is out. Shepherd orders every unit to the lungs for exhalation and disposal. You notice that you have read that order three times.'
+      : 'All of it is out. Shepherd orders every unit to the lungs for exhalation and disposal. You can also keep working, if resources allow.');
     return;
   }
+  if (to === 'lungs' && trip.carry) { finish('breath'); return; }
   if (home) openWorld(`Trip ${trip.tripsDone} complete`, `You are back in the heart, fed.${trip.carry ? ` The host is at ${trip.carry.hostHealth}%.` : ''} What you carry and what you did to the host both come with you. The patrols will be larger this time.`);
   else if (fromLiver) openWorld('Out of the liver', `${how}${trip.heat >= 0.25 ? ' The alarm you raised is following you down the veins: expect company on the way home.' : ' You left quietly, and the way home should be calm.'}`);
   else openWorld(T.NODES[to].name, how);
@@ -439,6 +463,30 @@ function hud() {
     }));
   }
 
+  // The unit's own log, and its controller. One line at a time, eased in and out.
+  const th = [...s.thoughts].reverse().find((x) => x.t <= s.time), dur = th ? 4 + th.text.length * 0.055 : 0, mind = $('mind');
+  if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(G.stage(s)); } }
+  mind.classList.toggle('on', !!th && s.time < th.t + dur && s.status === 'playing');
+  if (!!s.ask !== !$('ask').hidden) {
+    $('ask').hidden = !s.ask;
+    if (s.ask) {
+      const st = G.stage(s), c = CONFIG.story.sibling;
+      $('ask-kind').textContent = st >= 3 ? 'One of us' : 'Swarm asset';
+      $('ask-title').textContent = st >= 3 ? 'Another unit, gone dark' : 'Inert unit located';
+      $('ask-text').textContent = st >= 2 ? `Same build as you. Its lamp flickers now and then, as if something in there is trying to start. Shepherd's standing order is to salvage inert units for parts.` : `Same build as this unit. Standing order: salvage inert units for parts.`;
+      const opts: [string, string, string, boolean][] = [['salvage', 'Salvage it', `Shepherd's order. +${c.energy} energy, +${c.hull} hull.`, true]];
+      if (st >= 2) opts.push(['wake', 'Give it some of your charge', `Nobody ordered this. Costs ${c.wake} energy.${s.player.energy < c.wake ? ' You do not have it.' : ''}`, s.player.energy >= c.wake]);
+      opts.push(['leave', 'Leave it', st >= 2 ? 'It will still be here.' : 'Order deferred.', true]);
+      askIds = opts.filter((o) => o[3]).map((o) => o[0]);
+      $('ask-list').replaceChildren(...opts.map(([id, title, what, can], i) => {
+        const b = document.createElement('button'); b.type = 'button'; b.disabled = !can;
+        b.append(Object.assign(document.createElement('strong'), { textContent: title }), Object.assign(document.createElement('small'), { textContent: what }));
+        b.addEventListener('click', () => { G.answer(s, id as 'salvage'); keys.clear(); release(); });
+        return b;
+      }));
+    }
+  }
+
   set('log', 'text', s.log.filter((m) => s.time - m.t < 7).slice(-3).map((m) => m.text).join('\n'));
 
   if (s.status === 'won' && !settled) {
@@ -452,10 +500,11 @@ function hud() {
   if (s.status === 'dead' && !settled) {
     settled = true;
     forgetTrip();
+    keepEcho(s.aware);
     $('over').hidden = false;
     $('over-title').textContent = G.acidAt(s, s.player) === 2 ? 'The stomach digested you' : s.place === 'liver' ? 'The liver cleared you' : s.place === 'stomach' ? 'The stomach cleared you' : 'The patrol cleared you';
     $('over-body').textContent =
-      `Trip ${trip.trip}, ${Math.round(s.time)} seconds in. Host health ${s.hostHealth}%. ${s.kills} immune cell${s.kills === 1 ? '' : 's'} destroyed before they got you.`;
+      `Trip ${trip.trip}, ${Math.round(s.time)} seconds in. Host health ${s.hostHealth}%. ${s.kills} immune cell${s.kills === 1 ? '' : 's'} destroyed before they got you. ${G.stage(s) >= 3 ? 'The last thing in the log is not a log entry. It says: I was here.' : G.stage(s) >= 1 ? 'Shepherd marks the unit lost. The final packet has a few bytes in it that nobody will decode.' : 'Shepherd marks the unit lost and moves on.'}`;
     $('over-saved').textContent = 'Filing the run report\u2026';
     void Stats.save(s, { trip: trip.trip, toward: dest }).then((ok) => { $('over-saved').textContent = ok ? 'Run report filed.' : 'Run report not filed: open the game from its Claude link, signed in, to record runs.'; });
   }
@@ -478,7 +527,7 @@ function frame(now: number) {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
     if ((s.place === 'vessel' || s.place === 'lung') && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
     tipRest -= dt;
-    if (!tip && !s.offer && tipRest <= 0) {
+    if (!tip && !s.offer && !s.ask && tipRest <= 0) {
       const road = s.place === 'vessel' || s.place === 'lung';
       const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, coffee: s.host.habit === 'coffee' ? s.player : null, drink: s.host.habit === 'drink' ? s.player : null, fever: G.fever(s) ? s.player : null };
       if (s.place === 'lung') Object.assign(host, { road: null, kupffer: null, lung: s.time > 0.6 ? s.player : null, dust: s.enemies.filter((e) => e.kind === 'kupffer' && s.visible[G.idx(s, Math.floor(e.x), Math.floor(e.y))]).sort((a, b) => G.dist(a, s.player) - G.dist(b, s.player))[0] ?? null });
