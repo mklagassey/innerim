@@ -101,6 +101,8 @@
   #world-map .place:focus { outline: none; }
   #world-map .you { fill: var(--bone); }
   #world-ways { justify-content: flex-start; flex-flow: row wrap; }
+  #world-host { color: var(--bone-dim); font-size: 0.92em; margin-top: -4px; }
+  #world-ways button.wait { border-color: var(--seam); color: var(--bone-dim); }
   #world-market { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 10px 0; }
   #world-market[hidden] { display: none; }
   #world-market button { text-align: left; display: grid; align-content: start; gap: 3px; padding: 9px 12px; border-color: #7be08a; }
@@ -172,6 +174,7 @@
       <span class="where" id="world-status"></span>
       <h2 id="world-title">The bloodstream</h2>
       <p id="world-text"></p>
+      <p id="world-host"></p>
       <svg id="world-map" viewBox="0 0 640 380" role="img" aria-label="Map of the vessels between the heart and the liver"></svg>
       <div id="world-market" hidden></div>
       <div class="acts" id="world-ways"></div>

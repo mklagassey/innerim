@@ -106,6 +106,7 @@ export const CONFIG = {
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
   tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
   // The gut flora trade for sugar. Prices are in energy.
+  wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long
   market: { repair: { cost: 3, hull: 15 }, patch: { cost: 4 }, upgrade: { cost: 8, stock: 3 }, butyrate: { cost: 5, forget: 0.2 } },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },

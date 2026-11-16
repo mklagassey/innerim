@@ -161,6 +161,7 @@ function openWorld(title: string, text: string) {
   const c = trip.carry, here = T.NODES[trip.at], ways = T.ways(trip);
   $('world-title').textContent = title;
   $('world-text').textContent = `${text} ${here.what}`;
+  $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour);
   $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
@@ -195,6 +196,20 @@ function openWorld(title: string, text: string) {
     b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
     return b;
   }));
+  // Time is yours to spend: sit tight and let the host's day move on.
+  const wait = document.createElement('button');
+  wait.type = 'button'; wait.className = 'wait';
+  wait.textContent = `Wait an hour (${CONFIG.wait.energy} energy)`;
+  wait.disabled = (c?.energy ?? CONFIG.player.startEnergy) < CONFIG.wait.energy;
+  wait.addEventListener('click', () => {
+    const k = (trip.carry ??= freshCarry()), h = CONFIG.host;
+    const slept = k.hour >= h.asleepFrom || k.hour < h.asleepUntil;
+    k.energy -= CONFIG.wait.energy;
+    k.hour = (k.hour + 1) % 24;
+    if (slept) k.hostHealth = Math.min(h.maxHealth, k.hostHealth + Math.round(h.secondsPerHour / h.sleepHeals));
+    openWorld(here.name, slept ? 'You drift for an hour while the host sleeps and mends.' : 'You drift for an hour.');
+  });
+  $('world-ways').append(wait);
   market();
   $('world').hidden = false;
   ($('world-ways').firstElementChild as HTMLElement | null)?.focus({ preventScroll: true });
@@ -232,11 +247,20 @@ function market() {
   );
 }
 
+/** What the host is up to and what is coming, so a trip can be timed. */
+function forecast(hour: number): string {
+  const h = CONFIG.host, asleep = hour >= h.asleepFrom || hour < h.asleepUntil, fed = G.digesting(hour);
+  const next = [...h.meals].sort((a, b) => ((a - hour + 24) % 24) - ((b - hour + 24) % 24))[0];
+  const state = asleep ? `The host is asleep until ${clock(h.asleepUntil)}: slow blood, sharp noses, and they are mending.` : `The host is awake until ${clock(h.asleepFrom)}.`;
+  const gut = fed > 0.5 ? 'They have just eaten: sugar is plentiful and stomach acid is at its worst.' : fed > 0 ? 'They are still digesting: extra sugar, strong acid.' : 'Their stomach is empty: acid is weak, sugar is ordinary.';
+  return `${clock(hour)}. ${state} ${gut} Next meal ${clock(next)}.`;
+}
+
 /** Sets out for a place: straight there, or by way of whatever is in between. */
 function go(to: T.NodeId) {
   const out = T.depart(trip, to);
   if (!out) return;
-  if (out.kind === 'arrive') { land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. Nothing here wants you dead.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
+  if (out.kind === 'arrive') { if (trip.carry) trip.carry.hour = (trip.carry.hour + CONFIG.wait.legHours) % 24; land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. Nothing here wants you dead.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
   dest = to;
   const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
   s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'patrol' ? 'vessel' : out.kind, out.kind === 'patrol' ? out.size : 0, vessel);

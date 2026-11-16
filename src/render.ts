@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, acidLevel, cloaked, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, acidLevel, cloaked, hostState, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -264,7 +264,7 @@ function bloodCell(ctx: Ctx, b: Rbc, time: number) {
 // ---------- the scene ----------
 
 // How brightly each tile is currently drawn, eased toward what the rules say so nothing snaps on or off.
-let glowFor: Uint8Array | null = null;
+let glowFor: Uint8Array | null = null, night = 0;
 let lit = new Float32Array(0), known = new Float32Array(0), reek = new Float32Array(0), thin = new Float32Array(0);
 const FADE_IN = 0.45, FADE_OUT = 0.8, FADE_KNOWN = 0.5; // seconds
 
@@ -596,6 +596,9 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.restore();
   }
 
+  // Night: while the host sleeps everything cools toward blue. It comes on over a few seconds.
+  night += Math.max(-dt / 4, Math.min(dt / 4, (hostState(s) === 'asleep' ? 1 : 0) - night));
+  if (night > 0.01) { ctx.fillStyle = `rgba(14,26,96,${0.2 * night})`; ctx.fillRect(0, 0, v.w, v.h); }
   if (v.showMap && !v.mark) automap(ctx, s, v);
 }
 
