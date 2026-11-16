@@ -74,6 +74,8 @@ const SOUNDS: Record<string, () => void> = {
   surge: () => { tone(60, 44, 0.5, 0.9, 'sine'); tone(180, 520, 1.1, 0.12, 'sawtooth', 0.05); hiss(200, 1800, 1.2, 0.5, 'bandpass', 0, 2); }, // a jolt of adrenaline
   sleep: () => { [392, 330, 262].forEach((f, i) => tone(f, f * 0.99, 1.4, 0.1, 'sine', i * 0.35)); },
   wake: () => { [262, 330, 392].forEach((f, i) => tone(f, f, 0.9, 0.1, 'sine', i * 0.22)); },
+  burn: () => hiss(5200, 2200, 0.5, 0.45, 'bandpass', 0, 3), // the hull fizzing
+  meal: () => { [40, 52, 46].forEach((f, i) => tone(f, f * 1.5, 0.5, 0.5, 'sine', i * 0.3)); hiss(120, 500, 1.3, 0.6, 'lowpass', 0.1); }, // a long gurgle
   swing: () => hiss(900, 3200, 0.13, 0.7, 'bandpass', 0, 1.5),
   hit: () => { tone(190, 70, 0.11, 0.5, 'triangle'); hiss(1400, 300, 0.09, 0.9); },
   kill: () => { tone(240, 45, 0.3, 0.5, 'triangle'); hiss(2400, 120, 0.4, 1.4, 'lowpass'); }, // a cell bursting

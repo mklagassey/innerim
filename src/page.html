@@ -86,7 +86,7 @@
   .note label { display: flex; align-items: center; gap: 8px; color: var(--bone-dim); font-size: 0.92rem; cursor: pointer; }
   .note input { accent-color: var(--amber); width: 16px; height: 16px; margin: 0; }
   .card.wide { max-width: 44rem; width: 100%; }
-  #world-map { width: 100%; height: auto; max-height: 52vh; border: 1px solid var(--seam); border-radius: 4px; background: #0d0509; }
+  #world-map { width: 100%; height: auto; max-height: 44vh; border: 1px solid var(--seam); border-radius: 4px; background: #0d0509; }
   #world-map .leg { fill: none; stroke-width: 9; stroke-linecap: round; opacity: 0.38; }
   #world-map .leg.artery { stroke: var(--blood); } #world-map .leg.vein { stroke: var(--vein); }
   #world-map .leg.open { opacity: 0.95; }
@@ -100,7 +100,7 @@
   #world-map .place.go:hover circle, #world-map .place.go:focus-visible circle { fill: #3a2a0c; }
   #world-map .place:focus { outline: none; }
   #world-map .you { fill: var(--bone); }
-  #world-ways { justify-content: flex-start; }
+  #world-ways { justify-content: flex-start; flex-flow: row wrap; }
   .card button.quiet { border-color: var(--seam); color: var(--bone-dim); font-size: 0.78rem; padding: 8px 14px; }
   .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.84); padding: 16px; overflow-y: auto; }
   .card { max-width: 34rem; display: grid; gap: 14px; justify-items: start; }

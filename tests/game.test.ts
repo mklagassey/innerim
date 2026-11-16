@@ -389,7 +389,7 @@ test('leaving the liver costs the fare, and the change comes with you', () => {
 
 test('the circulation runs one way: out by an artery, home by the veins', () => {
   const t = T.newTrip(1);
-  assert.deepEqual(T.ways(t).map((l) => l.to).sort(), ['hepatic', 'mesenteric']);
+  assert.deepEqual(T.ways(t).map((l) => l.to).sort(), ['gastric', 'hepatic', 'mesenteric']);
   assert.equal(T.depart(t, 'liver'), null, 'no jumping straight to the liver');
   T.arrive(t, 'hepatic', null);
   assert.deepEqual(T.depart(t, 'liver'), { kind: 'arrive' }, 'the last step into the liver is never patrolled');
@@ -474,4 +474,84 @@ test('a frightened host floods the blood with sugar', () => {
   calm.host.nextSurge = 999; scared.host.surge = 999;
   run(calm, 3); run(scared, 3);
   assert.ok(scared.regen > calm.regen * 3 || scared.pickups.length > calm.pickups.length);
+});
+
+test('meals: the gut is busy for a few hours after each one, and sugar comes back faster', () => {
+  assert.equal(G.digesting(11), 0);
+  assert.ok(G.digesting(12.6) > 0.9);
+  assert.ok(G.digesting(14) > 0.4 && G.digesting(14) < 0.6);
+  assert.equal(G.digesting(16), 0);
+  const s = quiet(2); s.host.nextSurge = 999; s.host.hour = 12.49;
+  run(s, 1);
+  assert.ok(s.events.includes('meal') || s.host.eating, 'the meal is announced');
+  const fasting = quiet(2); fasting.host.nextSurge = 999; fasting.host.hour = 9.9; // well clear of breakfast
+  fasting.host.hour = 16;
+  run(fasting, 3); const a = fasting.regen;
+  const fed = quiet(2); fed.host.nextSurge = 999; fed.host.hour = 12.6;
+  run(fed, 3);
+  assert.ok(fed.regen > a * 2);
+});
+
+test('the stomach: acid eats the hull, mucus is safe and slow, and the way through exists', () => {
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const s = G.createGame(seed, undefined, 'stomach');
+    assert.ok(s.acid, 'there is acid');
+    assert.ok(G.findPath(s, G.tileOf(s.player), s.vein), `seed ${seed}: the vein can be reached`);
+    assert.ok(s.rich.size >= 8, 'parietal cells to strip');
+    assert.equal(G.acidAt(s, s.player), 0, 'you arrive on dry ground');
+    for (const e of s.enemies) assert.equal(G.acidAt(s, e), 0);
+  }
+  const s = G.createGame(3, undefined, 'stomach'); s.enemies = []; s.host.nextSurge = 999;
+  const N = s.size, tile = (kind: number) => { const i = s.acid!.indexOf(kind); return { x: (i % N) + 0.5, y: Math.floor(i / N) + 0.5 }; };
+  s.host.hour = 16; // empty stomach
+  Object.assign(s.player, tile(2), { path: [] });
+  run(s, 2);
+  const resting = 40 - s.player.hp;
+  assert.ok(resting > 1 && resting < 4, `resting acid costs a little: ${resting}`);
+  assert.equal(s.trail.length, 0, 'no wake in acid');
+  s.player.hp = 40; s.host.hour = 12.6; // just eaten
+  run(s, 2);
+  assert.ok(40 - s.player.hp > resting * 3, 'acid after a meal is far worse');
+  s.upgrades.mucin = 3; const before = s.player.hp;
+  run(s, 1);
+  assert.ok(before - s.player.hp < 1, 'a mucin coat shrugs most of it off');
+  const slow = G.createGame(3, undefined, 'stomach');
+  const fast = G.speed(slow);
+  Object.assign(slow.player, tile(1));
+  assert.ok(G.speed(slow) < fast * 0.6, 'mucus slows you');
+  const hp = slow.player.hp; slow.enemies = [];
+  run(slow, 1);
+  assert.equal(slow.player.hp, hp, 'and does not burn');
+});
+
+test('the stomach: only parietal cells are worth stripping, and immune cells dissolve in acid', () => {
+  const s = G.createGame(5, undefined, 'stomach'); s.enemies = []; s.host.nextSurge = 999;
+  const N = s.size, k = [...s.rich][0], cell = { x: k % N, y: Math.floor(k / N) };
+  const side = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: cell.x + dx, y: cell.y + dy })).find((p) => G.open(s, p.x, p.y))!;
+  Object.assign(s.player, { x: side.x + 0.5, y: side.y + 0.5, path: [] });
+  const energy = s.player.energy, host = s.hostHealth;
+  assert.ok(G.startStrip(s));
+  run(s, 1.2);
+  assert.equal(s.player.energy, energy + CONFIG.stomach.parietal.gain);
+  assert.equal(s.hostHealth, host - CONFIG.stomach.parietal.hostDamage);
+  assert.equal(G.leave(s), false, 'not at the vein yet');
+  Object.assign(s.player, { x: s.vein.x + 0.5, y: s.vein.y + 0.5 });
+  assert.ok(G.canLeave(s), 'no fare to leave the stomach');
+  const t = G.createGame(5, undefined, 'stomach'); t.host.nextSurge = 999; t.host.hour = 12.6;
+  const i = t.acid!.indexOf(2), e = t.enemies[0];
+  t.enemies = [e]; e.x = (i % N) + 0.5; e.y = Math.floor(i / N) + 0.5;
+  Object.assign(t.player, { x: 5, y: 5 });
+  run(t, 3);
+  assert.equal(t.enemies.length, 0, 'the acid got it');
+});
+
+test('the stomach is a detour on the way to the liver', () => {
+  const t = T.newTrip(1); t.rng = () => 0.99;
+  assert.deepEqual(T.depart(t, 'gastric'), { kind: 'arrive' });
+  T.arrive(t, 'gastric', null);
+  T.arrive(t, 'stomach', null);
+  assert.deepEqual(T.depart(t, 'portal'), { kind: 'stomach' });
+  T.arrive(t, 'portal', null);
+  assert.equal(t.fed, false, 'the stomach does not count as feeding');
+  assert.deepEqual(T.ways(t).map((l) => l.to), ['liver']);
 });

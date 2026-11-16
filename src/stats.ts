@@ -3,9 +3,9 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'ship-1'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'ship-2'; // bump when rules change so reports can be compared fairly
 
-const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
+const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn'];
 
 interface Tally {
   events: Record<string, number>;
@@ -39,6 +39,7 @@ export function track(s: G.State, dt: number, moved: number) {
       const near = s.enemies.filter((x) => G.dist(x, s.player) < 2.5).sort((a, b) => G.dist(a, s.player) - G.dist(b, s.player))[0];
       t.lastHurtBy = near ? near.kind : 'starvation';
     }
+    if (e === 'burn') t.lastHurtBy = 'acid';
   }
   if (s.offer) return; // the world is holding still for an upgrade choice
   const tier = CONFIG.alert.tiers.findIndex((x) => x.name === G.alertTier(s).name);
@@ -74,7 +75,7 @@ export function report(s: G.State, extra: Record<string, unknown> = {}) {
     cellsStripped: s.cellsKilled, skims: t.events.skim ?? 0,
     immuneKills: s.kills,
     hostFrights: t.events.surge ?? 0, hostHourAtEnd: Math.round(s.host.hour * 10) / 10,
-    timesSnared: t.events.net ?? 0,
+    timesSnared: t.events.net ?? 0, hullLostToAcid: t.events.burn ?? 0,
     timesSniffed: t.events.sniff ?? 0,
     timesSpotted: t.events.spot ?? 0, timesHurt: t.events.hurt ?? 0,
     swings: t.events.swing ?? 0, shots: t.events.shot ?? 0, hitsLanded: t.events.hit ?? 0,

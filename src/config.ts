@@ -24,13 +24,16 @@ export const CONFIG = {
   host: {
     maxHealth: 100,
     secondsPerHour: 30, // a whole day and night passes in twelve minutes of play
-    startHour: 15,
+    startHour: 11,
+    meals: [7.5, 12.5, 19], // breakfast, lunch, dinner
+    digestion: 3, // hours a meal keeps the gut busy
+    fedGlucose: 1.5, // extra sugar in the blood at the height of digestion, as a share
     asleepFrom: 23, asleepUntil: 7,
     surge: { first: [50, 80], every: [80, 140], time: 22 }, // a fright: seconds until the first, between them, and how long one lasts
     bpm: { asleep: 48, awake: 62, stressed: 120 },
     // How hard the blood pushes on you: by where you are, then scaled by what the host is doing.
-    current: { liver: 0.14, vein: 0.3, artery: 0.5 },
-    push: { asleep: { liver: 0.7, vein: 0.7, artery: 0.7 }, awake: { liver: 1, vein: 1, artery: 1 }, stressed: { liver: 1.6, vein: 1.3, artery: 2.4 } },
+    current: { liver: 0.14, stomach: 0, vein: 0.3, artery: 0.5 },
+    push: { asleep: { liver: 0.7, stomach: 1, vein: 0.7, artery: 0.7 }, awake: { liver: 1, stomach: 1, vein: 1, artery: 1 }, stressed: { liver: 1.6, stomach: 1, vein: 1.3, artery: 2.4 } },
     driftAbove: 0.85, // past this the current drags you along even when you are holding still
     glucose: { asleep: 0.6, awake: 1, stressed: 4 }, // how fast sugar comes back: fasting overnight, flooding out of the liver in a fright
     nose: { asleep: 1.25, awake: 1, stressed: 1 }, // the immune system does its best work while the host sleeps
@@ -75,6 +78,16 @@ export const CONFIG = {
     sniff: 1.6, // how close a cell must pass to a footprint to pick up the trail
     maskPerLevel: 0.2, // each CD47 level shortens plume and trail by this share
   },
+  // The stomach: a lake of acid with a rim of protective mucus, and glands full of rich cells around it.
+  stomach: {
+    burn: 6.5, // hull lost per second in acid at the height of digestion
+    resting: 0.2, // share of that when the stomach is empty
+    mucusSpeed: 0.55, // mucus is safe and slow
+    enemyBurn: 6, // immune cells dissolve in acid too
+    neutrophils: 4,
+    parietal: { gain: 8, hostDamage: 6 }, // acid-making cells: the richest in mitochondria in the body
+    mucinPerLevel: 0.3,
+  },
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {
@@ -103,6 +116,8 @@ export const UPGRADES = {
     real: 'Cells that die by apoptosis are cleared quietly, with no inflammation.' },
   retinol: { name: 'Retinol reserve', track: 'Scout', max: 3, per: 1.5, what: '+1.5 tiles of sight.',
     real: "Vitamin A, the pigment of vision. Most of the body's supply is stored in the liver." },
+  mucin: { name: 'Mucin coat', track: 'Tank', max: 3, per: 0.3, what: 'Acid burns your hull 30% less.',
+    real: 'The slime that stops the stomach digesting itself.' },
   atp: { name: 'ATP surge', track: 'Scout', max: 3, per: 0.09, what: 'Move 9% faster.',
     real: 'The energy currency every cell runs on.' },
 } as const satisfies Record<string, Upgrade>;

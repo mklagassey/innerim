@@ -159,9 +159,9 @@ function openWorld(title: string, text: string) {
     map.append(el('path', { class: `tip${open ? ' open' : ''}`, d: `M${x2 + ux * 12} ${y2 + uy * 12} L${x2 - uy * 8} ${y2 + ux * 8} L${x2 + uy * 8} ${y2 - ux * 8} Z` }));
   }
   for (const [id, n] of Object.entries(T.NODES) as [T.NodeId, T.Node][]) {
-    const way = ways.find((l) => l.to === id), isHere = id === trip.at, enter = isHere && id === 'liver';
+    const way = ways.find((l) => l.to === id), isHere = id === trip.at, enter = isHere && n.kind === 'organ';
     const g = el('g', { class: `place${isHere ? ' here' : ''}${way || enter ? ' go' : ''}` });
-    if (way || enter) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.dataset.to = enter ? 'hvein' : id; }
+    if (way || enter) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.dataset.to = enter ? ways[0].to : id; }
     g.append(el('circle', { cx: n.x, cy: n.y, r: n.kind === 'heart' || n.kind === 'organ' ? 26 : 20 }));
     g.append(el('text', { x: n.x, y: n.y + (n.kind === 'heart' || n.kind === 'organ' ? 44 : 38) }, n.name));
     if (isHere) g.append(el('circle', { class: 'you', cx: n.x, cy: n.y, r: 6 }));
@@ -170,7 +170,7 @@ function openWorld(title: string, text: string) {
   $('world-ways').replaceChildren(...ways.map((leg) => {
     const b = document.createElement('button'), word = T.riskWord(T.riskOf(trip, leg));
     b.type = 'button'; b.dataset.to = leg.to;
-    b.textContent = leg.from === 'liver' ? 'Enter the liver' : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
+    b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
     return b;
   }));
   $('world').hidden = false;
@@ -181,14 +181,14 @@ function openWorld(title: string, text: string) {
 function go(to: T.NodeId) {
   const out = T.depart(trip, to);
   if (!out) return;
-  if (out.kind === 'arrive') { land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : 'The vessel was quiet.'); return; }
+  if (out.kind === 'arrive') { land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
   dest = to;
   const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
-  s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'liver' ? 'liver' : 'vessel', out.kind === 'patrol' ? out.size : 0, vessel);
+  s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'patrol' ? 'vessel' : out.kind, out.kind === 'patrol' ? out.size : 0, vessel);
   settled = false;
   Stats.begin(); shownOffer = '';
   $('world').hidden = true;
-  $('where').textContent = out.kind === 'liver' ? 'Liver lobule \u00b7 cell tier' : `${T.NODES[to].name} \u00b7 cell tier`;
+  $('where').textContent = out.kind === 'liver' ? 'Liver lobule \u00b7 cell tier' : out.kind === 'stomach' ? 'Stomach lining \u00b7 cell tier' : `${T.NODES[to].name} \u00b7 cell tier`;
   started = true;
   canvas.focus();
 }
@@ -267,7 +267,7 @@ function hud() {
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
   const mood = G.hostState(s);
-  set('host-state', 'text', `${mood === 'stressed' ? 'frightened' : mood} \u00b7 ${clock(s.host.hour)}`);
+  set('host-state', 'text', `${mood === 'stressed' ? 'frightened' : mood}${G.digesting(s.host.hour) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
   set('host', 'tier', mood === 'stressed' ? '2' : '0');
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
@@ -279,7 +279,7 @@ function hud() {
   const playing = started && s.status === 'playing';
   const leaving = G.canLeave(s), sip = G.glucoseHere(s) > 0, harvesting = !!p.channel;
   set('act-e', 'hidden', playing && !harvesting && (leaving || sip) ? '0' : '1');
-  set('act-e', 'text', leaving ? 'E  Ride the central vein out' : 'E  Skim glucose');
+  set('act-e', 'text', leaving ? (s.place === 'stomach' ? 'E  Leave by the gastric vein' : 'E  Ride the central vein out') : 'E  Skim glucose');
   set('act-f', 'hidden', playing && !harvesting && G.stripTarget(s) ? '0' : '1');
   set('need', 'hidden', playing && G.atVein(s) && !leaving ? '0' : '1');
   set('act-h', 'hidden', playing && s.patches > 0 ? '0' : '1');
@@ -315,14 +315,14 @@ function hud() {
     // Out the far end: file the report and go back to the map, one place further on.
     settled = true;
     void Stats.save(s, { trip: trip.trip, toward: dest });
-    land(dest, G.carryOf(s), s.alert, s.place === 'liver'
-      ? `${Math.round(s.time)} seconds inside, ${s.cellsKilled} host cell${s.cellsKilled === 1 ? '' : 's'} killed.`
+    land(dest, G.carryOf(s), s.alert, s.place !== 'vessel'
+      ? `${s.place === 'stomach' ? 'Out of the stomach and into the portal vein. ' : ''}${Math.round(s.time)} seconds inside, ${s.cellsKilled} host cell${s.cellsKilled === 1 ? '' : 's'} killed.`
       : s.kills ? `You fought your way through: ${s.kills} down.` : 'You slipped past the patrol.');
   }
   if (s.status === 'dead' && !settled) {
     settled = true;
     $('over').hidden = false;
-    $('over-title').textContent = s.place === 'liver' ? 'The liver cleared you' : 'The patrol cleared you';
+    $('over-title').textContent = G.acidAt(s, s.player) === 2 ? 'The stomach digested you' : s.place === 'liver' ? 'The liver cleared you' : s.place === 'stomach' ? 'The stomach cleared you' : 'The patrol cleared you';
     $('over-body').textContent =
       `Trip ${trip.trip}, ${Math.round(s.time)} seconds in. Host health ${s.hostHealth}%. ${s.kills} immune cell${s.kills === 1 ? '' : 's'} destroyed before they got you.`;
     $('over-saved').textContent = 'Filing the run report\u2026';
@@ -348,7 +348,8 @@ function frame(now: number) {
     if (s.place === 'vessel' && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
     if (!tip && !s.offer) {
       const road = s.place === 'vessel';
-      const mood = G.hostState(s), host = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null };
+      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null };
+      if (s.place === 'stomach') Object.assign(host, { portal: null, vein: null, cell: null, stomach: s.time > 0.8 ? s.player : null, mucus: G.acidAt(s, s.player) === 1 ? s.player : null, parietal: Tips.nearestRich(s) });
       const next = Tips.nextTip(s, road ? { ...host, portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
       if (next) showTip(next.tip, next.at);
     }

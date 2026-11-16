@@ -34,6 +34,14 @@ export const TIPS: Tip[] = [
     body: 'Something out in the world has scared the host, and adrenaline is doing what it does. Their heart races, arteries clench and the blood in them runs hard enough to drag you along, veins much less so. The liver dumps sugar into the blood, so glucose comes back fast for a while. It passes in under half a minute.' },
   { id: 'sleep', kind: 'The host', title: 'The host is asleep',
     body: 'The host has a day of their own, and the clock next to Host health at the top keeps it. While they sleep the blood runs slow and easy, but sugar is scarce because they are fasting, and the immune system does its best work at night: everything smells you from further off.' },
+  { id: 'meal', kind: 'The host', title: 'The host has eaten',
+    body: 'For the next few hours of their day the gut is busy. Sugar from the meal pours into the portal vein and on to the liver, so glucose refills much faster. The stomach makes acid to match, so it is the worst time to be in there.' },
+  { id: 'stomach', kind: 'Place', title: 'The stomach',
+    body: 'The green lake is hydrochloric acid, and it eats your hull for as long as you are in it. It also dissolves your scent and your wake, and immune cells will not follow you in. The pale rim round the shore is mucus: safe, but slow going. Scraps of the last meal float in the acid if you want to skim them. The way out is a vein down one of the glands on the far side.' },
+  { id: 'mucus', kind: 'Place', title: 'Mucus',
+    body: 'The stomach coats itself in alkaline slime so that it does not digest its own wall. In it the acid cannot touch you, but you move at about half speed.' },
+  { id: 'parietal', kind: 'Host cell', title: 'Parietal cell',
+    body: `The amber cells make the acid, which takes so much power that they are the most mitochondria-rich cells in the body. Press F beside one to strip it: ${CONFIG.stomach.parietal.gain} energy for ${CONFIG.stomach.parietal.hostDamage} host health. The other cells of the stomach wall are not worth the trouble.` },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
     body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
 ];
@@ -56,6 +64,16 @@ export function unmuteAll() {
   try { localStorage.removeItem(KEY); } catch { /* nothing stored */ }
 }
 export const mutedCount = () => muted.size;
+/** The nearest parietal cell in view, for pointing at. */
+export function nearestRich(s: State): Point | null {
+  let best: Point | null = null, bestD = 99;
+  for (const k of s.rich) {
+    if (!s.visible[k]) continue;
+    const at = { x: (k % s.size) + 0.5, y: Math.floor(k / s.size) + 0.5 }, d = dist(at, s.player);
+    if (d < bestD) { bestD = d; best = at; }
+  }
+  return best;
+}
 
 /** What the player can see right now that they have not been told about yet, and where it is. */
 export function nextTip(s: State, extra: Record<string, Point | null> = {}): { tip: Tip; at: Point } | null {

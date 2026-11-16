@@ -4,14 +4,16 @@
 import { Carry } from './game';
 import { mulberry32 } from './map';
 
-export type NodeId = 'heart' | 'hepatic' | 'mesenteric' | 'portal' | 'liver' | 'hvein' | 'cava';
+export type NodeId = 'heart' | 'hepatic' | 'mesenteric' | 'gastric' | 'stomach' | 'portal' | 'liver' | 'hvein' | 'cava';
 
 export interface Node { name: string; x: number; y: number; kind: 'heart' | 'artery' | 'vein' | 'organ'; what: string }
 // Positions are on a 640 x 380 drawing.
 export const NODES: Record<NodeId, Node> = {
   heart: { name: 'Heart', x: 320, y: 58, kind: 'heart', what: 'Everything leaves from here and everything comes back.' },
-  hepatic: { name: 'Hepatic artery', x: 232, y: 168, kind: 'artery', what: 'The direct road to the liver. Fast blood, heavy patrols.' },
-  mesenteric: { name: 'Mesenteric artery', x: 86, y: 150, kind: 'artery', what: 'Feeds the gut. The long way round.' },
+  hepatic: { name: 'Hepatic artery', x: 300, y: 168, kind: 'artery', what: 'The direct road to the liver. Fast blood, heavy patrols.' },
+  mesenteric: { name: 'Mesenteric artery', x: 178, y: 192, kind: 'artery', what: 'Feeds the gut. The long way round.' },
+  gastric: { name: 'Gastric artery', x: 150, y: 76, kind: 'artery', what: 'Feeds the stomach.' },
+  stomach: { name: 'Stomach', x: 52, y: 176, kind: 'organ', what: 'A lake of acid, worst after the host has eaten. The cells that make the acid are the richest in the body.' },
   portal: { name: 'Portal vein', x: 130, y: 292, kind: 'vein', what: 'Carries everything the gut absorbed to the liver. Slow and quiet.' },
   liver: { name: 'Liver', x: 320, y: 290, kind: 'organ', what: 'Sugar in the blood and mitochondria in the cells. Feed here.' },
   hvein: { name: 'Hepatic vein', x: 482, y: 262, kind: 'vein', what: 'Where the central veins of the liver drain.' },
@@ -24,6 +26,9 @@ export const LEGS: Leg[] = [
   { from: 'heart', to: 'hepatic', risk: 0.8 },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
   { from: 'mesenteric', to: 'portal', risk: 0.25 },
+  { from: 'heart', to: 'gastric', risk: 0.45 },
+  { from: 'gastric', to: 'stomach', risk: 0 },
+  { from: 'stomach', to: 'portal', risk: 0 }, // travelled by playing the stomach and leaving by its vein
   { from: 'hepatic', to: 'liver', risk: 0 },
   { from: 'portal', to: 'liver', risk: 0 },
   { from: 'liver', to: 'hvein', risk: 0 }, // travelled by playing the liver and leaving by its central vein
@@ -53,13 +58,14 @@ export const ways = (t: Trip): Leg[] => LEGS.filter((l) => l.from === t.at);
 export type Outcome =
   | { kind: 'arrive' } // nothing on the road
   | { kind: 'patrol'; size: number } // a vessel map to get through first
-  | { kind: 'liver' }; // the liver itself has to be played
+  | { kind: 'liver' } // the liver itself has to be played
+  | { kind: 'stomach' };
 
 /** Sets out along a leg. The caller plays whatever comes back, then calls `arrive`. */
 export function depart(t: Trip, to: NodeId): Outcome | null {
   const leg = ways(t).find((l) => l.to === to);
   if (!leg) return null;
-  if (leg.from === 'liver') return { kind: 'liver' };
+  if (leg.from === 'liver' || leg.from === 'stomach') return { kind: leg.from };
   if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) };
   return { kind: 'arrive' };
 }

@@ -15,6 +15,8 @@ export interface Layout {
   caches: Point[];
   patches: Point[];
   calms: Point[];
+  acid?: Uint8Array; // stomach only: 1 = mucus, 2 = open acid
+  rich?: Point[]; // stomach only: parietal cells worth stripping
 }
 
 export function mulberry32(seed: number): () => number {
@@ -152,4 +154,68 @@ export function generateVessel(seed: number, patrol: number): Layout {
     if (open(p) && neutrophils.every((q) => q.x !== p.x || q.y !== p.y)) neutrophils.push(p);
   }
   return { size: N, wall, vein, portals: [start], start, glucose: nooks.slice(0, 2), kupffer: [], neutrophils, caches: [], patches: nooks.slice(2, 3), calms: [] };
+}
+
+/** A patch of stomach lining: a wide lake of acid, a rim of mucus round its shore, and narrow
+ *  gastric glands winding off into the wall. You come in down one gland and leave by another
+ *  on the far side, so the lake is always in the way. */
+export function generateStomach(seed: number): Layout {
+  const rng = mulberry32(seed);
+  const N = CONFIG.map.size, mid = Math.floor(N / 2);
+  const wall = new Uint8Array(N * N).fill(1), lake = new Uint8Array(N * N);
+  const at = (x: number, y: number) => y * N + x;
+  const p1 = rng() * 6.28, p2 = rng() * 6.28;
+  const shore = (a: number) => 1 + 0.16 * Math.sin(a * 3 + p1) + 0.1 * Math.sin(a * 5 + p2);
+  for (let y = 3; y < N - 3; y++)
+    for (let x = 3; x < N - 3; x++) {
+      const dx = (x - mid) / 15, dy = (y - mid) / 10, a = Math.atan2(dy, dx);
+      if (Math.hypot(dx, dy) <= shore(a)) { wall[at(x, y)] = 0; lake[at(x, y)] = 1; }
+    }
+  // Glands: narrow, winding, each ending in a small chamber.
+  const glands: Point[] = [], count = 10, turn = rng() * 6.28;
+  for (let k = 0; k < count; k++) {
+    const a = turn + (k / count) * Math.PI * 2 + (rng() - 0.5) * 0.25, len = 9 + Math.floor(rng() * 6);
+    let x = mid + Math.cos(a) * 15 * shore(a) * 0.9, y = mid + Math.sin(a) * 10 * shore(a) * 0.9, bend = a;
+    for (let i = 0; i < len + 6; i++) {
+      bend += (rng() - 0.5) * 0.5 + (a - bend) * 0.3;
+      x += Math.cos(bend); y += Math.sin(bend);
+      const tx = Math.max(4, Math.min(N - 5, Math.round(x))), ty = Math.max(4, Math.min(N - 5, Math.round(y)));
+      wall[at(tx, ty)] = 0; wall[at(tx + 1, ty)] = 0; // two wide, so nothing gets stuck on a diagonal
+    }
+    const g = { x: Math.max(5, Math.min(N - 6, Math.round(x))), y: Math.max(5, Math.min(N - 6, Math.round(y))) };
+    for (let yy = g.y - 2; yy <= g.y + 2; yy++) for (let xx = g.x - 2; xx <= g.x + 2; xx++) if (Math.hypot(xx - g.x, yy - g.y) <= 1.8) wall[at(xx, yy)] = 0;
+    glands.push(g);
+  }
+  // Acid fills the lake. Where it meets the wall, mucus keeps it off the cells (and off you).
+  const acid = new Uint8Array(N * N);
+  for (let y = 3; y < N - 3; y++)
+    for (let x = 3; x < N - 3; x++) {
+      if (!lake[at(x, y)]) continue;
+      let rim = false;
+      for (let yy = y - 1; yy <= y + 1; yy++) for (let xx = x - 1; xx <= x + 1; xx++) if (!lake[at(xx, yy)]) rim = true;
+      acid[at(x, y)] = rim ? 1 : 2;
+    }
+  // In by one gland, out by the one most nearly opposite.
+  const start = glands[0];
+  const vein = glands.slice(1).sort((a, b) => Math.hypot(b.x - start.x, b.y - start.y) - Math.hypot(a.x - start.x, a.y - start.y))[0];
+  const rest = glands.filter((g) => g !== start && g !== vein);
+  // Parietal cells line the glands.
+  const rich: Point[] = [];
+  for (const g of rest) {
+    const ring: Point[] = [];
+    for (let yy = g.y - 3; yy <= g.y + 3; yy++) for (let xx = g.x - 3; xx <= g.x + 3; xx++) {
+      if (!wall[at(xx, yy)] || xx < 3 || yy < 3 || xx > N - 4 || yy > N - 4) continue;
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !wall[at(xx + dx, yy + dy)])) ring.push({ x: xx, y: yy });
+    }
+    for (let i = 0; i < 2 && ring.length; i++) rich.push(ring.splice(Math.floor(rng() * ring.length), 1)[0]);
+  }
+  const open: Point[] = [];
+  for (let y = 3; y < N - 3; y++) for (let x = 3; x < N - 3; x++) if (acid[at(x, y)] === 2) open.push({ x, y });
+  const glucose: Point[] = [];
+  for (let tries = 0; glucose.length < 4 && tries < 500; tries++) {
+    const p = open[Math.floor(rng() * open.length)];
+    if (glucose.every((q) => Math.hypot(p.x - q.x, p.y - q.y) > 7)) glucose.push(p); // the host's last meal, afloat in the acid
+  }
+  const neutrophils = rest.slice(0, CONFIG.stomach.neutrophils);
+  return { size: N, wall, vein, portals: [start], start, glucose, kupffer: [], neutrophils, caches: rest.slice(4, 7), patches: rest.slice(7, 8), calms: [], acid, rich };
 }

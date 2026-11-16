@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, cloaked, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, acidLevel, cloaked, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -290,7 +290,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const things: { depth: number; draw: () => void }[] = [];
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
-  const road = s.place === 'vessel';
+  const road = s.place === 'vessel', gut = s.place === 'stomach';
   if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); thin = new Float32Array(s.size * s.size); }
   // Whatever matters on screen: a cell standing in front of one of these goes glassy so you can see it.
   const behind: Point[] = [p, ...s.enemies.filter(seenAt), ...s.pickups.filter(seenAt)].map((q) => project(q.x, q.y));
@@ -318,12 +318,14 @@ export function draw(ctx: Ctx, s: State, v: View) {
           for (const memory of [true, false]) {
             const a = memory ? (glow > 0.99 ? 0 : seen) : glow;
             if (a < 0.01) continue;
-            const img = sprite(`${road ? 'v' : 'c'}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
+            const rich = s.rich.has(i), look = road ? 'v' : rich ? 'p' : gut ? 'g' : 'c';
+            const img = sprite(`${look}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
               paintCell(cx, variant);
-              if (!road) return;
-              // Vessel wall: the same living cells, but soaked in arterial red rather than liver pink.
+              if (look === 'c') return;
+              // The same living cells in other tissues: soaked in arterial red in a vessel wall, pale and
+              // slimy in the stomach, and amber where a parietal cell is busy making acid.
               cx.globalCompositeOperation = 'source-atop';
-              cx.fillStyle = 'rgba(128,18,30,0.55)'; cx.fillRect(0, 0, CELL_W, CELL_H);
+              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'p' ? 'rgba(240,160,30,0.5)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
               cx.globalCompositeOperation = 'source-over';
             });
             ctx.globalAlpha = a * glass;
@@ -384,6 +386,26 @@ export function draw(ctx: Ctx, s: State, v: View) {
           ctx.globalAlpha = 1;
         }
       } });
+    }
+  }
+
+  // The stomach's lake: acid glows a sour green that brightens as the host digests; mucus lies pale along its shore.
+  if (s.acid) {
+    const strength = acidLevel(s);
+    for (const { c, i, x, y } of floors) {
+      const kind = s.acid[i];
+      if (!kind) continue;
+      const shown = Math.max(lit[i], 0.35) * known[i];
+      if (kind === 2) {
+        const swell = 0.5 + 0.5 * Math.sin(v.time * 1.3 + x * 0.9 + y * 0.6);
+        ctx.fillStyle = `rgba(${150 + 40 * strength},${205 + 30 * strength},60,${shown * (0.2 + 0.3 * strength + 0.06 * swell)})`;
+      } else ctx.fillStyle = `rgba(226,232,214,${shown * 0.3})`;
+      oval(ctx, c.x, c.y, TW * 0.56, TH * 0.56); ctx.fill();
+      if (kind === 2 && hash(x * 7 + Math.floor(v.time * 0.7 + hash(x, y) * 9), y * 3) > 0.9 - strength * 0.12) { // bubbles
+        const up = (v.time * 0.7 + hash(x, y) * 9) % 1;
+        ctx.fillStyle = `rgba(235,255,170,${shown * 0.5 * (1 - up)})`;
+        oval(ctx, c.x + (hash(y, x) - 0.5) * 30, c.y - up * 10, 2.2, 2.2); ctx.fill();
+      }
     }
   }
 
@@ -464,7 +486,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
     oval(ctx, c.x, c.y, TW * 0.3, TH * 0.3); ctx.stroke();
   }
 
-  for (const b of rbcs) if (b.x > 0 && seenAt(b)) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
+  for (const b of rbcs) if (b.x > 0 && seenAt(b) && !s.acid?.[idx(s, Math.floor(b.x), Math.floor(b.y))]) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
   for (const e of s.enemies) if (seenAt(e)) things.push({ depth: depthOf(e.x, e.y), draw: () => enemy(ctx, e, v) });
   for (const item of s.pickups) {
     if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
@@ -773,7 +795,8 @@ function automap(ctx: Ctx, s: State, v: View) {
       const i = idx(s, x, y);
       if (!s.explored[i] || s.tiles[i] === 'cell') continue;
       const c = at(x + 0.5, y + 0.5);
-      ctx.fillStyle = s.visible[i] ? 'rgba(255,226,190,0.5)' : 'rgba(255,226,190,0.26)';
+      const sour = s.acid?.[i] === 2;
+      ctx.fillStyle = sour ? (s.visible[i] ? 'rgba(190,235,70,0.5)' : 'rgba(190,235,70,0.26)') : s.visible[i] ? 'rgba(255,226,190,0.5)' : 'rgba(255,226,190,0.26)';
       ctx.beginPath(); ctx.moveTo(c.x, c.y - u * 0.5); ctx.lineTo(c.x + u, c.y); ctx.lineTo(c.x, c.y + u * 0.5); ctx.lineTo(c.x - u, c.y); ctx.closePath(); ctx.fill();
     }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
