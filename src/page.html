@@ -36,6 +36,8 @@
   .gauges { top: 12px; left: 50%; transform: translateX(-50%); width: min(340px, 44%); display: grid; gap: 7px; }
   .gauge { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: baseline; }
   .gauge span { font: 600 0.62rem/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--bone-dim); }
+  .gauge span em { font-style: normal; color: var(--bone); }
+  #host[data-tier="2"] span em { color: var(--blood); }
   .gauge b { font: 700 0.72rem/1 var(--data); color: var(--bone); }
   .gauge i { grid-column: 1 / -1; height: 6px; background: var(--clot); border: 1px solid var(--seam); border-radius: 3px; overflow: hidden; display: block; }
   .gauge i u { display: block; height: 100%; width: 0; background: var(--fill); transition: width 0.2s; }
@@ -109,7 +111,9 @@
   .card dd { margin: 0; color: var(--bone-dim); }
   .card button { font-size: 0.95rem; padding: 12px 22px; border-color: var(--amber); color: var(--amber); }
   @media (max-width: 560px) {
-    .gauges { top: 48px; left: 14px; transform: none; width: calc(100% - 28px); }
+    .gauges { top: 50px; left: 14px; transform: none; width: calc(100% - 28px); }
+    .name { display: none; }
+    .tools { left: 12px; gap: 6px; } .tools button { flex: 1; white-space: nowrap; padding: 6px 4px; font-size: 11px; }
     .orb { width: 64px; height: 64px; } .belt { left: 12px; right: 12px; bottom: 88px; }
     #style, #build { display: none; }
   }
@@ -119,7 +123,7 @@
   <canvas id="board" tabindex="0" aria-label="Isometric view of liver tissue around you"></canvas>
   <div class="hud name"><h1>Insiderim</h1><span class="where" id="where">Liver lobule &middot; cell tier</span><span class="where" id="style"></span><span id="build"></span></div>
   <div class="hud gauges">
-    <div class="gauge" id="host"><span>Host health</span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
+    <div class="gauge" id="host"><span>Host health &middot; <em id="host-state"></em></span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
   </div>
   <div class="hud tools"><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="turn-l" type="button" aria-label="Turn the view left (Z)" title="Turn the view left (Z)">&#10226; Z</button><button id="turn-r" type="button" aria-label="Turn the view right (X)" title="Turn the view right (X)">X &#10227;</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
@@ -137,17 +141,17 @@
   </div>
   <div class="veil" id="intro">
     <div class="card">
-      <h2>You are ten micrometres tall and adrift in someone's blood</h2>
-      <p>You need energy, and the liver is where it is. Ride the vessels there from the heart, feed, and get back. Leaving the liver by its central vein takes 20 energy. Sip glucose from the blood where it glows amber, or tear the mitochondria out of the host's own cells: five energy at once, and every immune cell nearby comes looking.</p>
+      <h2>Your ship is ten micrometres long and adrift in someone's blood</h2>
+      <p>The ship needs energy, and the liver is where it is. Ride the vessels there from the heart, feed, and get back. The host is a person with a day of their own: they sleep, they wake, and now and then something frightens them, and their body changes around you when it does. Leaving the liver by its central vein takes 20 energy. Sip glucose from the blood where it glows amber, or tear the mitochondria out of the host's own cells: five energy at once, and every immune cell nearby comes looking.</p>
       <dl>
-        <dt>Click / hold</dt><dd>Walk. You can only see what your lamp reaches.</dd>
-        <dt>W A S D</dt><dd>Walk, if you prefer keys.</dd>
+        <dt>Click / hold</dt><dd>Steer. You can only see what your lamp reaches.</dd>
+        <dt>W A S D</dt><dd>Steer, if you prefer keys.</dd>
         <dt>Click enemy</dt><dd>Close in and strike. <b>Space</b> swings at whatever is nearest.</dd>
         <dt>Right-click</dt><dd>Fire toward the cursor. Costs 1 energy. <b>Q</b> does the same.</dd>
         <dt>E</dt><dd>Skim glucose while standing on it. At the vein, leave.</dd>
         <dt>F</dt><dd>Strip the nearest living cell. It dies and leaves a gap you can walk through.</dd>
         <dt>Pickups</dt><dd>Fibrin patches heal you by themselves when life runs low. Glowing vesicles hold upgrades.</dd>
-        <dt>Scent</dt><dd>Nothing in here has eyes. They smell you: your scent drifts downstream, and your footprints linger.</dd>
+        <dt>Scent</dt><dd>Nothing in here has eyes. They smell you: your scent drifts downstream, and your wake lingers.</dd>
         <dt>Z / X</dt><dd>Turn the view a quarter turn, to look behind the cells.</dd>
         <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>
       </dl>

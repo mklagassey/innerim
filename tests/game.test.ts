@@ -430,3 +430,48 @@ test('on the road a neutrophil nets you from a distance, and the net slows you',
   run(liver, 0.5);
   assert.equal(liver.snare, 0, 'tissue neutrophils do not throw nets');
 });
+
+test('the host keeps a day: awake, asleep at night, and frightened now and then', () => {
+  const s = quiet(3);
+  assert.equal(G.hostState(s), 'awake');
+  s.host.nextSurge = 0.5;
+  run(s, 1);
+  assert.equal(G.hostState(s), 'stressed');
+  assert.ok(s.host.nextSurge > 60, 'the next fright is a good while off');
+  run(s, CONFIG.host.surge.time + 1);
+  assert.equal(G.hostState(s), 'awake', 'a fright passes');
+  s.host.hour = CONFIG.host.asleepFrom - 0.01; s.host.nextSurge = 999;
+  run(s, 1);
+  assert.equal(G.hostState(s), 'asleep');
+  s.host.nextSurge = 0;
+  run(s, 2);
+  assert.equal(G.hostState(s), 'asleep', 'nothing frightens a sleeping host');
+  const next = G.createGame(5, G.carryOf(s), 'vessel', 0, 'vein');
+  assert.ok(Math.abs(next.host.hour - s.host.hour) < 1e-9, 'the clock carries from map to map');
+});
+
+test('a fright makes an artery far rougher than a vein, and drags a drifting ship along', () => {
+  const artery = G.createGame(7, undefined, 'vessel', 0, 'artery'), vein = G.createGame(7, undefined, 'vessel', 0, 'vein');
+  const calmA = G.currentStrength(artery), calmV = G.currentStrength(vein);
+  assert.ok(calmA > calmV, 'arteries run faster than veins');
+  artery.host.surge = 20; vein.host.surge = 20;
+  assert.ok(G.currentStrength(artery) / calmA > G.currentStrength(vein) / calmV, 'and a fright hits them harder');
+  assert.ok(G.currentStrength(vein) <= CONFIG.host.driftAbove, 'a vein never sweeps you away');
+  const from = { x: artery.player.x, y: artery.player.y };
+  const c = G.currentAt(artery, artery.player);
+  assert.ok(Math.hypot(c.x, c.y) > 0.9, 'there is a current where you start');
+  artery.host.nextSurge = 999; artery.enemies = [];
+  run(artery, 1.5);
+  const moved = { x: artery.player.x - from.x, y: artery.player.y - from.y };
+  assert.ok(Math.hypot(moved.x, moved.y) > 0.5, 'engines off, the ship still moves');
+  const calm = G.createGame(7, undefined, 'vessel', 0, 'artery'); calm.host.nextSurge = 999;
+  run(calm, 1.5);
+  assert.ok(G.dist(calm.player, from) < 0.01, 'a calm artery leaves a still ship where it is');
+});
+
+test('a frightened host floods the blood with sugar', () => {
+  const calm = quiet(2), scared = quiet(2);
+  calm.host.nextSurge = 999; scared.host.surge = 999;
+  run(calm, 3); run(scared, 3);
+  assert.ok(scared.regen > calm.regen * 3 || scared.pickups.length > calm.pickups.length);
+});

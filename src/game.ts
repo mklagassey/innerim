@@ -33,6 +33,8 @@ export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: 
 
 export interface State {
   place: Place;
+  vessel: Vessel | null; // which kind of vessel, when you are in one
+  host: { hour: number; surge: number; nextSurge: number }; // time of the host's day, seconds of fright left, seconds to the next
   size: number;
   tiles: Tile[];
   explored: Uint8Array; // tiles you have ever seen
@@ -82,16 +84,26 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour });
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
 export type Place = 'liver' | 'vessel';
+export type Vessel = 'artery' | 'vein';
+export type HostState = 'asleep' | 'awake' | 'stressed';
 
-export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3): State {
+/** What the host is doing right now. A fright overrides everything, even sleep. */
+export function hostState(s: State): HostState {
+  const h = CONFIG.host;
+  return s.host.surge > 0 ? 'stressed' : s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil ? 'asleep' : 'awake';
+}
+
+export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3, vessel: Vessel = 'artery'): State {
   const m = place === 'vessel' ? generateVessel(seed, patrol) : generate(seed);
   const N = m.size;
   const s: State = {
     place,
+    vessel: place === 'vessel' ? vessel : null,
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0 },
     size: N,
     tiles: Array.from(m.wall, (w) => (w ? 'cell' : 'floor')),
     explored: new Uint8Array(N * N),
@@ -134,6 +146,8 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     rng: mulberry32(seed ^ 0x9e3779b9),
     nextId: 1,
   };
+  const [lo, hi] = CONFIG.host.surge.first;
+  s.host.nextSurge = lo + s.rng() * (hi - lo);
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : `Find ${CONFIG.energy.quota} energy, then find the central vein.`);
@@ -173,6 +187,32 @@ export const cloaked = (s: State) => s.cloak > 0;
 export const scentScale = (s: State) => 1 - CONFIG.scent.maskPerLevel * s.upgrades.cd47;
 /** Seconds one of your footprints lasts. */
 export const trailLife = (s: State) => CONFIG.scent.trailLife * scentScale(s);
+
+/** Which way the blood is running at a spot, as a unit vector (or nothing, in a still corner). */
+export function currentAt(s: State, at: Point): Point {
+  const flow = flowField(s), t = tileOf(at);
+  if (!inside(s, t.x, t.y)) return { x: 0, y: 0 };
+  const here = flow[idx(s, t.x, t.y)];
+  let vx = 0, vy = 0;
+  for (const [dx, dy] of STEPS) {
+    const x = t.x + dx, y = t.y + dy;
+    if (!open(s, x, y)) continue;
+    const drop = here - flow[idx(s, x, y)];
+    if (drop > 0) { const len = Math.hypot(dx, dy); vx += (dx / len) * drop; vy += (dy / len) * drop; }
+  }
+  const len = Math.hypot(vx, vy);
+  return len ? { x: vx / len, y: vy / len } : { x: 0, y: 0 };
+}
+/** How hard the blood pushes: gentle in tissue, strong in an artery, and worse when the host's heart is racing. */
+export function currentStrength(s: State): number {
+  const where = s.vessel ?? 'liver';
+  return CONFIG.host.current[where] * CONFIG.host.push[hostState(s)][where];
+}
+/** Your speed over the ground: your engine, helped or hindered by the blood. */
+function drive(s: State): number {
+  const c = currentAt(s, s.player), f = s.player.face;
+  return speed(s) * Math.max(0.3, 1 + currentStrength(s) * (f.x * c.x + f.y * c.y));
+}
 
 /** Steps to the central vein from every open tile: which way the blood is running. */
 function flowField(s: State): Int16Array {
@@ -617,18 +657,41 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     p.face = { x: dir.x / len, y: dir.y / len };
     p.path = []; p.attackId = null;
     interrupt(s);
-    shift(s, p, p.face.x * speed(s) * dt, p.face.y * speed(s) * dt, pc.radius);
+    shift(s, p, p.face.x * drive(s) * dt, p.face.y * drive(s) * dt, pc.radius);
   } else if (target) {
     const reach = pc.strike.reach + CONFIG.enemies[target.kind].radius - 0.15;
     if (dist(target, p) <= reach) { p.path = []; strike(s, target); }
     else {
       if (!p.path.length || dist(mid(p.path[p.path.length - 1]), target) > 1) p.path = findPath(s, tileOf(p), tileOf(target)) ?? [];
-      const d = follow(s, p, speed(s), dt, pc.radius);
+      const d = follow(s, p, drive(s), dt, pc.radius);
       if (d) p.face = d;
     }
   } else if (p.path.length) {
-    const d = follow(s, p, speed(s), dt, pc.radius);
+    const d = follow(s, p, drive(s), dt, pc.radius);
     if (d) p.face = d;
+  }
+
+  // A strong enough current drags you with it whether your engine is running or not.
+  const pull = currentStrength(s) - CONFIG.host.driftAbove;
+  if (pull > 0) { const c = currentAt(s, p); shift(s, p, c.x * pull * 2.4 * dt, c.y * pull * 2.4 * dt, pc.radius); }
+
+  // The host's day goes on around you.
+  const was = hostState(s), h = CONFIG.host;
+  s.host.hour = (s.host.hour + dt / h.secondsPerHour) % 24;
+  if (s.host.surge > 0) s.host.surge = Math.max(0, s.host.surge - dt);
+  else if (was === 'awake' && (s.host.nextSurge -= dt) <= 0) {
+    s.host.surge = h.surge.time;
+    s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
+  }
+  const now = hostState(s);
+  if (now !== was) {
+    if (now === 'stressed') {
+      say(s, s.vessel === 'artery' ? 'Something has frightened the host. The artery clenches and the blood tears through it.' : 'Something has frightened the host. Their heart is pounding.');
+      emit(s, 'surge');
+      if (s.place === 'vessel') arrive(s, 1); // adrenaline shakes neutrophils loose into the blood
+    } else if (was === 'stressed') say(s, 'The fright passes. The blood slows.');
+    else if (now === 'asleep') { say(s, 'The host has fallen asleep. The blood slows, and the immune system goes to work.'); emit(s, 'sleep'); }
+    else { say(s, 'The host is waking up.'); emit(s, 'wake'); }
   }
 
   // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.
@@ -698,7 +761,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
 
   const en = CONFIG.energy;
-  s.regen += dt;
+  s.regen += dt * CONFIG.host.glucose[hostState(s)];
   if (s.regen >= en.patchRegen) {
     s.regen = 0;
     for (const [k, v] of s.glucose) if (v < en.patchMax) s.glucose.set(k, v + 1);
@@ -729,7 +792,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
   const d = dist(e, p);
   // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
-  const whiff = cloaked(s) ? 0 : scentAt(s, e, c.nose);
+  const whiff = cloaked(s) ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)]);
   const found = !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p))));
   const print = cloaked(s) ? null : freshPrint(s, e);
   // Once it is after you, any trace of scent keeps it on you.

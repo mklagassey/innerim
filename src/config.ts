@@ -20,7 +20,21 @@ export const CONFIG = {
     metabolism: 14, // seconds per unit burned
     starveDamage: 1,
   },
-  host: { maxHealth: 100 },
+  // The host is a person getting on with their day. Their body changes around you.
+  host: {
+    maxHealth: 100,
+    secondsPerHour: 30, // a whole day and night passes in twelve minutes of play
+    startHour: 15,
+    asleepFrom: 23, asleepUntil: 7,
+    surge: { first: [50, 80], every: [80, 140], time: 22 }, // a fright: seconds until the first, between them, and how long one lasts
+    bpm: { asleep: 48, awake: 62, stressed: 120 },
+    // How hard the blood pushes on you: by where you are, then scaled by what the host is doing.
+    current: { liver: 0.14, vein: 0.3, artery: 0.5 },
+    push: { asleep: { liver: 0.7, vein: 0.7, artery: 0.7 }, awake: { liver: 1, vein: 1, artery: 1 }, stressed: { liver: 1.6, vein: 1.3, artery: 2.4 } },
+    driftAbove: 0.85, // past this the current drags you along even when you are holding still
+    glucose: { asleep: 0.6, awake: 1, stressed: 4 }, // how fast sugar comes back: fasting overnight, flooding out of the liver in a fright
+    nose: { asleep: 1.25, awake: 1, stressed: 1 }, // the immune system does its best work while the host sleeps
+  },
   alert: {
     max: 100,
     decay: 0.6, // per second while nothing has your scent

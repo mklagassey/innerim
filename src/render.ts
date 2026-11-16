@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, cloaked, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, cloaked, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -271,7 +271,7 @@ const FADE_IN = 0.45, FADE_OUT = 0.8, FADE_KNOWN = 0.5; // seconds
 export function draw(ctx: Ctx, s: State, v: View) {
   const p = s.player, R = vision(s), scale = v.zoom * v.dpr;
   const dt = Math.min(0.05, Math.max(0, v.time - lastTime)); lastTime = v.time;
-  driftBlood(s, dt);
+  driftBlood(s, dt * (0.5 + currentStrength(s) * 3.5)); // the red cells show how hard the blood is running
   if (dt > 0) { heroMoving = Math.hypot(p.x - heroWas.x, p.y - heroWas.y) > dt * 0.5; heroWas = { x: p.x, y: p.y }; }
 
   ctx.fillStyle = INK;
@@ -399,14 +399,12 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const life = trailLife(s);
   for (const f of s.trail) {
     const left = 1 - (s.time - f.born) / life;
-    if (left <= 0) continue; // you always know where you have just walked
-    // Left and right feet alternate. The side comes from when the print was made, so it never changes.
-    const side = Math.round(f.born * 1000) % 2 ? 1 : -1, c = project(f.x - f.dy * 0.13 * side, f.y + f.dx * 0.13 * side);
-    const ahead = project(f.dx, f.dy), turn = Math.atan2(ahead.y, ahead.x);
-    ctx.globalAlpha = left * 0.6; // a dark stain that thins out steadily until it is gone
+    if (left <= 0) continue; // you always know where you have just been
+    // A dark smear of exhaust that spreads and thins steadily until it is gone.
+    const c = project(f.x, f.y), r = 5 + (1 - left) * 5;
+    ctx.globalAlpha = left * 0.5;
     ctx.fillStyle = '#1a0a10';
-    oval(ctx, c.x + Math.cos(turn) * 2.5, c.y + Math.sin(turn) * 2.5, 5.5, 3, turn); ctx.fill(); // sole
-    oval(ctx, c.x - Math.cos(turn) * 5.5, c.y - Math.sin(turn) * 5.5, 2.6, 2, turn); ctx.fill(); // heel
+    oval(ctx, c.x, c.y, r, r * 0.5); ctx.fill();
   }
   ctx.globalAlpha = 1;
 
@@ -700,61 +698,61 @@ function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch' | 'calm'
   ctx.globalAlpha = 1;
 }
 
-/** You: a person in a pressure suit, about ten micrometres tall. */
+/** You: a submersible about ten micrometres long, hanging in the blood. */
 function hero(ctx: Ctx, s: State, v: View) {
   const p = s.player, c = project(p.x, p.y);
   const f = project(p.face.x, p.face.y), fl = Math.hypot(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
-  const moving = heroMoving, stride = moving ? Math.sin(v.time * 14) : 0;
-  const k = 1.3, away = fy < -0.3; // facing up the screen shows the back
+  const moving = heroMoving, bob = Math.sin(v.time * 2.2) * 1.6, lift = 15 + bob, a = Math.atan2(fy, fx);
   if (cloaked(s)) ctx.globalAlpha = 0.35;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; oval(ctx, c.x, c.y, 10, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.42)'; oval(ctx, c.x, c.y, 13 - bob * 0.5, 5.5 - bob * 0.2); ctx.fill();
   if (p.swing > 0) {
-    const a = Math.atan2(fy, fx), t = 1 - p.swing / 0.18;
+    const t = 1 - p.swing / 0.18;
     ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = `rgba(255,236,205,${0.85 - t * 0.6})`; ctx.lineWidth = 5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.ellipse(c.x, c.y - 13, 40, 22, 0, a - 1.1 + t * 0.5, a - 0.2 + t * 1.3); ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
   }
-  const hurt = p.hurt > 0, suit = hurt ? '#ff8a7e' : '#dbe6e2', shade = hurt ? '#b5544b' : '#8ea09c', dark = '#27353a';
-  ctx.save(); ctx.translate(c.x, c.y); ctx.scale(k, k);
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  // Legs and boots.
-  ctx.strokeStyle = shade; ctx.lineWidth = 3.4;
-  ctx.beginPath(); ctx.moveTo(-2.6, -9); ctx.lineTo(-2.8 - fx * stride * 2.4, -1.5 - Math.abs(stride)); ctx.moveTo(2.6, -9); ctx.lineTo(2.8 + fx * stride * 2.4, -1.5 - Math.abs(-stride) * 0.3); ctx.stroke();
-  ctx.fillStyle = dark; oval(ctx, -2.8 - fx * stride * 2.4, -0.8, 2.6, 1.5); ctx.fill(); oval(ctx, 2.8 + fx * stride * 2.4, -0.8, 2.6, 1.5); ctx.fill();
-  const pack = () => { ctx.fillStyle = '#6f827f'; ctx.beginPath(); ctx.roundRect(-4.5 - fx * 4.5, -20.5 - fy * 1.5, 9, 11, 3); ctx.fill(); ctx.fillStyle = '#4b5b59'; ctx.fillRect(-2.5 - fx * 4.5, -18.5 - fy * 1.5, 5, 1.6); };
-  if (!away) pack();
-  // Torso, shaded down one side.
-  const torso = ctx.createLinearGradient(-6, 0, 6, 0);
-  torso.addColorStop(0, suit); torso.addColorStop(1, shade);
-  ctx.fillStyle = torso; ctx.beginPath(); ctx.roundRect(-5.6, -21, 11.2, 13.5, 4.5); ctx.fill();
-  ctx.strokeStyle = 'rgba(30,45,50,0.45)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-5, -12.5); ctx.lineTo(5, -12.5); ctx.stroke(); // belt
-  // Arms, swinging against the legs.
-  ctx.strokeStyle = suit; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(-5.4, -19); ctx.lineTo(-7 + fx * stride * 2, -12 + stride); ctx.stroke();
-  ctx.strokeStyle = shade;
-  ctx.beginPath(); ctx.moveTo(5.4, -19); ctx.lineTo(7 + fx * 3, -13 + fy * 2 - stride); ctx.stroke();
-  if (away) pack();
-  // Helmet: a white shell with a dark glass visor.
-  const helm = ctx.createRadialGradient(-2, -29, 0.5, 0, -27, 7);
-  helm.addColorStop(0, '#ffffff'); helm.addColorStop(1, hurt ? '#d06a60' : '#aebfbb');
-  ctx.fillStyle = helm; oval(ctx, 0, -27, 6.4, 6.4); ctx.fill();
-  if (!away) {
-    ctx.fillStyle = '#101c24'; oval(ctx, fx * 2.6, -26.6 + fy * 1.4, 4, 3.6); ctx.fill();
-    ctx.fillStyle = 'rgba(160,220,255,0.55)'; oval(ctx, fx * 2.6 - 1.3, -27.8 + fy * 1.4, 1.5, 0.9, -0.5); ctx.fill();
+  const hurt = p.hurt > 0, hull = hurt ? '#ff9a8e' : '#e6efec', shade = hurt ? '#a8483f' : '#6f8582', dark = '#22303a';
+  ctx.save(); ctx.translate(c.x, c.y - lift); ctx.rotate(a); ctx.scale(1.25, 1.25);
+  // Engine wash behind the ship while it is under way.
+  if (moving) {
+    ctx.globalCompositeOperation = 'lighter';
+    const len = 15 + Math.sin(v.time * 31) * 3, wash = ctx.createLinearGradient(-12, 0, -12 - len, 0);
+    wash.addColorStop(0, 'rgba(140,230,255,0.75)'); wash.addColorStop(1, 'rgba(140,230,255,0)');
+    ctx.fillStyle = wash;
+    for (const side of [-3.4, 3.4]) { ctx.beginPath(); ctx.moveTo(-11, side - 1.8); ctx.lineTo(-12 - len, side); ctx.lineTo(-11, side + 1.8); ctx.fill(); }
+    ctx.globalCompositeOperation = 'source-over';
   }
-  // The lamp on the chest.
+  // Twin engine pods and tail fins.
+  ctx.fillStyle = shade;
+  for (const side of [-1, 1]) {
+    ctx.beginPath(); ctx.roundRect(-13, side * 3.4 - 2.1, 7.5, 4.2, 1.8); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-6, side * 4.5); ctx.lineTo(-12.5, side * 9); ctx.lineTo(-10.5, side * 4.5); ctx.fill();
+  }
+  ctx.fillStyle = dark; for (const side of [-3.4, 3.4]) { oval(ctx, -13, side, 1.1, 1.7); ctx.fill(); }
+  // The pressure hull: a fat teardrop, pale on top.
+  const skin = ctx.createRadialGradient(1, -2, 1, 0, 0, 13);
+  skin.addColorStop(0, '#ffffff'); skin.addColorStop(0.55, hull); skin.addColorStop(1, shade);
+  ctx.fillStyle = skin;
+  ctx.beginPath(); ctx.moveTo(13, 0); ctx.bezierCurveTo(11, -7, -4, -7.5, -10.5, -3.6); ctx.lineTo(-10.5, 3.6); ctx.bezierCurveTo(-4, 7.5, 11, 7, 13, 0); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,45,55,0.5)'; ctx.lineWidth = 0.7;
+  ctx.beginPath(); ctx.moveTo(-3.5, -6.6); ctx.lineTo(-3.5, 6.6); ctx.stroke(); // hull seam
+  ctx.fillStyle = '#e2b53c'; ctx.fillRect(-8.5, -5, 2, 10); // a band of hazard yellow, so the surgeons can find you
+  // The canopy.
+  ctx.fillStyle = '#0f1c26'; oval(ctx, 4.6, 0, 4.6, 3.6); ctx.fill();
+  ctx.fillStyle = 'rgba(160,220,255,0.6)'; oval(ctx, 5.6, -1.2, 2.1, 1); ctx.fill();
+  // The lamp on the nose.
   ctx.globalCompositeOperation = 'lighter';
-  const lamp = ctx.createRadialGradient(fx * 6, -17 + fy * 3, 0, fx * 6, -17 + fy * 3, 6);
+  const lamp = ctx.createRadialGradient(13, 0, 0, 13, 0, 7);
   lamp.addColorStop(0, 'rgba(255,236,190,0.95)'); lamp.addColorStop(1, 'rgba(255,236,190,0)');
-  ctx.fillStyle = lamp; oval(ctx, fx * 6, -17 + fy * 3, 6, 6); ctx.fill();
+  ctx.fillStyle = lamp; oval(ctx, 13, 0, 7, 7); ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
   if (p.channel) {
     const t = p.channel.t / p.channel.total;
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(c.x, c.y - 56, 9, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(c.x, c.y - 48, 9, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = p.channel.kind === 'strip' ? '#ff5a4d' : '#ecb42e'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(c.x, c.y - 56, 9, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(c.x, c.y - 48, 9, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }

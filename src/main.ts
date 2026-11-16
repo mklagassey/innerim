@@ -140,7 +140,7 @@ function openWorld(title: string, text: string) {
   const c = trip.carry, here = T.NODES[trip.at], ways = T.ways(trip);
   $('world-title').textContent = title;
   $('world-text').textContent = `${text} ${here.what}`;
-  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Life ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}%` : '');
+  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Life ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)}` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
@@ -183,7 +183,8 @@ function go(to: T.NodeId) {
   if (!out) return;
   if (out.kind === 'arrive') { land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : 'The vessel was quiet.'); return; }
   dest = to;
-  s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'liver' ? 'liver' : 'vessel', out.kind === 'patrol' ? out.size : 0);
+  const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
+  s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'liver' ? 'liver' : 'vessel', out.kind === 'patrol' ? out.size : 0, vessel);
   settled = false;
   Stats.begin(); shownOffer = '';
   $('world').hidden = true;
@@ -246,6 +247,7 @@ function closeTip() {
   canvas.focus();
 }
 const roman = (n: number) => 'I'.repeat(n);
+const clock = (hour: number) => `${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 6) * 10).padStart(2, '0')}`;
 function set(id: string, prop: 'text' | 'height' | 'width' | 'hidden' | 'tier', value: string) {
   if (last[id + prop] === value) return;
   last[id + prop] = value;
@@ -264,6 +266,9 @@ function hud() {
   set('energy-val', 'text', `${p.energy}/${CONFIG.energy.quota}`);
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
+  const mood = G.hostState(s);
+  set('host-state', 'text', `${mood === 'stressed' ? 'frightened' : mood} \u00b7 ${clock(s.host.hour)}`);
+  set('host', 'tier', mood === 'stressed' ? '2' : '0');
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
@@ -343,7 +348,8 @@ function frame(now: number) {
     if (s.place === 'vessel' && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
     if (!tip && !s.offer) {
       const road = s.place === 'vessel';
-      const next = Tips.nextTip(s, road ? { portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null } : { rbc: s.time > 9 ? nearestBloodCell(s) : null });
+      const mood = G.hostState(s), host = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null };
+      const next = Tips.nextTip(s, road ? { ...host, portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
       if (next) showTip(next.tip, next.at);
     }
     if (!tip) {
@@ -363,7 +369,7 @@ function frame(now: number) {
   const near = s.enemies.filter((e) => G.dist(e, s.player) < 10);
   const chasers = near.filter((e) => e.mood === 'chase').length;
   const heat = Math.max(tier / 3, chasers ? 0.5 + 0.17 * Math.min(3, chasers) : near.some((e) => e.mood === 'investigate') ? 0.3 : 0);
-  const bpm = Math.max([58, 80, 108, 132][tier], chasers ? 100 : 0);
+  const bpm = Math.max([58, 80, 108, 132][tier], chasers ? 100 : 0, CONFIG.host.bpm[G.hostState(s)]) - (G.hostState(s) === 'asleep' && !tier && !chasers ? 10 : 0);
   Sound.pulse(started && s.status === 'playing' && !tip ? bpm : 0, s.player.hp / G.maxHp(s), heat);
   aimPointer();
   const live = started && s.status === 'playing' && !tip;

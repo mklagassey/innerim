@@ -70,7 +70,10 @@ function hiss(from: number, to: number, dur: number, vol: number, kind: BiquadFi
 }
 
 const SOUNDS: Record<string, () => void> = {
-  step: () => hiss(420 + Math.random() * 160, 160, 0.09, 0.5, 'bandpass', 0, 2.5), // a wet footfall
+  step: () => { hiss(240 + Math.random() * 60, 120, 0.22, 0.32, 'lowpass'); tone(92, 80, 0.2, 0.07, 'sawtooth'); }, // the engines, pulsing
+  surge: () => { tone(60, 44, 0.5, 0.9, 'sine'); tone(180, 520, 1.1, 0.12, 'sawtooth', 0.05); hiss(200, 1800, 1.2, 0.5, 'bandpass', 0, 2); }, // a jolt of adrenaline
+  sleep: () => { [392, 330, 262].forEach((f, i) => tone(f, f * 0.99, 1.4, 0.1, 'sine', i * 0.35)); },
+  wake: () => { [262, 330, 392].forEach((f, i) => tone(f, f, 0.9, 0.1, 'sine', i * 0.22)); },
   swing: () => hiss(900, 3200, 0.13, 0.7, 'bandpass', 0, 1.5),
   hit: () => { tone(190, 70, 0.11, 0.5, 'triangle'); hiss(1400, 300, 0.09, 0.9); },
   kill: () => { tone(240, 45, 0.3, 0.5, 'triangle'); hiss(2400, 120, 0.4, 1.4, 'lowpass'); }, // a cell bursting

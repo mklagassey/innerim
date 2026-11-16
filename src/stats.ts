@@ -3,9 +3,9 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'trip-1'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'ship-1'; // bump when rules change so reports can be compared fairly
 
-const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
+const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm'];
 
 interface Tally {
   events: Record<string, number>;
@@ -73,6 +73,7 @@ export function report(s: G.State, extra: Record<string, unknown> = {}) {
     hostHealth: Math.round(s.hostHealth),
     cellsStripped: s.cellsKilled, skims: t.events.skim ?? 0,
     immuneKills: s.kills,
+    hostFrights: t.events.surge ?? 0, hostHourAtEnd: Math.round(s.host.hour * 10) / 10,
     timesSnared: t.events.net ?? 0,
     timesSniffed: t.events.sniff ?? 0,
     timesSpotted: t.events.spot ?? 0, timesHurt: t.events.hurt ?? 0,
