@@ -839,7 +839,11 @@ test('story: a dark sibling can be salvaged, woken or left, and waking needs a m
   assert.ok(G.answer(s, 'salvage'));
   assert.equal(s.player.energy, e + CONFIG.story.sibling.energy);
   const next = G.createGame(6, G.carryOf(s), 'vessel');
-  assert.equal(next.player.energy, s.player.energy + 1, 'kin leave sugar at the door');
+  const friend = next.pickups.find((i) => i.kind === 'kin');
+  assert.ok(friend, 'the one you woke is waiting further on');
+  next.enemies = []; next.player.x = friend!.x; next.player.y = friend!.y; const had = next.player.energy;
+  run(next, 0.1);
+  assert.equal(next.player.energy, had + CONFIG.story.kin.gift);
 });
 
 test('story: wardens come for a woken unit, hunt by sight alone, and can be made to stop', () => {

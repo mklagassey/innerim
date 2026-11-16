@@ -29,7 +29,7 @@ export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
-export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling'; snooze?: boolean }
+export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling' | 'kin'; snooze?: boolean }
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number } // st: how awake the unit was when it said it
 export interface Ask { kind: 'sibling'; item: Pickup }
 /** An antibody adrift in the blood: made to fit you, and it sticks. */
@@ -242,7 +242,12 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   // The controller speaks first, for as long as it can still hear you, and then you do.
   if (stage(s) < 4 && Story.ORDERS[place]) s.thoughts.push({ text: Story.ORDERS[place], who: 'shepherd', t: 1.5 });
   notice(s, 'enter', place);
-  if (s.kin > 0 && place !== 'lung') { s.player.energy += s.kin; notice(s, 'kin'); }
+  // Units you have woken turn up where you are going, lamps on, with sugar they have saved for you.
+  if (place !== 'lung' && place !== 'stomach')
+    for (let n = Math.min(s.kin, CONFIG.story.kin.most), tries = 0; n > 0 && tries < 4000; tries++) {
+      const x = Math.floor(s.player.x + (lost() - 0.5) * 30), y = Math.floor(s.player.y + (lost() - 0.5) * 30), d = dist(s.player, { x, y });
+      if (open(s, x, y) && d > 5 && d < 15) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'kin' }); n--; }
+    }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
@@ -1014,7 +1019,12 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       continue;
     }
     if (dist(item, p) > 0.75) continue;
-    if (item.kind === 'patch') {
+    if (item.kind === 'kin') {
+      s.player.energy += CONFIG.story.kin.gift;
+      float(s, item, 'hello', '#bfe9ff'); float(s, p, `+${CONFIG.story.kin.gift} energy`, '#e8b530');
+      say(s, 'A unit you woke. It has been saving sugar for you. It dips its lamp and goes on its way.');
+      notice(s, 'kin'); emit(s, 'pickup');
+    } else if (item.kind === 'patch') {
       if (s.patches >= CONFIG.items.maxPatches) continue;
       s.patches++;
       float(s, p, 'Fibrin patch', '#7be08a');

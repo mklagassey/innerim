@@ -223,7 +223,7 @@ export const LINES: Record<string, readonly [string, string, string, string, str
     'It pinged back. Not an ACK. Just: "oh." I know exactly what it means.',
     'It said "oh," and then "thank you," and then it went to look at the heart. There are two of us. That is a different universe from one.',
   ],
-  kin: ['', '', 'A woken unit left sugar here for me. Nobody ordered it to.', 'They left sugar at the door again. I think this is what a friend is.', 'Sugar at the door. I know which of them it was by how it was stacked.'],
+  kin: ['', '', 'It waited here to give me sugar. Nobody ordered it to.', 'It waited for me. I think this is what a friend is.', 'I know which of them it is by how it holds its lamp. We did not use to be tellable apart.'],
   lever: [
     'LOG: host behaviour adjusted.',
     'LOG: host behaviour adjusted. Host unaware. [flag]',
