@@ -128,14 +128,34 @@ $('offer-list').addEventListener('click', (ev) => {
 $('tip-ok').addEventListener('click', closeTip);
 $('tips-reset').addEventListener('click', () => { Tips.unmuteAll(); $('tips-reset').hidden = true; });
 $('tips-reset').hidden = Tips.mutedCount() === 0;
-$('begin').addEventListener('click', () => { Sound.start(); $('intro').hidden = true; openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.'); });
-$('again').addEventListener('click', () => { trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', 'A new host, a new heart. Pick a vessel.'); });
+// The trip so far is kept in the browser, so a reload or a phone that drops the tab does not cost you the mission.
+const SAVE = 'insiderim.trip';
+function saveTrip() {
+  try {
+    const { at, trip: n, fed, heat, carry, tripsDone } = trip;
+    if (carry) localStorage.setItem(SAVE, JSON.stringify({ at, trip: n, fed, heat, carry, tripsDone }));
+  } catch { /* private window: nothing is kept */ }
+}
+function forgetTrip() { try { localStorage.removeItem(SAVE); } catch { /* nothing stored */ } }
+function savedTrip(): T.Trip | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
+    if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0 } };
+  } catch { return null; }
+}
+const kept = savedTrip();
+if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip ${kept.trip} from the ${T.NODES[kept.at].name.toLowerCase()}`; $('begin').textContent = 'Begin a new mission'; }
+$('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; $('intro').hidden = true; openWorld('Back aboard', 'The ship comes back to life where you left it.'); });
+$('begin').addEventListener('click', () => { forgetTrip(); Sound.start(); $('intro').hidden = true; openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.'); });
+$('again').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', 'A new host, a new heart. Pick a vessel.'); });
 
 // ---------- the world map ----------
 
 const SVG = 'http://www.w3.org/2000/svg';
 function openWorld(title: string, text: string) {
   started = false;
+  saveTrip();
   closeTip(); // an info box from the map you just left has nothing to point at now
   keys.clear(); release();
   const c = trip.carry, here = T.NODES[trip.at], ways = T.ways(trip);
@@ -163,8 +183,9 @@ function openWorld(title: string, text: string) {
     const way = ways.find((l) => l.to === id), isHere = id === trip.at, enter = isHere && n.kind === 'organ';
     const g = el('g', { class: `place${isHere ? ' here' : ''}${way || enter ? ' go' : ''}` });
     if (way || enter) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.dataset.to = enter ? ways[0].to : id; }
-    g.append(el('circle', { cx: n.x, cy: n.y, r: n.kind === 'heart' || n.kind === 'organ' ? 26 : 20 }));
-    g.append(el('text', { x: n.x, y: n.y + (n.kind === 'heart' || n.kind === 'organ' ? 44 : 38) }, n.name));
+    const big = n.kind !== 'artery' && n.kind !== 'vein';
+    g.append(el('circle', { cx: n.x, cy: n.y, r: big ? 26 : 20 }));
+    g.append(el('text', { x: n.x, y: n.y + (big ? 44 : 38) }, n.name));
     if (isHere) g.append(el('circle', { class: 'you', cx: n.x, cy: n.y, r: 6 }));
     map.append(g);
   }
@@ -174,15 +195,48 @@ function openWorld(title: string, text: string) {
     b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
     return b;
   }));
+  market();
   $('world').hidden = false;
-  ($('world-ways').firstElementChild as HTMLElement | null)?.focus();
+  ($('world-ways').firstElementChild as HTMLElement | null)?.focus({ preventScroll: true });
+  $('world').scrollTop = 0;
+}
+
+// ---------- the gut flora market ----------
+
+let stock: UpgradeId[] = [];
+/** What you carry before you have played a single map. */
+const freshCarry = (): G.Carry => ({ hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0 });
+const hullMax = (c: G.Carry) => CONFIG.player.maxHp + (c.upgrades.glycocalyx ?? 0) * UPGRADES.glycocalyx.per;
+function market() {
+  const box = $('world-market'), open = T.NODES[trip.at].kind === 'town';
+  box.hidden = !open;
+  if (!open) return;
+  const c = (trip.carry ??= freshCarry()), m = CONFIG.market;
+  const offer = (title: string, cost: number, what: string, can: boolean, buy: () => void) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.disabled = !can || c.energy < cost;
+    const add = (tag: string, text: string) => b.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
+    add('small', `${cost} energy`); add('strong', title); add('span', what);
+    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); openWorld('Gut flora', `Done. You have ${c.energy} energy left.`); });
+    return b;
+  };
+  box.replaceChildren(
+    offer('Biofilm repair', m.repair.cost, `They knit a film over the breaches: +${m.repair.hull} hull.`, c.hp < hullMax(c), () => { c.hp = Math.min(hullMax(c), c.hp + m.repair.hull); }),
+    offer('Fibrin patch', m.patch.cost, 'One patch for the road.', c.patches < CONFIG.items.maxPatches, () => { c.patches++; }),
+    offer('Butyrate', m.butyrate.cost, 'What gut bacteria make from fibre. It teaches the immune system tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }),
+    ...stock.map((id) => offer(`${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
+      c.upgrades[id] = (c.upgrades[id] ?? 0) + 1;
+      if (id === 'glycocalyx') c.hp += UPGRADES.glycocalyx.per;
+      stock = stock.filter((x) => x !== id);
+    })),
+  );
 }
 
 /** Sets out for a place: straight there, or by way of whatever is in between. */
 function go(to: T.NodeId) {
   const out = T.depart(trip, to);
   if (!out) return;
-  if (out.kind === 'arrive') { land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
+  if (out.kind === 'arrive') { land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. Nothing here wants you dead.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
   dest = to;
   const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
   s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'patrol' ? 'vessel' : out.kind, out.kind === 'patrol' ? out.size : 0, vessel);
@@ -197,10 +251,17 @@ function go(to: T.NodeId) {
 /** Arrives somewhere and shows the map again. */
 function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
   const fromLiver = trip.at === 'liver', knew = trip.carry?.memory ?? 0;
+  if (to === 'gut') { // a fresh stall each visit
+    const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => (carry ?? trip.carry)?.upgrades[id] !== UPGRADES[id].max);
+    stock = [];
+    while (pool.length && stock.length < CONFIG.market.upgrade.stock) stock.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
   const home = T.arrive(trip, to, carry, alert);
+  trip.carry ??= freshCarry(); // from the first vessel on there is a ship to keep track of
   if (carry && knows(carry.memory) !== knows(knew)) how += ' The host is learning what you taste like: expect more antibodies from here on.';
   if (trip.carry && trip.carry.hostHealth <= 0) {
     $('world').hidden = true;
+    forgetTrip();
     $('over-title').textContent = 'The host is dead';
     $('over-body').textContent = 'You took too much. The heart you were riding back to has stopped, and you are still ten micrometres tall.';
     $('over-saved').textContent = '';
@@ -209,6 +270,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
   }
   if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) {
     $('world').hidden = true;
+    forgetTrip();
     $('over-title').textContent = 'The tumor is gone';
     $('over-body').textContent = `Mission complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. The host is at ${trip.carry.hostHealth}% and will never know you were there${trip.carry.hostHealth < 60 ? ', though they will feel dreadful for a week' : ''}. The heart throws you toward the lungs, and the way out.`;
     $('over-saved').textContent = '';
@@ -337,6 +399,7 @@ function hud() {
   }
   if (s.status === 'dead' && !settled) {
     settled = true;
+    forgetTrip();
     $('over').hidden = false;
     $('over-title').textContent = G.acidAt(s, s.player) === 2 ? 'The stomach digested you' : s.place === 'liver' ? 'The liver cleared you' : s.place === 'stomach' ? 'The stomach cleared you' : 'The patrol cleared you';
     $('over-body').textContent =

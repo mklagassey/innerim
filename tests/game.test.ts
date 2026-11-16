@@ -642,3 +642,11 @@ test('the tumor: every liver has a nodule, and cutting it out helps the host and
   assert.ok(s.alert < 10, 'hardly any alarm');
   assert.equal(G.createGame(8, G.carryOf(s)).excised, 1, 'progress carries from map to map');
 });
+
+test('the long way round goes through the gut', () => {
+  const t = T.newTrip(1); t.rng = () => 0.99;
+  T.arrive(t, 'mesenteric', null);
+  assert.deepEqual(T.ways(t).map((l) => l.to), ['gut']);
+  T.arrive(t, 'gut', null);
+  assert.deepEqual(T.depart(t, 'portal'), { kind: 'arrive' }, 'no patrols among the flora');
+});

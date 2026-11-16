@@ -101,6 +101,12 @@
   #world-map .place:focus { outline: none; }
   #world-map .you { fill: var(--bone); }
   #world-ways { justify-content: flex-start; flex-flow: row wrap; }
+  #world-market { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 10px 0; }
+  #world-market[hidden] { display: none; }
+  #world-market button { text-align: left; display: grid; align-content: start; gap: 3px; padding: 9px 12px; border-color: #7be08a; }
+  #world-market button:disabled { opacity: 0.4; cursor: default; }
+  #world-market button small { font: 500 11px var(--data); color: var(--amber); letter-spacing: 0.04em; }
+  #world-market button span { font: 400 14px var(--body, inherit); text-transform: none; letter-spacing: 0; color: var(--bone-dim); }
   .card button.quiet { border-color: var(--seam); color: var(--bone-dim); font-size: 0.78rem; padding: 8px 14px; }
   .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.84); padding: 16px; overflow-y: auto; }
   .card { max-width: 34rem; display: grid; gap: 14px; justify-items: start; }
@@ -157,6 +163,7 @@
         <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>
       </dl>
       <button id="begin" type="button">Begin</button>
+      <button id="resume" type="button" hidden>Continue</button>
       <button id="tips-reset" type="button" class="quiet" hidden>Show all the info boxes again</button>
     </div>
   </div>
@@ -166,6 +173,7 @@
       <h2 id="world-title">The bloodstream</h2>
       <p id="world-text"></p>
       <svg id="world-map" viewBox="0 0 640 380" role="img" aria-label="Map of the vessels between the heart and the liver"></svg>
+      <div id="world-market" hidden></div>
       <div class="acts" id="world-ways"></div>
     </div>
   </div>

@@ -4,17 +4,18 @@
 import { Carry } from './game';
 import { mulberry32 } from './map';
 
-export type NodeId = 'heart' | 'hepatic' | 'mesenteric' | 'gastric' | 'stomach' | 'portal' | 'liver' | 'hvein' | 'cava';
+export type NodeId = 'heart' | 'hepatic' | 'mesenteric' | 'gastric' | 'stomach' | 'gut' | 'portal' | 'liver' | 'hvein' | 'cava';
 
-export interface Node { name: string; x: number; y: number; kind: 'heart' | 'artery' | 'vein' | 'organ'; what: string }
+export interface Node { name: string; x: number; y: number; kind: 'heart' | 'artery' | 'vein' | 'organ' | 'town'; what: string }
 // Positions are on a 640 x 380 drawing.
 export const NODES: Record<NodeId, Node> = {
   heart: { name: 'Heart', x: 320, y: 58, kind: 'heart', what: 'Everything leaves from here and everything comes back.' },
-  hepatic: { name: 'Hepatic artery', x: 300, y: 168, kind: 'artery', what: 'The direct road to the liver. Fast blood, heavy patrols.' },
-  mesenteric: { name: 'Mesenteric artery', x: 178, y: 192, kind: 'artery', what: 'Feeds the gut. The long way round.' },
+  hepatic: { name: 'Hepatic artery', x: 318, y: 172, kind: 'artery', what: 'The direct road to the liver. Fast blood, heavy patrols.' },
+  mesenteric: { name: 'Mesenteric artery', x: 200, y: 148, kind: 'artery', what: 'Feeds the gut. The long way round.' },
+  gut: { name: 'Gut flora', x: 142, y: 228, kind: 'town', what: 'Trillions of bacteria live here with the host\'s blessing, and the immune system leaves them be. They will trade for sugar.' },
   gastric: { name: 'Gastric artery', x: 150, y: 76, kind: 'artery', what: 'Feeds the stomach.' },
   stomach: { name: 'Stomach', x: 52, y: 176, kind: 'organ', what: 'A lake of acid, worst after the host has eaten. The cells that make the acid are the richest in the body.' },
-  portal: { name: 'Portal vein', x: 130, y: 292, kind: 'vein', what: 'Carries everything the gut absorbed to the liver. Slow and quiet.' },
+  portal: { name: 'Portal vein', x: 168, y: 312, kind: 'vein', what: 'Carries everything the gut absorbed to the liver. Slow and quiet.' },
   liver: { name: 'Liver', x: 320, y: 290, kind: 'organ', what: 'Sugar in the blood and mitochondria in the cells. Feed here.' },
   hvein: { name: 'Hepatic vein', x: 482, y: 262, kind: 'vein', what: 'Where the central veins of the liver drain.' },
   cava: { name: 'Vena cava', x: 540, y: 132, kind: 'vein', what: 'The great vein home to the heart.' },
@@ -25,7 +26,8 @@ export interface Leg { from: NodeId; to: NodeId; risk: number }
 export const LEGS: Leg[] = [
   { from: 'heart', to: 'hepatic', risk: 0.8 },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
-  { from: 'mesenteric', to: 'portal', risk: 0.25 },
+  { from: 'mesenteric', to: 'gut', risk: 0.25 },
+  { from: 'gut', to: 'portal', risk: 0 },
   { from: 'heart', to: 'gastric', risk: 0.45 },
   { from: 'gastric', to: 'stomach', risk: 0 },
   { from: 'stomach', to: 'portal', risk: 0 }, // travelled by playing the stomach and leaving by its vein
