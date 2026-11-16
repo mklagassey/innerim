@@ -443,9 +443,12 @@ test('the host keeps a day: awake, asleep at night, and frightened now and then'
   s.host.hour = CONFIG.host.asleepFrom - 0.01; s.host.nextSurge = 999;
   run(s, 1);
   assert.equal(G.hostState(s), 'asleep');
-  s.host.nextSurge = 0;
-  run(s, 2);
-  assert.equal(G.hostState(s), 'asleep', 'nothing frightens a sleeping host');
+  s.host.nextSurge = 1;
+  run(s, 1.5);
+  assert.equal(G.hostState(s), 'asleep', 'frights come slower in sleep');
+  run(s, 1.5);
+  assert.equal(G.hostState(s), 'stressed', 'but a nightmare will do it');
+  assert.match(s.log[s.log.length - 1].text, /dream|nightmare/i);
   const next = G.createGame(5, G.carryOf(s), 'vessel', 0, 'vein');
   assert.ok(Math.abs(next.host.hour - s.host.hour) < 1e-9, 'the clock carries from map to map');
 });
@@ -772,4 +775,24 @@ test('levers: a nap puts the host to sleep until a fright, a snack starts digest
   assert.equal(G.carryOf(t).snack, 16);
   run(t, 1);
   assert.ok(t.host.eating);
+});
+
+test('stowaways: a gut bacterium goes overboard when you are found, and the innate cells take it', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.flora = 2;
+  const e = foe(s, 2, 0), health = s.hostHealth;
+  run(s, 0.2);
+  assert.equal(s.flora, 1);
+  assert.equal(s.decoys.length, 1);
+  assert.equal(s.hostHealth, health - CONFIG.flora.hostDamage, 'the host pays');
+  assert.notEqual(e.mood, 'chase');
+  const hp = s.player.hp;
+  run(s, 3);
+  assert.equal(s.decoys.length, 0, 'it gets eaten');
+  assert.equal(s.player.hp, hp, 'and you are left alone while they digest');
+  assert.equal(G.carryOf(s).flora, 1);
+  const t = quiet(4); t.host.nextSurge = 999; t.flora = 1;
+  const k = foe(t, 2, 0, 'tcell');
+  run(t, 0.3);
+  assert.equal(t.flora, 1, 'a T cell is after you, not bacteria');
+  assert.equal(k.mood, 'chase');
 });

@@ -8,7 +8,7 @@ export type Tile = 'cell' | 'dead' | 'floor';
 export type EnemyKind = 'neutrophil' | 'kupffer' | 'tcell';
 export type Mood = 'patrol' | 'investigate' | 'chase';
 
-export interface Enemy extends Point {
+export interface Enemy extends Point { sated?: number;
   id: number;
   kind: EnemyKind;
   hp: number;
@@ -48,6 +48,8 @@ export interface State {
   memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
+  flora: number; // gut bacteria riding along, to be thrown to the immune system as bait
+  decoys: (Point & { t: number })[]; // the ones already overboard
   tagged: number; // seconds an antibody stays stuck to you
   size: number;
   tiles: Tile[];
@@ -98,8 +100,8 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora });
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -154,6 +156,8 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
+    flora: carry?.flora ?? 0,
+    decoys: [],
     tagged: 0,
     size: N,
     tiles: Array.from(m.wall, (w) => (w ? 'cell' : 'floor')),
@@ -400,6 +404,18 @@ export function board(s: State): boolean {
   return true;
 }
 /** Show the 'do not eat me' signal: nothing can see you until it fades or you attack. */
+/** Throw a stowaway overboard. Innate immune cells cannot resist a real bacterium, but the host pays for it. */
+export function bait(s: State): boolean {
+  if (s.flora <= 0 || s.decoys.length || riding(s)) return false;
+  s.flora--;
+  s.decoys.push({ x: s.player.x, y: s.player.y, t: CONFIG.flora.lasts });
+  s.hostHealth = Math.max(0, s.hostHealth - CONFIG.flora.hostDamage);
+  float(s, s.player, 'Bait away', '#9be38a');
+  say(s, s.place === 'liver' ? 'A stowaway goes overboard. Gut bacteria in the liver are exactly what these cells are here for.' : 'A stowaway goes overboard. Bacteria loose in the blood: the host will feel that.');
+  emit(s, 'bait');
+  return true;
+}
+
 export function cloak(s: State): boolean {
   if (s.status !== 'playing' || !s.upgrades.cd47 || s.cloakCd > 0 || s.player.energy < CONFIG.cloak.energy || s.tagged > 0) return false; // no hiding with a flag stuck to you
   s.player.energy -= CONFIG.cloak.energy;
@@ -826,7 +842,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.host.nap = Math.max(0, s.host.nap - dt / h.secondsPerHour);
   if (s.host.snack >= 0 && (s.host.hour - s.host.snack + 24) % 24 >= h.digestion) s.host.snack = -1;
   if (s.host.surge > 0) s.host.surge = Math.max(0, s.host.surge - dt);
-  else if (was === 'awake' && (s.host.nextSurge -= dt * (1 + h.coffee.jumpy * caffeine(s.host.hour))) <= 0) {
+  else if ((s.host.nextSurge -= dt * (was === 'awake' ? 1 + h.coffee.jumpy * caffeine(s.host.hour) : h.dreams)) <= 0) { // asleep, the frights are nightmares, and rarer
     s.host.surge = h.surge.time;
     s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
   }
@@ -854,7 +870,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (now !== was) {
     if (now === 'stressed') {
       s.host.nap = 0;
-      say(s, `${outside(s, ['A car horn, very close.', 'They missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said their name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : 'Their heart is pounding.'}`);
+      say(s, `${was === 'asleep' ? outside(s, ['In the dream, they are falling.', 'A nightmare: their teeth are coming loose.', 'They dream of being chased, and their legs will not move.', 'In the dream there is an exam, and they never studied.', 'They dream of something small moving in their blood.']) : outside(s, ['A car horn, very close.', 'They missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said their name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : was === 'asleep' ? 'Their heart pounds, though they never wake.' : 'Their heart is pounding.'}`);
       emit(s, 'surge');
       // Adrenaline first, cortisol after: droplets of it turn up in the blood around you.
       for (let n = CONFIG.cortisol.drops, tries = 0; n > 0 && tries < 600; tries++) {
@@ -886,6 +902,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
   // Acid eats the hull for as long as you sit in it.
   if (acidAt(s, p) === 2) {
+    if (s.flora > 0) { s.flora = 0; say(s, 'The stowaways do not survive the acid. Few things do.'); }
     const lost = burnRate(s) * dt;
     p.hp -= lost; s.sizzle += lost;
     if (s.sizzle >= 1) { float(s, p, `-${Math.floor(s.sizzle)}`, '#c8f05a'); s.sizzle -= Math.floor(s.sizzle); p.hurt = 0.2; emit(s, 'burn'); }
@@ -918,6 +935,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   // Antibodies ride the blood, and lean toward you when you pass close.
   s.tagged = Math.max(0, s.tagged - dt);
   const mem = CONFIG.memory;
+  for (const b of [...s.decoys]) if ((b.t -= dt) <= 0) s.decoys.splice(s.decoys.indexOf(b), 1);
   for (const a of [...s.antibodies]) {
     const c = currentAt(s, a), d = dist(a, p), near = d < mem.pull && !cloaked(s);
     const wob = s.time * 0.8 + a.seed;
@@ -1008,6 +1026,24 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
     e.hp -= CONFIG.stomach.enemyBurn * acidLevel(s) * dt; e.flash = 0.1;
     if (e.hp <= 0) { hurtEnemy(s, e, 0); return false; }
   }
+  if ((e.sated ?? 0) > 0) { e.sated! -= dt; e.windup = -1; return false; } // busy digesting, or milling about where the meal was
+  // Thrown bait: a real bacterium in the blood outranks a strange ship. Only T cells, which want you in particular, ignore it.
+  const lure = e.kind === 'tcell' ? undefined : s.decoys.find((b) => dist(b, e) <= CONFIG.flora.lure);
+  if (lure) {
+    e.mood = 'investigate'; e.unseen = 99; e.windup = -1;
+    if (dist(lure, e) <= c.reach) {
+      s.decoys.splice(s.decoys.indexOf(lure), 1);
+      e.mood = 'patrol'; e.goal = null; e.path = []; e.idle = 1; e.sated = CONFIG.flora.feast; e.home = tileOf(e);
+      float(s, e, 'engulfed', '#9be38a');
+      for (const o of s.enemies) if (o !== e && o.kind !== 'tcell' && dist(o, e) <= CONFIG.flora.lure) { o.mood = 'patrol'; o.goal = null; o.path = []; o.idle = 1; o.sated = 1.5 + s.rng(); }
+      return false;
+    }
+    const t = tileOf(lure);
+    if (!e.goal || e.goal.x !== t.x || e.goal.y !== t.y || e.repath <= 0) { e.goal = t; e.path = findPath(s, tileOf(e), t, false, true) ?? []; e.repath = 0.5; }
+    if (dist(lure, e) < 1.6) { const dl = dist(lure, e) || 1; shift(s, e, ((lure.x - e.x) / dl) * c.chaseSpeed * dt, ((lure.y - e.y) / dl) * c.chaseSpeed * dt, c.radius); }
+    else follow(s, e, c.chaseSpeed, dt, c.radius);
+    return false;
+  }
   const d = dist(e, p);
   // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
   // A killer T cell reads your antigens directly, so up close the cloak does not fool it.
@@ -1024,6 +1060,8 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
       float(s, e, '?', '#78f0e1');
       return false;
     }
+    // Failing that, a stowaway goes over the side.
+    if (e.mood !== 'chase' && e.kind !== 'tcell' && bait(s)) return false;
     if (e.mood !== 'chase') { float(s, e, '!', '#ff5a4d'); emit(s, 'spot'); }
     e.mood = 'chase'; e.unseen = 0; e.goal = tileOf(p);
     raiseAlert(s, (e.kind === 'kupffer' ? CONFIG.alert.seenByKupffer : CONFIG.alert.seenByNeutrophil) * dt);

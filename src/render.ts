@@ -494,6 +494,17 @@ export function draw(ctx: Ctx, s: State, v: View) {
     const c = project(p.x, p.y), hold = Math.min(1, s.tagged / 1.5);
     for (let k = 0; k < 3; k++) { const a = v.time * 0.9 + k * 2.1; antibody(ctx, c.x + Math.cos(a) * 15, c.y - 20 + Math.sin(a) * 7, a, hold); }
   } });
+  for (const b of s.decoys) things.push({ depth: depthOf(b.x, b.y) - 0.01, draw: () => {
+    // A little knot of rod-shaped bacteria, tumbling, with a green haze that fades as it runs out.
+    const c = project(b.x, b.y), fade = Math.min(1, b.t / 2) * Math.min(1, (CONFIG.flora.lasts - b.t) / 0.4);
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = 'rgba(140,230,120,0.13)'; oval(ctx, c.x, c.y - 10, 20 + Math.sin(v.time * 2) * 2, 12); ctx.fill();
+    for (let k = 0; k < 5; k++) {
+      const a = v.time * (0.7 + k * 0.13) + k * 1.3, x = c.x + Math.cos(a) * 7, y = c.y - 10 + Math.sin(a * 1.3) * 4;
+      ctx.fillStyle = k % 2 ? '#9be38a' : '#6cc46a'; oval(ctx, x, y, 4.2, 1.7, a * 1.7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  } });
   for (const item of s.pickups) {
     if (!s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) continue;
     const seen = seenAt(item);

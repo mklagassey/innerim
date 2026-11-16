@@ -30,6 +30,7 @@ export const CONFIG = {
     sleepHeals: 6, // seconds of sleep that give the host back one point of health
     meals: [7.5, 12.5, 19],
     // Habits. Coffee quickens the blood and makes the host jumpy; an evening drink dulls the immune system, makes the ship hard to hold straight, and leaves the liver with less to spare.
+    dreams: 0.4, // how often a sleeping host takes fright, against a waking one
     coffee: { at: [8, 15], lasts: 3, push: 0.35, jumpy: 1 },
     drink: { at: [20.5], lasts: 3.5, immune: 0.2, sway: 0.9, liver: 1 }, // breakfast, lunch, dinner
     digestion: 3, // hours a meal keeps the gut busy
@@ -117,6 +118,7 @@ export const CONFIG = {
   // Boarding: climb inside a wounded neutrophil and wear it.
   board: { reach: 1.5, below: 0.5, time: 12, speed: 0.8 },
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
+  flora: { cost: 4, aboard: 2, most: 4, lure: 8, lasts: 12, feast: 5, hostDamage: 2 }, // gut bacteria as stowaways and bait
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long
   levers: { serotonin: { cost: 4, hours: 2 }, ghrelin: { cost: 3 } }, // ways to nudge the host from inside
