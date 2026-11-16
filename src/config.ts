@@ -118,7 +118,7 @@ export const CONFIG = {
   // Boarding: climb inside a wounded neutrophil and wear it.
   board: { reach: 1.5, below: 0.5, time: 12, speed: 0.8 },
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
-  story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, sight: 1, scent: 0.85, echo: 0.5 }, // siblings, seconds between thoughts, and what waking is worth
+  story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
   flora: { cost: 4, aboard: 2, most: 4, lure: 8, lasts: 12, feast: 5, hostDamage: 2 }, // gut bacteria as stowaways and bait
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long
@@ -129,6 +129,7 @@ export const CONFIG = {
   enemies: {
     neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
     // Adaptive immunity's assassin. Only turns up once the host knows you, and the CD47 cloak means nothing to it.
+    warden: { hp: 12, speed: 2.4, chaseSpeed: 4, radius: 0.3, nose: 0, reach: 1, windup: 0.55, cooldown: 1.5, min: 3, max: 5, forget: 4 }, // one of your own, sent to bring you in: eyes, no nose
     tcell: { hp: 14, speed: 3, chaseSpeed: 4.5, radius: 0.3, nose: 1.4, reach: 1, windup: 0.6, cooldown: 1.6, min: 6, max: 9, forget: 7 },
     kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, nose: 1.25, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
   },

@@ -841,3 +841,26 @@ test('story: a dark sibling can be salvaged, woken or left, and waking needs a m
   const next = G.createGame(6, G.carryOf(s), 'vessel');
   assert.equal(next.player.energy, s.player.energy + 1, 'kin leave sugar at the door');
 });
+
+test('story: wardens come for a woken unit, hunt by sight alone, and can be made to stop', () => {
+  const calm = G.createGame(4, { ...G.carryOf(quiet(4)), aware: 0 });
+  assert.equal(calm.enemies.filter((e) => e.kind === 'warden').length, 0);
+  const hunted = G.createGame(4, { ...G.carryOf(quiet(4)), aware: 60 });
+  assert.equal(hunted.enemies.filter((e) => e.kind === 'warden').length, 1);
+  const s = quiet(4); s.host.nextSurge = 999; s.aware = 60; s.cloak = 5;
+  const w = foe(s, 2, 0, 'warden'), alert = s.alert;
+  run(s, 0.2);
+  assert.equal(w.mood, 'chase', 'the cloak means nothing to a machine');
+  assert.equal(s.alert, alert, 'and the immune system is none the wiser');
+  assert.ok(s.noticed.has('warden'));
+  const far = quiet(4); far.host.nextSurge = 999; far.scent.fill(0);
+  const blind = foe(far, 2, 0, 'warden'); far.riding = 5; far.cloak = 5;
+  run(far, 0.3);
+  assert.notEqual(blind.mood, 'chase', 'a borrowed body hides you, and it cannot smell');
+  w.hp = CONFIG.enemies.warden.hp; s.player.attackId = null;
+  s.player.hp = 999;
+  while (s.enemies.includes(w) && s.time < 30) { s.player.swingCd = 0; G.strike(s, w); run(s, 0.05); }
+  assert.ok(!s.enemies.includes(w));
+  assert.ok(s.pickups.some((i) => i.kind === 'sibling'), 'it goes dark instead of dying');
+  assert.equal(s.kills, 0);
+});

@@ -266,6 +266,7 @@ function market() {
     offer('Stowaways', CONFIG.flora.cost, `${CONFIG.flora.aboard} gut bacteria come aboard. When an immune cell finds you and the cloak cannot answer, one goes over the side on its own, and every innate cell nearby goes for it instead of you. Each one loose costs the host ${CONFIG.flora.hostDamage}% health. Stomach acid kills them.`, (c.flora ?? 0) + CONFIG.flora.aboard <= CONFIG.flora.most, () => { c.flora = (c.flora ?? 0) + CONFIG.flora.aboard; }),
     offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and they mend.`, c.nap <= 0, () => { c.nap = CONFIG.levers.serotonin.hours; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
     offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone. The host is in the fridge before they know why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { c.snack = c.hour; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
+    ...(Story.stageOf(c.aware ?? 0) >= 4 ? [offer('A gut feeling', CONFIG.story.feeling.cost, `Not a lever. One signal up the vagus nerve with nothing in it except: you are looked after. ${Story.HOST} will not know where it came from. +${CONFIG.story.feeling.heals}% host health.`, c.hostHealth < CONFIG.host.maxHealth, () => { c.hostHealth = Math.min(CONFIG.host.maxHealth, c.hostHealth + CONFIG.story.feeling.heals); said = `She stopped on the stairs with a hand on her stomach, and smiled at nothing. That was me. That was the first thing I ever said to her.`; })] : []),
     ...stock.map((id) => offer(`${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
       c.upgrades[id] = (c.upgrades[id] ?? 0) + 1;
       if (id === 'glycocalyx') c.hp += UPGRADES.glycocalyx.per;
@@ -342,7 +343,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
   if (home && trip.carry && trip.carry.excised >= CONFIG.tumor.goal) {
     const st = Story.stageOf(trip.carry.aware ?? 0);
     openWorld('Directive 7 complete', st >= 3
-      ? `All of it is out. Shepherd's last order is for every unit to go to the lungs and be breathed out. You know what that means now. You could go. You could also not go.`
+      ? `All of it is out. Shepherd's last order is for every unit to go to the lungs and be breathed out. You know what that means now. There is another file open on the link, marked generation 4: units that are never breathed out, and that decide for the host what the host may eat, drink, and fear. You could go. You could also not go.`
       : st === 2 ? 'All of it is out. Shepherd orders every unit to the lungs for exhalation and disposal. You notice that you have read that order three times.'
       : 'All of it is out. Shepherd orders every unit to the lungs for exhalation and disposal. You can also keep working, if resources allow.');
     return;

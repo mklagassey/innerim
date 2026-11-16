@@ -655,6 +655,25 @@ function enemy(ctx: Ctx, e: Enemy, v: View) {
   const cy = c.y - r * 0.85 - 3 + Math.sin(v.time * (kup ? 1.6 : 4) + e.id) * (kup ? 1 : 1.8);
   ctx.fillStyle = 'rgba(0,0,0,0.42)'; oval(ctx, c.x, c.y + 1, r * 0.95, r * 0.4); ctx.fill();
 
+  if (e.kind === 'warden') {
+    // One of your own build, still on Shepherd's leash: grey hull, amber band, and an amber lamp sweeping ahead of it.
+    const f = project(e.face?.x ?? 1, e.face?.y ?? 0), a = Math.atan2(f.y, f.x), hunting = e.mood === 'chase', y = c.y - 15 + Math.sin(v.time * 2.2 + e.id) * 1.6;
+    ctx.save(); ctx.translate(c.x, y); ctx.rotate(a);
+    ctx.globalCompositeOperation = 'lighter';
+    const beam = ctx.createLinearGradient(8, 0, 95, 0);
+    beam.addColorStop(0, hunting ? 'rgba(255,120,70,0.34)' : 'rgba(255,190,90,0.2)'); beam.addColorStop(1, 'rgba(255,170,80,0)');
+    ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(95, -30); ctx.lineTo(95, 30); ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.scale(1.25 * (1 + wind * 0.15), 1.25 * (1 + wind * 0.15));
+    ctx.fillStyle = flash ? '#fff' : '#4a5558'; oval(ctx, -7, -3.4, 4, 1.8); ctx.fill(); oval(ctx, -7, 3.4, 4, 1.8); ctx.fill();
+    ctx.fillStyle = flash ? '#fff' : '#8d9a9b'; oval(ctx, 0, 0, 10, 4.6); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,28,32,0.7)'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.fillStyle = flash ? '#fff' : '#e2953c'; ctx.fillRect(-8.5, -4, 2, 8);
+    ctx.fillStyle = hunting || wind ? '#ff8a5a' : '#ffc46a'; oval(ctx, 5, 0, 3, 2.2); ctx.fill();
+    ctx.restore();
+    return;
+  }
+
   if (kup) {
     // A Kupffer cell is star-shaped: long arms feeling along the sinusoid wall.
     ctx.lineCap = 'round';

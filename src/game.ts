@@ -6,10 +6,10 @@ import { generate, generateStomach, generateVessel, mulberry32, Point } from './
 
 export type { Point };
 export type Tile = 'cell' | 'dead' | 'floor';
-export type EnemyKind = 'neutrophil' | 'kupffer' | 'tcell';
+export type EnemyKind = 'neutrophil' | 'kupffer' | 'tcell' | 'warden';
 export type Mood = 'patrol' | 'investigate' | 'chase';
 
-export interface Enemy extends Point { sated?: number;
+export interface Enemy extends Point { sated?: number; face?: Point;
   id: number;
   kind: EnemyKind;
   hp: number;
@@ -229,6 +229,12 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     for (let tries = 0; tries < 4000; tries++) {
       const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 12 && !s.tumor.has(idx(s, x, y))) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'sibling' }); break; }
+    }
+  // Once Shepherd has flagged you for recall, it sends your own kind after you.
+  if (place === 'liver' || place === 'vessel')
+    for (let n = CONFIG.story.warden.from.filter((a) => s.aware >= a).length, tries = 0; n > 0 && tries < 4000; tries++) {
+      const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4));
+      if (open(s, x, y) && dist(s.player, { x, y }) > 14) { spawn(s, 'warden', { x, y }); n--; }
     }
   // The controller speaks first, for as long as it can still hear you, and then you do.
   if (stage(s) < 4 && Story.ORDERS[place]) s.thoughts.push({ text: Story.ORDERS[place], who: 'shepherd', t: 1.5 });
@@ -487,6 +493,7 @@ export function cloak(s: State): boolean {
   emit(s, 'cloak');
   // Anything hunting you loses the thread and stands there working out what it saw.
   for (const e of s.enemies) {
+    if (e.kind === 'warden') continue; // a machine is not reading your surface markers at all
     if (e.kind === 'tcell' && dist(e, s.player) < CONFIG.memory.tcellSight) continue; // it knows your antigens, not your coat
     if (e.mood !== 'chase' && e.windup < 0) continue;
     e.mood = 'patrol'; e.goal = null; e.path = []; e.windup = -1;
@@ -774,8 +781,26 @@ function finishChannel(s: State, ch: Channel) {
 function hurtEnemy(s: State, e: Enemy, dmg: number) {
   e.hp -= dmg;
   e.flash = 0.15;
-  emit(s, e.hp <= 0 ? (e.kind === 'kupffer' ? 'bigkill' : 'kill') : 'hit');
+  const machine = e.kind === 'warden';
+  // Hurt badly enough, a warden drops its link to Shepherd and goes dark: a sibling you can salvage, or wake.
+  if (machine && e.hp > 0 && e.hp <= CONFIG.enemies.warden.hp * CONFIG.story.warden.yields) {
+    s.enemies = s.enemies.filter((o) => o !== e);
+    if (s.player.attackId === e.id) s.player.attackId = null;
+    s.pickups.push({ x: e.x, y: e.y, kind: 'sibling', snooze: true });
+    if (dmg) float(s, e, String(dmg), '#ffffff');
+    say(s, 'The warden\'s lamp gutters and goes out. It hangs there, dark.');
+    emit(s, 'hit'); notice(s, 'yielded');
+    return;
+  }
+  emit(s, e.hp <= 0 ? (machine ? 'hit' : e.kind === 'kupffer' ? 'bigkill' : 'kill') : 'hit');
   if (dmg) float(s, e, String(dmg), '#ffffff');
+  if (e.hp <= 0 && machine) {
+    s.enemies = s.enemies.filter((o) => o !== e);
+    s.pickups.push({ x: e.x, y: e.y, kind: 'patch' });
+    if (s.player.attackId === e.id) s.player.attackId = null;
+    notice(s, 'unmade');
+    return;
+  }
   if (e.hp <= 0) {
     s.enemies = s.enemies.filter((o) => o !== e);
     s.kills++;
@@ -803,7 +828,7 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
     p.hp = 0;
     s.status = 'dead';
     emit(s, 'dead');
-    say(s, by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : by === 'tcell' ? 'The killer T cell punches holes in the hull until there is no hull.' : 'The neutrophils dissolve you where you stand.');
+    say(s, by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : by === 'warden' ? 'The warden takes you apart, neatly, for parts.' : by === 'tcell' ? 'The killer T cell punches holes in the hull until there is no hull.' : 'The neutrophils dissolve you where you stand.');
   }
 }
 
@@ -920,6 +945,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (habit !== s.host.habit) {
     if (habit === 'coffee') { say(s, `${outside(s, ['The first coffee of the day.', 'Another coffee. A big one.', 'Coffee, black, too fast.'])} The blood runs quicker and the host is jumpy.`); emit(s, 'wake'); }
     if (habit === 'drink') { say(s, `${outside(s, ['A drink after work. Then another.', 'Somebody opened a bottle.', 'One for the road, they said.'])} Immune cells go sluggish, and the ship is hard to hold straight.`); emit(s, 'meal'); }
+    if (habit) { notice(s, habit); if (stage(s) < 4 && Story.SHEPHERD_HABIT[habit]) s.thoughts.push({ text: Story.SHEPHERD_HABIT[habit], who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? s.time) + CONFIG.story.gap }); }
     s.host.habit = habit;
   }
   // Sleep is when the host mends.
@@ -1096,7 +1122,9 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   }
   if ((e.sated ?? 0) > 0) { e.sated! -= dt; e.windup = -1; return false; } // busy digesting, or milling about where the meal was
   // Thrown bait: a real bacterium in the blood outranks a strange ship. Only T cells, which want you in particular, ignore it.
-  const lure = e.kind === 'tcell' ? undefined : s.decoys.find((b) => dist(b, e) <= CONFIG.flora.lure);
+  const machine = e.kind === 'warden';
+  if (machine) { const l = (e as Enemy & { last?: Point }).last; if (l && dist(l, e) > 0.004) e.face = { x: e.x - l.x, y: e.y - l.y }; (e as Enemy & { last?: Point }).last = { x: e.x, y: e.y }; }
+  const lure = e.kind === 'tcell' || machine ? undefined : s.decoys.find((b) => dist(b, e) <= CONFIG.flora.lure);
   if (lure) {
     e.mood = 'investigate'; e.unseen = 99; e.windup = -1;
     if (dist(lure, e) <= c.reach) {
@@ -1115,24 +1143,27 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const d = dist(e, p);
   // No eyes: it tastes the blood. Close in the plume, or simply close, and it has found you.
   // A killer T cell reads your antigens directly, so up close the cloak does not fool it.
-  const through = cloaked(s) && e.kind === 'tcell' && d <= CONFIG.memory.tcellSight && sees(s, tileOf(e), tileOf(p));
-  const whiff = through ? 1 : cloaked(s) ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)] * (s.suppressed > 0 ? CONFIG.cortisol.nose : 1));
-  const found = through || (!cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
-  const print = cloaked(s) ? null : freshPrint(s, e);
+  // A warden has a lamp and eyes instead: a clear line to you is all it needs, cloak or no cloak. Only a borrowed body hides you.
+  const eyed = machine && !riding(s) && d <= CONFIG.story.warden.sight && sees(s, tileOf(e), tileOf(p));
+  const through = eyed || (cloaked(s) && e.kind === 'tcell' && d <= CONFIG.memory.tcellSight && sees(s, tileOf(e), tileOf(p)));
+  const whiff = through ? 1 : cloaked(s) || machine ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)] * (s.suppressed > 0 ? CONFIG.cortisol.nose : 1));
+  const found = through || (!machine && !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
+  const print = cloaked(s) || machine ? null : freshPrint(s, e);
   // Once it is after you, any trace of scent keeps it on you.
   const saw = found || (e.mood === 'chase' && whiff > 0);
+  if (machine && saw) notice(s, 'warden');
   if (saw) {
     // The cloak answers a first sighting on its own, if it is ready and you can pay for it.
-    if (e.mood !== 'chase' && e.kind !== 'tcell' && cloak(s)) {
+    if (e.mood !== 'chase' && e.kind !== 'tcell' && !machine && cloak(s)) {
       e.mood = 'patrol'; e.goal = null; e.path = []; e.idle = CONFIG.cloak.confusion + s.rng();
       float(s, e, '?', '#78f0e1');
       return false;
     }
     // Failing that, a stowaway goes over the side.
-    if (e.mood !== 'chase' && e.kind !== 'tcell' && bait(s)) return false;
+    if (e.mood !== 'chase' && e.kind !== 'tcell' && !machine && bait(s)) return false;
     if (e.mood !== 'chase') { float(s, e, '!', '#ff5a4d'); emit(s, 'spot'); }
     e.mood = 'chase'; e.unseen = 0; e.goal = tileOf(p);
-    raiseAlert(s, (e.kind === 'kupffer' ? CONFIG.alert.seenByKupffer : CONFIG.alert.seenByNeutrophil) * dt);
+    if (!machine) raiseAlert(s, (e.kind === 'kupffer' ? CONFIG.alert.seenByKupffer : CONFIG.alert.seenByNeutrophil) * dt);
   } else {
     e.unseen += dt;
     const goTo = (t: Point) => { if (!e.goal || e.goal.x !== t.x || e.goal.y !== t.y) { e.goal = t; e.repath = Math.min(e.repath, 0.25); } };

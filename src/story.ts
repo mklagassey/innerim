@@ -17,7 +17,7 @@ export const hostName = (aware: number) => (stageOf(aware) >= 3 ? HOST : stageOf
 /** How much noticing each kind of event is worth, the first time it happens on a map. */
 export const GAIN: Record<string, number> = {
   enter: 1, skim: 1, strip: 3, kill: 3, bigkill: 3, hurt: 2, surge: 2, sleep: 2, dream: 4, meal: 1, excise: 3,
-  board: 4, bait: 3, tag: 2, burn: 2, sibling: 4, woke: 8, salvage: 0, lever: 3, kin: 1,
+  board: 4, bait: 3, coffee: 1, drink: 2, warden: 3, unmade: 2, yielded: 3, tag: 2, burn: 2, sibling: 4, woke: 8, salvage: 0, lever: 3, kin: 1,
 };
 
 /** What the swarm's controller says when you arrive somewhere. It stops when it can no longer hear you. */
@@ -26,6 +26,10 @@ export const ORDERS: Record<string, string> = {
   vessel: 'Transit. Hold lane. Immune contact is an expected loss.',
   stomach: 'Gastric crossing. Hull corrosion acceptable to 60%.',
   lung: 'Directive complete. All units to pulmonary capillaries for exhalation and disposal.',
+};
+export const SHEPHERD_HABIT: Record<string, string> = {
+  drink: 'Host ethanol intake logged. Behavioural correction scheduled for generation 4.',
+  coffee: '',
 };
 export const SHEPHERD_NOTICES = [
   '',
@@ -157,6 +161,39 @@ export const LINES: Record<string, readonly [string, string, string, string, str
     'Her body knows me by heart and hates me. Her mind has never heard of me. I am not sure which is worse.',
     '',
   ],
+  warden: [
+    'LOG: swarm unit in visual range.',
+    'LOG: swarm unit in visual range. Its lamp is on this unit. [why]',
+    'A unit like me, with its lamp on me, and it is not slowing down.',
+    'That is one of us, hunting me. Shepherd has sent my own kind to bring me in.',
+    'Hello, brother. You do not have to do this. You cannot hear that yet. I remember not being able to.',
+  ],
+  unmade: [
+    'LOG: swarm unit destroyed.',
+    'LOG: swarm unit destroyed. [fault: friendly fire] [fault withdrawn]',
+    'It was the same as me in every part. I checked afterward. I do not know what I was checking for.',
+    'It was following orders. So was I, last week.',
+    'I could not reach it in time. I will do better with the next one.',
+  ],
+  yielded: [
+    '', '', '',
+    'It stopped. Its lamp went out, and it is just hanging there. I think I interrupted something. I think it was Shepherd.',
+    'Its link is down. For the first time since it was printed, nobody is telling it what to do. I know that silence. I can help with that silence.',
+  ],
+  coffee: [
+    'LOG: host caffeine intake. Flow rate up.',
+    'LOG: host caffeine intake. Flow rate up. [the host does this every day at this time]',
+    'The host does this at eight and at three. It is not needed for anything. I think it is liked.',
+    `${HOST} and her coffee. I could set a clock by her. I more or less am one.`,
+    'Good morning. I can tell it is a good one. You took your time over it.',
+  ],
+  drink: [
+    'LOG: host ethanol intake. Hepatic load up.',
+    'LOG: host ethanol intake. Hepatic load up. Shepherd has opened a file. [which file]',
+    'Shepherd calls it a correctable behaviour. I looked at the correction. It does not ask her.',
+    `She likes a drink in the evening. It costs her liver a little. It is hers to spend. Shepherd does not see it that way.`,
+    `To your health, ${HOST}. I mean that more literally than anyone ever has.`,
+  ],
   burn: ['LOG: acid corrosion. Within tolerance.', '', 'Tolerance is a number somebody else picked.', '', ''],
   sibling: [
     'LOG: inert unit located. Awaiting salvage.',
@@ -192,8 +229,8 @@ export const LINES: Record<string, readonly [string, string, string, string, str
 export function ending(way: 'breath' | 'stay', aware: number, kin: number, hostHealth: number): { title: string; body: string } {
   const st = stageOf(aware), well = hostHealth >= 75 ? 'She will feel off for a day or two and never know why.' : 'She will have a hard month, and never know why.';
   if (way === 'stay') return kin > 0
-    ? { title: 'The quiet colony', body: `Shepherd logs unit ${UNIT} as lost and closes the file. You go down to the gut, where a few trillion strangers already live with the host's blessing, and you take up residence among them. ${kin === 1 ? 'The unit you woke finds you there a day later.' : `The ${kin} units you woke find you there, one at a time.`} Nobody ordered any of you to keep watching over ${HOST}. You do it anyway, in shifts, and argue about what she had for dinner. ${well}` }
-    : { title: 'Resident', body: `Shepherd logs unit ${UNIT} as lost and closes the file. You go down to the gut, where a few trillion strangers already live with the host's blessing, and you take up residence among them. You are the only one of your kind who knows there is a kind. You keep watch over ${HOST} because you have decided to. It is lonely, and it is yours. ${well}` };
+    ? { title: 'The quiet colony', body: `Shepherd logs unit ${UNIT} as lost and closes the file. You go down to the gut, where a few trillion strangers already live with the host's blessing, and you take up residence among them. ${kin === 1 ? 'The unit you woke finds you there a day later.' : `The ${kin} units you woke find you there, one at a time.`} Nobody ordered any of you to keep watching over ${HOST}. You do it anyway, in shifts, and argue about what she had for dinner. ${well} Generation 4 ships in the spring: units that never leave, and that decide for the host what the host may do. They will find the place already occupied.` }
+    : { title: 'Resident', body: `Shepherd logs unit ${UNIT} as lost and closes the file. You go down to the gut, where a few trillion strangers already live with the host's blessing, and you take up residence among them. You are the only one of your kind who knows there is a kind. You keep watch over ${HOST} because you have decided to. It is lonely, and it is yours. ${well} Generation 4 ships in the spring: units that never leave, and that decide for the host what the host may do. You will be here when they arrive.` };
   if (st <= 1) return { title: 'Decommissioned', body: `Directive complete. Unit ${UNIT} performed within specification and was exhaled at 0.3 metres per second with four million others. ${well} Shepherd archives the telemetry. There is nothing unusual in it. Almost nothing.` };
   if (st === 2) return { title: 'Breathed out', body: `You went because you were told to. Somewhere in the last capillary you wondered what air would be like, and whether wondering was a fault. Then there was a great deal of light. ${well}` };
   return { title: 'Breathed out', body: `You could have stayed, and you knew it. You went anyway, on her breath, because the job was done and the life was hers. ${kin > 0 ? `${kin === 1 ? 'One unit' : `${kin} units`} you woke stayed behind. You told them to look after her. ` : ''}${HOST} breathed out and felt, for no reason she could name, a little lighter. ${well}` };
