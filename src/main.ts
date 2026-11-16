@@ -331,7 +331,7 @@ $('world-map').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || e
 
 const last: Record<string, string> = {};
 let shownOffer = '';
-let tip: Tips.Tip | null = null;
+let tip: Tips.Tip | null = null, tipRest = 0;
 
 function showTip(next: Tips.Tip, at: G.Point) {
   tip = next;
@@ -354,6 +354,7 @@ function closeTip() {
   if (!tip) return;
   if ($<HTMLInputElement>('tip-mute').checked) Tips.mute(tip.id);
   tip = null;
+  tipRest = 6; // a few seconds of actual play before the next thing is explained
   view.mark = null;
   $('tip').hidden = true;
   canvas.focus();
@@ -383,6 +384,10 @@ function hud() {
   const mood = G.hostState(s);
   set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${s.place === 'lung' ? (G.breathingOut(s) ? ' \u00b7 breathing out' : ' \u00b7 breathing in') : G.digesting(s.host.hour) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
+  const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota - p.energy), done = s.excised >= CONFIG.tumor.goal;
+  set('goal', 'text', s.place === 'liver'
+    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'}`} \u00b7 ${need ? `${need} more energy to leave` : 'enough energy to leave by the vein'}`
+    : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel');
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
@@ -464,7 +469,8 @@ function frame(now: number) {
   if (started && s.status === 'playing') {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
     if ((s.place === 'vessel' || s.place === 'lung') && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
-    if (!tip && !s.offer) {
+    tipRest -= dt;
+    if (!tip && !s.offer && tipRest <= 0) {
       const road = s.place === 'vessel' || s.place === 'lung';
       const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, fever: G.fever(s) ? s.player : null };
       if (s.place === 'lung') Object.assign(host, { road: null, kupffer: null, lung: s.time > 0.6 ? s.player : null, dust: s.enemies.filter((e) => e.kind === 'kupffer' && s.visible[G.idx(s, Math.floor(e.x), Math.floor(e.y))]).sort((a, b) => G.dist(a, s.player) - G.dist(b, s.player))[0] ?? null });
