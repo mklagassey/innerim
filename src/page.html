@@ -124,7 +124,7 @@
   #world-ways button.ordered::after { content: ' \00b7 assigned'; color: #e8a25a; font-size: 0.8em; letter-spacing: 0.06em; text-transform: uppercase; }
   #world-map .tip { fill: var(--bone); opacity: 0.5; } #world-map .tip.open { opacity: 1; }
   #world-map text { font: 600 12px var(--display); letter-spacing: 0.08em; fill: var(--bone-dim); text-anchor: middle; }
-  #world { background: rgba(10, 4, 7, 0.95); }
+  #world { background: rgba(10, 4, 7, 0.985); }
   #world-map text.risk { paint-order: stroke; stroke: #0d0509; stroke-width: 4px; font: 500 10.5px var(--data); letter-spacing: 0.02em; fill: var(--amber); }
   #world-map .place circle { fill: var(--clot); stroke: var(--seam); stroke-width: 2; }
   #world-map .place.here circle { stroke: var(--bone); stroke-width: 3; } #world-map .place.here text { fill: var(--bone); }
@@ -133,6 +133,13 @@
   #world-map .place:focus { outline: none; }
   #world-map .you { fill: var(--bone); }
   #world-ways { justify-content: flex-start; flex-flow: row wrap; }
+  #world-map .place.unseen { opacity: 0.45; } #world-map[hidden], #world-goal[hidden], #world-text[hidden] { display: none; }
+  #transit { position: absolute; inset: 0; z-index: 20; background: #050203; opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
+  #transit.on { opacity: 1; pointer-events: auto; } #transit[hidden] { display: none; }
+  #transit-view { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #transit-label { position: absolute; left: 0; right: 0; bottom: max(28px, 9vh); text-align: center; font: 600 0.72rem/1.4 var(--data); letter-spacing: 0.22em; text-transform: uppercase; color: rgba(240, 230, 220, 0.62); text-shadow: 0 1px 6px #000; }
+  @media (prefers-reduced-motion: reduce) { #transit { transition: none; } }
+  #paused .acts { justify-content: center; flex-flow: row wrap; margin-top: 8px; }
   #notes { z-index: 5; background: rgba(10, 4, 7, 0.97); place-items: start center; } #notes-list { display: block; } #notes-list dt { margin-top: 14px; color: var(--amber); } #notes-list dd { margin: 4px 0 0; }
   #world-host { color: var(--bone-dim); font-size: 0.92em; margin-top: -4px; }
   #world-ways button.wait { border-color: var(--seam); color: var(--bone-dim); }
@@ -266,11 +273,12 @@
       <p id="world-text"></p>
       <p id="world-host"></p>
       <p id="world-event" hidden></p>
-      <svg id="world-map" viewBox="0 0 640 380" role="img" aria-label="Map of the vessels between the heart and the liver"></svg>
+      <svg id="world-map" viewBox="0 0 640 380" role="img" aria-label="Chart of the vessels this unit has travelled"></svg>
       <div id="world-market" hidden></div>
       <div class="acts" id="world-ways"></div>
     </div>
   </div>
+  <div id="transit" hidden><canvas id="transit-view"></canvas><div id="transit-label"></div></div>
   <div id="scene" data-light="day" hidden>
     <div id="scene-light"></div>
     <div id="scene-line"><div id="scene-art"></div><p id="scene-seen"></p><p id="scene-print"></p></div>
@@ -281,6 +289,7 @@
       <h2>Paused</h2>
       <p>The host carries on without you for a moment.</p>
       <button id="unpause" type="button">Resume</button>
+      <div class="acts"><button id="telemetry" type="button" class="quiet">Telemetry</button><button id="log-open" type="button" class="quiet">Unit log</button></div>
     </div>
   </div>
   <div class="veil" id="ask" hidden>

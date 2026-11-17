@@ -308,8 +308,8 @@ let rbcs: Rbc[] = [], flow: Int16Array | null = null, flowFor: State | null = nu
 
 function flowField(s: State): Int16Array {
   if (flow && flowFor === s && flowKills === s.cellsKilled) return flow;
-  const N = s.size, d = new Int16Array(N * N).fill(-1), queue = [idx(s, s.vein.x, s.vein.y)];
-  d[queue[0]] = 0;
+  const N = s.size, d = new Int16Array(N * N).fill(-1), queue = s.junction ? s.junction.exits.map((e) => idx(s, e.at.x, e.at.y)) : [idx(s, s.vein.x, s.vein.y)];
+  for (const q of queue) d[q] = 0;
   for (let head = 0; head < queue.length; head++) {
     const cur = queue[head], cx = cur % N, cy = Math.floor(cur / N);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -560,9 +560,9 @@ export function draw(ctx: Ctx, s: State, v: View) {
   ctx.globalAlpha = 1;
 
   // Vessels: openings in the floor that the blood pours into or out of.
-  const vessel = (at: Point, vein: boolean) => {
+  const vessel = (at: Point, vein: boolean, tint = '') => {
     if (!s.explored[idx(s, at.x, at.y)]) return;
-    const c = project(at.x + 0.5, at.y + 0.5), size = vein ? 62 : 40, rgb = vein ? '70,110,255' : '235,60,48';
+    const c = project(at.x + 0.5, at.y + 0.5), size = tint ? 50 : vein ? 62 : 40, rgb = tint || (vein ? '70,110,255' : '235,60,48');
     ctx.globalAlpha = s.visible[idx(s, at.x, at.y)] === 1 ? 1 : 0.4;
     const hole = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, size);
     hole.addColorStop(0, vein ? 'rgba(4,6,26,0.98)' : 'rgba(255,150,120,0.9)');
@@ -586,8 +586,8 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.restore();
     ctx.globalAlpha = 1;
   };
-  vessel(s.vein, true);
-  for (const portal of s.portals) vessel(portal, false);
+  if (s.junction) for (const ex of s.junction.exits) vessel(ex.at, true, ex.tint); // each way out has its own colour, which is how you learn them
+  else { vessel(s.vein, true); for (const portal of s.portals) vessel(portal, false); }
 
   // The lamp: a warm pool at your feet and a beam the way you are facing.
   const fa = heroTurn;
@@ -677,6 +677,19 @@ export function draw(ctx: Ctx, s: State, v: View) {
       if (blink > 0.05) { ctx.fillStyle = `rgba(150,225,255,${blink * 0.12})`; oval(ctx, c.x, y, 22, 14); ctx.fill(); }
       ctx.globalAlpha = 1;
     } });
+    else if (kind === 'stall') things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => {
+      // A raft of gut bacteria on a fleck of fibre: rods and beads in a soft green film, slowly turning over.
+      const c = project(item.x, item.y), breathe = v.still ? 0.5 : 0.5 + 0.5 * Math.sin(v.time * 0.8);
+      ctx.globalAlpha = seen ? 1 : 0.4;
+      ctx.fillStyle = `rgba(123,224,138,${0.08 + 0.06 * breathe})`; oval(ctx, c.x, c.y - 6, 34 + breathe * 3, 18 + breathe * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(60,84,48,0.85)'; oval(ctx, c.x, c.y - 4, 20, 9); ctx.fill();
+      for (let k = 0; k < 14; k++) {
+        const a = k * 2.4 + (v.still ? 0 : v.time * 0.12), r = 4 + (k % 5) * 3.2, x = c.x + Math.cos(a) * r * 1.5, y = c.y - 6 + Math.sin(a) * r * 0.7;
+        ctx.fillStyle = k % 3 ? 'rgba(150,230,150,0.85)' : 'rgba(230,220,140,0.85)';
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a * 1.7); oval(ctx, 0, 0, k % 2 ? 4.2 : 2.2, 1.8); ctx.fill(); ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    } });
     else things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => pickup(ctx, item.x, item.y, kind, seen, v.time) });
   }
   things.push({ depth: depthOf(p.x, p.y), draw: () => hero(ctx, s, v) });
@@ -739,6 +752,38 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.strokeStyle = 'rgba(8,14,18,0.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(q.x - 6, y - 3); ctx.lineTo(q.x, y + 4); ctx.lineTo(q.x + 6, y - 3); ctx.stroke();
     ctx.strokeStyle = 'rgba(140,235,230,0.9)'; ctx.lineWidth = 2; ctx.stroke();
     ctx.strokeStyle = 'rgba(120,220,225,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(q.x, y + 7); ctx.lineTo(q.x, q.y - 6); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // The ways out of a junction. Shepherd's overlay names the road it has assigned; the unit's own chart names the ones it has been down. The rest it has to learn.
+  if (s.junction) {
+    const ease = v.still ? 0.8 : 0.7 + 0.3 * Math.sin(v.time * 1.6);
+    ctx.save(); ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+    for (const ex of s.junction.exits) {
+      if (!s.explored[idx(s, ex.at.x, ex.at.y)]) continue;
+      const q = project(ex.at.x + 0.5, ex.at.y + 0.5), near = Math.max(0.35, Math.min(1, 1.4 - Math.hypot(ex.at.x + 0.5 - p.x, ex.at.y + 0.5 - p.y) / 16));
+      if (ex.assigned) { ctx.strokeStyle = `rgba(240,170,90,${0.8 * ease})`; ctx.lineWidth = 2.4; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.ellipse(q.x, q.y, 40, 22, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      if (!ex.assigned && !ex.known) continue; // a mouth the unit has never been down has no name yet: it has a colour, and a taste
+      const name = ex.label, sub = ex.assigned ? 'assigned' : ex.note;
+      ctx.globalAlpha = near;
+      ctx.font = '600 13px "IBM Plex Mono", ui-monospace, monospace';
+      ctx.strokeStyle = 'rgba(10,4,7,0.85)'; ctx.lineWidth = 4; ctx.strokeText(name.toUpperCase(), q.x, q.y - 44);
+      ctx.fillStyle = ex.assigned ? '#e8a25a' : ex.known ? 'rgba(240,230,220,0.92)' : 'rgba(240,230,220,0.5)'; ctx.fillText(name.toUpperCase(), q.x, q.y - 44);
+      if (sub) { ctx.font = '500 11px "IBM Plex Mono", ui-monospace, monospace'; ctx.strokeText(sub, q.x, q.y - 30); ctx.fillStyle = ex.assigned ? 'rgba(232,162,90,0.85)' : 'rgba(240,230,220,0.6)'; ctx.fillText(sub, q.x, q.y - 30); }
+      ctx.globalAlpha = 1;
+    }
+    // A small chevron beside the ship toward the road Shepherd has assigned.
+    const want = s.junction.exits.find((e) => e.assigned);
+    if (want) {
+      const q = project(want.at.x + 0.5, want.at.y + 0.5), h = project(p.x, p.y), dx = q.x - h.x, dy = q.y - h.y, far = Math.hypot(dx, dy);
+      if (far > 120) {
+        const ux = dx / far, uy = dy / far, ax = h.x + ux * 46, ay = h.y - 8 + uy * 46;
+        ctx.lineCap = 'round';
+        for (const [w, col] of [[5, 'rgba(10,6,4,0.7)'], [2.4, `rgba(232,162,90,${0.9 * ease})`]] as const) {
+          ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
+          ctx.moveTo(ax - ux * 7 - uy * 7, ay - uy * 7 + ux * 7); ctx.lineTo(ax + ux * 4, ay + uy * 4); ctx.lineTo(ax - ux * 7 + uy * 7, ay - uy * 7 - ux * 7); ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
   }
   // Shepherd's pointer in its first liver: a steady amber ring on the thing it wants, and a small chevron beside the ship toward it. Both breathe slowly; neither blinks.
   const want = tutorialTarget(s);
@@ -1227,7 +1272,8 @@ function automap(ctx: Ctx, s: State, v: View) {
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
   for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'sibling' || item.kind === 'kin' ? '#96e1ff' : item.kind === 'cortisol' ? '#ffc878' : item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
   for (const k of s.niche) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.6, '#78c8d7');
-  if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
+  if (s.junction) { for (const ex of s.junction.exits) if (s.explored[idx(s, ex.at.x, ex.at.y)]) dot(ex.at.x + 0.5, ex.at.y + 0.5, u * 1.3, ex.assigned ? '#e8a25a' : `rgb(${ex.tint})`); }
+  else if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   for (const a of s.antibodies) if (s.visible[idx(s, Math.floor(a.x), Math.floor(a.y))]) dot(a.x, a.y, u * 0.35, '#b8c8ff');
   if (s.search && s.alert > 0) {

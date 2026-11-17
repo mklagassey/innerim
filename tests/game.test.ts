@@ -1315,3 +1315,45 @@ test('a vessel\'s side branches can always be entered, and once the tumor is out
   const t = T.newTrip(1); t.carry = { ...G.carryOf(G.createGame(3)), excised: CONFIG.tumor.goal };
   assert.deepEqual(T.ways(t).filter((l) => T.assigned(t, l)).map((l) => l.to), ['lungs']);
 });
+
+// ---------- junctions: travel is steered, not picked from a menu ----------
+const plan = (n: number, kind: 'heart' | 'gut' = 'heart'): G.JunctionPlan => ({ kind, exits: Array.from({ length: n }, (_, i) => ({ to: ['hepatic', 'mesenteric', 'gastric', 'lungs'][i], label: `way ${i}`, note: '', assigned: i === 0, known: false, tint: '1,2,3' })) });
+test('a junction has a mouth for every way out, all reachable, and nothing hunting in it', () => {
+  for (let seed = 1; seed <= 25; seed++) for (const n of [1, 3, 4]) {
+    const s = G.createGame(seed, undefined, 'vessel', 0, 'artery', false, plan(n));
+    assert.equal(s.junction!.exits.length, n);
+    assert.equal(s.enemies.length, 0);
+    assert.equal(s.antibodies.length, 0);
+    for (const ex of s.junction!.exits) assert.ok(G.findPath(s, { x: Math.floor(s.player.x), y: Math.floor(s.player.y) }, ex.at), `seed ${seed}: mouth ${ex.to} cut off`);
+    const spots = s.junction!.exits.map((e) => `${e.at.x},${e.at.y}`);
+    assert.equal(new Set(spots).size, n);
+    for (const a of s.junction!.exits) for (const b of s.junction!.exits) if (a !== b) assert.ok(G.dist(a.at, b.at) > 3.2, 'mouths far enough apart to tell which one you entered');
+  }
+});
+test('steering into a mouth chooses that road, and a junction cannot be left any other way', () => {
+  const s = G.createGame(7, undefined, 'vessel', 0, 'artery', false, plan(3));
+  assert.equal(G.canLeave(s), false);
+  assert.equal(G.leave(s), false);
+  for (let i = 0; i < 200; i++) G.update(s, 0.05);
+  assert.equal(s.status, 'playing', 'nothing carries you out on its own');
+  const ex = s.junction!.exits[2];
+  s.player.x = ex.at.x + 0.5; s.player.y = ex.at.y + 0.5;
+  G.update(s, 0.05);
+  assert.equal(s.status, 'won');
+  assert.equal(s.junction!.chose, 2);
+});
+test('the gut has its bacteria to come alongside, and what is traded there is written back', () => {
+  const s = G.createGame(3, undefined, 'vessel', 0, 'vein', false, plan(1, 'gut'));
+  const stall = s.pickups.find((i) => i.kind === 'stall')!;
+  assert.ok(stall);
+  s.player.x = stall.x - 0.6; s.player.y = stall.y;
+  G.update(s, 0.05);
+  assert.equal(s.market, true);
+  s.market = false;
+  G.update(s, 0.05);
+  assert.equal(s.market, false, 'it does not reopen until you have moved off and come back');
+  const c = G.carryOf(s);
+  c.energy -= 3; c.patches += 1; c.nap = 2;
+  G.adopt(s, c);
+  assert.equal(s.player.energy, c.energy); assert.equal(s.patches, c.patches); assert.equal(s.host.nap, 2);
+});
