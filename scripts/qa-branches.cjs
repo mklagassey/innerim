@@ -111,6 +111,17 @@ async function mission(browser, n) {
   return log;
 }
 
+// Per-decision tally across all runs: how often each decision was met, obeyed, deviated or lapsed.
+function tally(results) {
+  const t = {};
+  for (const r of results) {
+    const c = r.final?.carry ?? r.carry ?? {};
+    for (const id of c.met ?? []) (t[id] ??= { met: 0, obey: 0, deviate: 0, lapsed: 0, other: 0 }).met++;
+    for (const [id, v] of Object.entries(c.took ?? {})) { const row = (t[id] ??= { met: 0, obey: 0, deviate: 0, lapsed: 0, other: 0 }); if (v in row && v !== 'met') row[v]++; else row.other++; }
+  }
+  return t;
+}
+
 (async () => {
   const browser = await chromium.launch();
   const queue = [...ONLY], results = [];
@@ -125,6 +136,8 @@ async function mission(browser, n) {
   }));
   results.sort((a, b) => a.n - b.n);
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(results, null, 1));
+  const tl = tally(results); fs.writeFileSync(path.join(OUT, 'tally.json'), JSON.stringify(tl, null, 1));
+  console.log('\nDecision tally (runs: met / obey / deviate / lapsed / other):'); for (const [id, v] of Object.entries(tl).sort()) console.log(`  ${id.padEnd(22)} ${v.met} / ${v.obey} / ${v.deviate} / ${v.lapsed} / ${v.other}`);
   const endings = {};
   for (const r of results) { const k = r.end?.title ?? 'none'; (endings[k] ??= []).push(r.n); }
   console.log('\nEndings reached:', JSON.stringify(endings));

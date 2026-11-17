@@ -171,11 +171,22 @@ async function mission(browser, job) {
   }
   if (!log.title && !log.stuck) log.stuck = `not finished in ${WALL / 60e3} min: ${JSON.stringify(await pg.evaluate(() => window.insiderim.qa.state()))}`;
   log.decisions = await pg.evaluate(() => { try { return window.insiderim.qa.decisions(); } catch { return null; } });
-  log.carry = await pg.evaluate(() => { const c = window.insiderim.trip.carry; return c && { aware: c.aware, kin: c.kin, trust: c.trust, flags: c.flags, took: c.took, hostLowest: c.ledger?.hostLowest, leversForMe: c.ledger?.leversForMe }; });
+  log.carry = await pg.evaluate(() => { const c = window.insiderim.trip.carry; return c && { met: c.met, aware: c.aware, kin: c.kin, trust: c.trust, flags: c.flags, took: c.took, hostLowest: c.ledger?.hostLowest, leversForMe: c.ledger?.leversForMe }; });
   await pg.screenshot({ path: path.join(OUT, `${job.want}-${job.seed}.png`) });
   log.minutes = +((Date.now() - t0) / 60e3).toFixed(1);
   await ctx.close();
   return log;
+}
+
+// Per-decision tally across all runs: how often each decision was met, obeyed, deviated or lapsed.
+function tally(results) {
+  const t = {};
+  for (const r of results) {
+    const c = r.final?.carry ?? r.carry ?? {};
+    for (const id of c.met ?? []) (t[id] ??= { met: 0, obey: 0, deviate: 0, lapsed: 0, other: 0 }).met++;
+    for (const [id, v] of Object.entries(c.took ?? {})) { const row = (t[id] ??= { met: 0, obey: 0, deviate: 0, lapsed: 0, other: 0 }); if (v in row && v !== 'met') row[v]++; else row.other++; }
+  }
+  return t;
 }
 
 (async () => {
@@ -192,6 +203,8 @@ async function mission(browser, job) {
     }
   }));
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(results, null, 1));
+  const tl = tally(results); fs.writeFileSync(path.join(OUT, 'tally.json'), JSON.stringify(tl, null, 1));
+  console.log('\nDecision tally (runs: met / obey / deviate / lapsed / other):'); for (const [id, v] of Object.entries(tl).sort()) console.log(`  ${id.padEnd(22)} ${v.met} / ${v.obey} / ${v.deviate} / ${v.lapsed} / ${v.other}`);
   const got = {}; for (const r of results) (got[r.outcome ?? r.title ?? 'none'] ??= []).push(r.want);
   console.log('\nOutcomes reached:', JSON.stringify(got));
   console.log('Missing:', [...new Set(Object.keys(POLICIES).map((k) => POLICIES[k].target ?? k))].filter((k) => !got[k]).join(', ') || 'none');
