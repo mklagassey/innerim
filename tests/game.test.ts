@@ -1026,3 +1026,18 @@ test('beside a tumor cell and a healthy one, the tumor is what gets cut', () => 
   const t = G.stripTarget(s)!;
   assert.ok(s.tumor.has(G.idx(s, t.x, t.y)), 'picked the tumor cell');
 });
+
+test('in the fog, repeated clicks on the stomach exit get there without wading', () => {
+  for (const seed of [1, 4, 10]) {
+    const s = G.createGame(seed, undefined, 'stomach'); s.enemies = []; s.host.nextSurge = 999; s.player.energy = 99;
+    let wet = 0;
+    while (s.status === 'playing' && s.time < 120) {
+      if (G.canLeave(s)) { G.leave(s); break; }
+      if (!s.player.path.length) G.moveTo(s, s.vein.x + 0.5, s.vein.y + 0.5);
+      if (G.acidAt(s, s.player) === 2) wet++;
+      G.update(s, 1 / 30);
+    }
+    assert.equal(s.status, 'won', 'seed ' + seed + ' reaches the vein');
+    assert.equal(wet, 0, 'seed ' + seed + ' stays dry');
+  }
+});

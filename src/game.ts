@@ -675,23 +675,28 @@ export function moveTo(s: State, x: number, y: number): boolean {
   for (const dry of s.acid ? [true, false] : [false]) {
   prev = new Int32Array(N * N).fill(-1);
   prev[startI] = startI;
-  const queue = [startI];
+  const queue = [startI], depth = new Int32Array(N * N);
+  let edge = -1, edgeScore = Infinity; // the dry tile at the rim of what you know that looks most promising
   best = startI; bestD = Math.hypot(from.x + 0.5 - x, from.y + 0.5 - y);
   for (let head = 0; head < queue.length; head++) {
     const cur = queue[head], cx = cur % N, cy = Math.floor(cur / N);
     const d = Math.hypot(cx + 0.5 - x, cy + 0.5 - y);
     if (d < bestD - 0.01) { bestD = d; best = cur; }
+    if (dry && cur !== startI && d + depth[cur] * 0.15 < edgeScore && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ex, ey]) => open(s, cx + ex, cy + ey) && s.explored[idx(s, cx + ex, cy + ey)] !== 1)) { edge = cur; edgeScore = d + depth[cur] * 0.15; }
     for (const [dx, dy] of STEPS) {
       const nx = cx + dx, ny = cy + dy;
       const ok = (ax: number, ay: number) => open(s, ax, ay) && s.explored[idx(s, ax, ay)] === 1;
       if (!ok(nx, ny) || prev[idx(s, nx, ny)] !== -1) continue;
       if (dry && s.acid![idx(s, nx, ny)] === 2 && s.acid![cur] !== 2) continue; // never step from dry ground into acid
       if (dx && dy && (!ok(cx + dx, cy) || !ok(cx, cy + dy))) continue;
-      prev[idx(s, nx, ny)] = cur;
+      prev[idx(s, nx, ny)] = cur; depth[idx(s, nx, ny)] = depth[cur] + 1;
       queue.push(idx(s, nx, ny));
     }
   }
-  if (dry && bestD < 0.8) break; // the dry way gets there
+  // Keep the dry way unless the click itself is in acid, or the dry way goes nowhere at all.
+  // In the fog the full dry route is rarely known yet: walk to the nearest dry ground you know of and look from there.
+  if (dry && bestD >= 0.8 && edge >= 0) best = edge; // not there yet: go and look from the edge of the known dry ground
+  if (dry && best !== startI && s.acid![idx(s, Math.max(0, Math.min(N - 1, Math.floor(x))), Math.max(0, Math.min(N - 1, Math.floor(y))))] !== 2) break;
   }
   const path: Point[] = [];
   for (let k = best; k !== startI; k = prev[k]) path.unshift({ x: k % N, y: Math.floor(k / N) });
