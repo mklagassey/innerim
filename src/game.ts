@@ -468,6 +468,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     s.due.forEach((d, i) => { d.t = 3 + i * 5; });
   }
   if (s.flags.quietNight) s.host.nextSurge = 99999;
+  if (place === 'liver' && s.took.beacon === 'obey') { s.alert = Math.max(s.alert, CONFIG.marks.dockAlert); s.peak = Math.max(s.peak, s.alert); note(s, 'Macrophages have gathered round the docking site. An implant is a foreign body, whoever ordered it.'); }
   if (place === 'liver' && s.flags.inherited) { delete s.flags.inherited; s.explored.fill(1); note(s, 'LOG: route map received from unit 4,471,206. ACK.'); } // the last unit handed its map on
   if (place === 'liver' && s.flags.heirloom) { delete s.flags.heirloom; const at = freeTile(s, lost, (_x, _y, d) => d > 5 && d < 12); if (at) s.pickups.push({ ...mid(at), kind: 'sibling' }); } // the last unit kept its map, and left something else
   fireEchoes(s);
