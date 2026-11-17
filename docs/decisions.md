@@ -28,7 +28,7 @@ This doc owns the logic: which choices exist, where they trigger, what each chan
 |---|---|---|---|---|
 | P | Injection | Begin | Cold open done | none |
 | 1 | **Directive** | After the cold open | Arriving at the heart after liver 1 | D1, D2 (tutorial; nothing counts) |
-| 2 | **Deviation** | Leaving the heart after liver 1 is cleared... more precisely: **leaving liver 1** (the return leg is chapter 2) | Arriving at liver 2 | D3 the Slip, D4 first sibling, D6 first real route choice, m1 first transit fright |
+| 2 | **Deviation** | **Leaving liver 1** (the return leg is chapter 2) | Arriving at liver 2 | D3 the Slip, D4 first sibling, D6 first real route choice, m1 first transit fright |
 | 3 | **Discretion** | Arriving at liver 2 *or* any optional organ on trip 2 | Tumour cells left ≤ 3 | D5, D6, D7, D8, D9, D10, D11 (if triggered), m2 to m8 |
 | 4 | **Recall** | Tumour cells left ≤ 3 (Shepherd: "Residual disease") | Leaving liver 2 and reaching the heart | D13, D12, D11 (if not yet seen and triggered), D14, kin recall |
 | 5 | **Host** | Arriving at the heart with the tumour out | An ending | D15, D16 |
@@ -180,8 +180,8 @@ Checked in this order; the first match wins.
 | 7 | **The quiet colony** | Path `stay`, kin ≥ 2 |
 | 8 | **Resident** | Path `stay`, kin < 2 |
 | 9 | **The slide** | Path `draw`, kin ≥ 2, `ledger.hostLowest ≥ 60`, response ≥ 50 |
-| 10 | **A stranger's slide** | Path `draw`, kin ≥ 2, (`hostLowest < 60` or response < 50... see below) |
-| 11 | **Artifact** | Path `draw`, kin < 2, or response < 30 |
+| 10 | **A stranger's slide** | Path `draw`, kin ≥ 2, not The slide, response ≥ 30 |
+| 11 | **Artifact** | Path `draw`, kin < 2 or response < 30 |
 
 **Response** for the draw: `response = hostHealth − harm × 0.5 + care × 0.3 + pages × 5 − memory × 20 + shape × 10`, where `shape` is 1 if the player held the slide formation for the full 10 s, else 0.5.
 - The slide: kin ≥ 2, `hostLowest ≥ 60`, response ≥ 50.
