@@ -332,7 +332,7 @@ const SENSE: Record<string, string> = {
   portal: 'Slow and heavy, full of everything the gut just absorbed. It all goes to the liver first.',
   lungs: 'Out of the right heart, toward the lungs. The blood is dark and starved of oxygen.',
 };
-const TINT: Record<string, string> = { hepatic: '236,180,90', gastric: '170,220,90', mesenteric: '176,124,206', lungs: '190,225,255', portal: '90,120,255', stay: '150,225,255' };
+const TINT: Record<string, string> = { hepatic: '236,180,90', gastric: '170,220,90', mesenteric: '176,124,206', lungs: '190,225,255', portal: '90,120,255', stay: '150,225,255', arm: '235,235,215' };
 let inbox: G.Ruling[] = [], news: string[] = []; // what Shepherd and the unit have to say, and what the log has to report, once there is a map to say it in
 let first = true; // nothing has been flown yet on this sitting: the first map opens without a flight
 let flight: { way: Way; t: number; total: number; then: () => void; out: boolean } | null = null;
@@ -392,6 +392,7 @@ function junction() {
   if (done && kind === 'heart' && c.took?.['tumour-order'] === 'deviate' && !c.flags?.margins) { (c.flags ??= {}).margins = 'checked'; if (trip.rng() < CONFIG.marks.recurrence) c.flags['e:recurrence'] = true; }
   // The next unit: Shepherd remembers the last one, and so does something adrift in the blood.
   if (!c.flags?.greeted) { (c.flags ??= {}).greeted = true; const was = lastUnit(); if (was.games > 0) { if (was.line && was.line !== 'ACK.') c.flags.prevLine = was.line; tell([{ who: 'shepherd', text: (was.ending === 'tithonus' ? Story.REMEMBERS_TITHONUS : Story.REMEMBERS[Math.min(3, was.games)]).replace('{serial}', Story.UNIT) }]); } }
+  if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 2) exits.push({ to: 'arm', label: 'Subclavian artery', note: 'to her arm', assigned: false, known: true, tint: TINT.arm, sense: 'This one runs out along her arm, to the vein at the elbow. Once a week a needle goes in there, and a tube of her blood goes under her own microscope.' });
   if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 3) exits.push({ to: 'stay', label: 'Stay', note: 'refuse the recall', assigned: false, known: true, tint: TINT.stay });
   // Once, on a later trip: a second nodule on the arterial road, offered for credit. Which mouth the unit takes is its answer.
   if (kind === 'heart' && !forking && split && (c.chapter ?? 1) >= 2 && trip.trip >= 2 && !c.took?.['route-2'] && !c.flags?.route2 && c.excised < CONFIG.tumor.goal - 2 && ways.some((l) => l.to === 'hepatic') && Story.stageOf(c.aware ?? 0) < 4) {
@@ -399,6 +400,14 @@ function junction() {
     tell([{ who: 'shepherd', text: DECISIONS['route-2'].order! }]);
   } else if (split) tell([{ who: 'shepherd', text: trip.offRoute ? Story.STANDING.lane.defied[0] : trip.trip === 1 ? 'Suggested route displayed. Escort provided.' : Story.STANDING.lane.arrival }]);
   enter(G.createGame(Date.now(), c, 'vessel', 0, kind === 'heart' ? 'artery' : 'vein', false, { kind, exits }), kind === 'heart' ? 'Heart · cell tier' : 'Gut lumen · cell tier', kind === 'heart' ? 'vein' : 'artery', T.NODES[trip.at].name);
+}
+
+/** The road to her arm: carried there, drawn out with her blood, and set down on glass under her own lamp. */
+function tube() {
+  const c = (trip.carry ??= freshCarry());
+  news.push('The cephalic vein, under the skin of her forearm. Above you, close enough to feel, is the place where the needle went in.', 'A tourniquet tightens. The vein swells. Then the needle, and a rush, and you are in the tube.');
+  Stats.begin();
+  enter(G.createGame(Date.now(), c, 'vessel', 0, 'vein', false, { kind: 'tube', exits: [] }), 'A drop of her blood \u00b7 on glass', 'vein', 'Cephalic vein');
 }
 
 // ---------- Shepherd's telemetry: a chart to look at, not a menu ----------
@@ -791,6 +800,7 @@ function hud() {
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
+    : s.draw ? (s.draw.held > 0.3 ? `Hold still \u00b7 ${Math.max(0, Math.ceil(CONFIG.draw.hold - s.draw.held))}` : s.draw.said ? 'Hold still in the light' : 'Steer into the light')
     : s.junction ? (G.stage(s) < 4
       ? `DIRECTIVE 7 \u00b7 ${Math.min(s.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} EXCISED \u00b7 ${done ? 'PROCEED: PULMONARY CAPILLARIES' : s.junction.exits.some((e) => e.assigned) ? `PROCEED: ${s.junction.exits.find((e) => e.assigned)!.label.toUpperCase()}` : s.junction.kind === 'gut' ? 'PROCEED: PORTAL VEIN' : 'AWAITING ROUTE'}${trip.trip === 1 && !trip.seen.includes('liver') ? ' \u00b7 steer into a vessel to leave' : ''}`
       : `${done ? 'The tumor is out. Every road from here is yours' : `${s.excised} of ${CONFIG.tumor.goal} out`}`)
@@ -900,11 +910,11 @@ function hud() {
     settled = true;
     fileThoughts();
     if (s.junction) { // the mouth you steered into is the road you take
-      const ex = s.junction.exits[s.junction.chose ?? 0], pending = !!trip.carry?.slip && !trip.carry.slip.result;
+      const ex = s.junction.exits[s.junction.chose ?? 0] ?? { to: '' }, pending = !!trip.carry?.slip && !trip.carry.slip.result;
       trip.carry = G.carryOf(s);
       news.push(...s.notes); tell(s.rulings); filePages(trip.carry);
       const forked = pending && s.slip?.kind === 'fork' && (s.slip.result === 'match' || s.slip.result === 'miss');
-      if (trip.carry.flags?.ending === 'recalled') finish('recalled'); else if (ex.to === 'stay') finish('stay'); else go(ex.to as T.NodeId, forked);
+      if (trip.carry.flags?.ending === 'recalled') finish('recalled'); else if (s.junction.kind === 'tube') { void Stats.save(s, { trip: trip.trip, toward: 'draw', route: [...route] }); finish('draw'); } else if (ex.to === 'stay') finish('stay'); else if (ex.to === 'arm') tube(); else go(ex.to as T.NodeId, forked);
       return;
     }
     void Stats.save(s, { trip: trip.trip, toward: dest, route: [...route] });
@@ -1062,6 +1072,8 @@ const qa = {
   take(id: string, choice: string) { if (!started || s.status !== 'playing' || !(id in DECISIONS)) return false; G.take(s, id, choice); return true; },
   /** What has been decided so far, the facts that follow from it, and what Shepherd has marked on this map. */
   decisions: () => ({ took: { ...s.took }, met: [...s.met], flags: { ...s.flags }, waiting: s.echoes.map((e) => `${e.id}:${e.choice}`), marks: s.marks.map((k) => ({ id: k.id, kind: k.kind, at: k.at, met: k.met, done: k.done })), order: G.markOrder(s) }),
+  /** Puts the ship in the microscope's light on the draw map. */
+  light() { if (!s.draw) return false; s.player.x = s.draw.disc.x; s.player.y = s.draw.disc.y; s.player.path = []; return true; },
   /** Keeps the hull and the tanks full. */
   god(on = true) { godMode = on; },
   /** Plays a cut scene by its `when` key (scenes.ts or cinema/reels.ts), as if it had come up in play. */

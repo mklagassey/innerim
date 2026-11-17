@@ -794,6 +794,17 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.restore();
   }
   // Shepherd's pointer in its first liver: a steady amber ring on the thing it wants, and a small chevron beside the ship toward it. Both breathe slowly; neither blinks.
+  // The microscope's lamp on the smear: a steady disc of light that eases in. It never pulses.
+  if (s.draw) {
+    const q = project(s.draw.disc.x, s.draw.disc.y), up = v.still ? 1 : Math.min(1, s.time / 4), held = Math.min(1, s.draw.held / 10);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(q.x, q.y, 4, q.x, q.y, 150);
+    g.addColorStop(0, `rgba(255,248,225,${0.34 * up})`); g.addColorStop(0.55, `rgba(240,230,200,${0.16 * up})`); g.addColorStop(1, 'rgba(240,230,200,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(q.x, q.y, 150, 82, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(255,244,214,${(0.25 + 0.45 * held) * up})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(q.x, q.y, 104, 57, 0, 0, Math.PI * 2); ctx.stroke();
+    if (held > 0) { ctx.strokeStyle = `rgba(255,244,214,${0.8 * up})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(q.x, q.y, 104, 57, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * held); ctx.stroke(); }
+    ctx.restore();
+  }
   const want = tutorialTarget(s) ?? markTarget(s);
   if (want) {
     const q = project(want.x, want.y), h = project(p.x, p.y), dx = q.x - h.x, dy = q.y - h.y, far = Math.hypot(dx, dy), ease = v.still ? 0.8 : 0.7 + 0.3 * Math.sin(v.time * 1.6);
