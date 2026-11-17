@@ -917,8 +917,8 @@ function hud() {
       }
       if (s.ask.kind === 'escort') {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Escort assigned';
-        $('ask-text').textContent = 'Escort assigned for this vessel. Remain in sight of your escort.';
-        opts.splice(0, opts.length, ['accept', 'Accept the escort', 'Shepherd\u2019s order. A smaller patrol on the way, and the escort keeps you in sight.', true], ['refuse', 'Decline', 'Not Shepherd\u2019s order. You go alone.', true]);
+        $('ask-text').textContent = 'Escort assigned for this vessel. Remain in sight of your escort. It is for your protection.';
+        opts.splice(0, opts.length, ['accept', 'Accept the escort', 'Shepherd\u2019s order. Fewer patrols find you, and the escort keeps you in sight.', true], ['refuse', 'Go alone', 'Not Shepherd\u2019s order. You go alone.', true]);
       }
       if (s.ask.kind === 'handover') {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Handover';
