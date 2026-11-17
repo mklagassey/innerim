@@ -106,8 +106,8 @@ export const CONFIG = {
   },
   // Adaptive immunity: every alarm you raise teaches the host a little more about you, and it does not forget.
   memory: {
-    perAlert: 0.3, // learned from one map whose alert peaked at 100
-    perKill: 0.015,
+    perAlert: 0.15, // learned from one map whose alert peaked at 100
+    perKill: 0.005,
     most: 18, // antibodies adrift in a map when the host knows you completely
     tagTime: 9, // seconds one stays stuck to you
     tagScent: 1.7, // how much further your scent carries while tagged

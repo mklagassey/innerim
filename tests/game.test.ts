@@ -565,9 +565,9 @@ test('the host remembers: alarms on one map mean antibodies on the next', () => 
   assert.equal(G.carryOf(a).memory, 0, 'and a quiet visit teaches it nothing');
   a.peak = 100; a.kills = 4;
   const carry = G.carryOf(a);
-  assert.ok(carry.memory > 0.3 && carry.memory < 0.45);
+  assert.ok(carry.memory > 0.15 && carry.memory < 0.2);
   const b = G.createGame(9, carry);
-  assert.ok(b.antibodies.length >= 5, `antibodies waiting: ${b.antibodies.length}`);
+  assert.ok(b.antibodies.length >= 2, `antibodies waiting: ${b.antibodies.length}`);
   assert.ok(b.antibodies.every((x) => G.dist(x, b.player) > 9), 'none on top of you at the start');
   assert.equal(G.createGame(9, carry, 'stomach').antibodies.length, 0, 'acid takes them apart');
   assert.ok(G.createGame(9, { ...carry, memory: 1 }).antibodies.length > b.antibodies.length);
