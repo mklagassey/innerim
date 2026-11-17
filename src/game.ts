@@ -42,8 +42,8 @@ export interface Exit { to: string; label: string; note: string; assigned: boole
 export interface Junction { kind: 'heart' | 'gut' | 'tube'; exits: Exit[]; chose: number | null }
 export type JunctionPlan = { kind: Junction['kind']; exits: Omit<Exit, 'at'>[] };
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number; keep?: boolean } // keep: if the map ends before this is shown, it is said on the next one // st: how awake the unit was when it said it
-export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall' | 'handover' | 'nighthold'; item: Pickup }
-const ASKS: Partial<Record<Ask['kind'], string>> = { review: 'telemetry-review', recall: 'recall', kinrecall: 'kin-recall', handover: 'handover', nighthold: 'night-hold' };
+export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall' | 'handover' | 'nighthold' | 'escort'; item: Pickup }
+const ASKS: Partial<Record<Ask['kind'], string>> = { review: 'telemetry-review', recall: 'recall', kinrecall: 'kin-recall', handover: 'handover', nighthold: 'night-hold', escort: 'escort-refuse' };
 /** Something Shepherd has marked on the map: a place to hold still at, or one particular cell to take. */
 export interface Mark { id: string; kind: 'hold' | 'strip'; at: Point; t: number; done: boolean; met: boolean; say: number; near?: number; tried?: number; pressed?: boolean; other?: boolean; since?: number } // tried: the longest the unit has held here; pressed: something hostile came within reach while the order stood; other: a different cell was taken
 export interface Pending { id: string; choice: string; i: number }
@@ -129,6 +129,7 @@ export interface State {
   flora: number; // gut bacteria riding along, to be thrown to the immune system as bait
   decoys: (Point & { t: number })[]; // the ones already overboard
   tagged: number; // seconds an antibody stays stuck to you
+  escortSaid: boolean; // the escort for this departure has been accepted or declined
   drawn: number; cloaks: number; // seconds every antibody is drifting toward you; cloaks used on this map
   size: number;
   tiles: Tile[];
@@ -295,7 +296,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
     decoys: [],
-    tagged: 0, drawn: 0, cloaks: 0,
+    tagged: 0, drawn: 0, cloaks: 0, escortSaid: false,
     size: N,
     tiles: Array.from(m.wall, (w) => (w ? 'cell' : 'floor')),
     explored: new Uint8Array(N * N),
@@ -664,6 +665,13 @@ export function answer(s: State, id: 'salvage' | 'wake' | 'leave' | 'accept' | '
       float(s, a.item, KIN_PINGS.volunteer, '#bfe9ff'); say(s, 'A lamp flares behind you, bright, and everything hunting you turns toward it.'); emit(s, 'pickup');
     }
     take(s, 'kin-volunteer', id, { after: 2 });
+    return true;
+  }
+  if (a.kind === 'escort') { // asked at the mouth of the assigned vessel: the unit goes on either way, with company or without
+    if (id !== 'accept' && id !== 'refuse') return false;
+    s.ask = null; s.escortSaid = true; s.flags.escortAsked = s.chapter;
+    if (id === 'refuse') s.flags.noEscort = true; else delete s.flags.noEscort;
+    take(s, 'escort-refuse', id === 'accept' ? 'obey' : 'deviate');
     return true;
   }
   if (a.kind === 'handover' || a.kind === 'nighthold') {
@@ -1569,9 +1577,9 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (s.kin > 0 && !s.met.includes('kin-volunteer') && s.chapter >= 2 && !s.junction && p.hp < maxHp(s) * CONFIG.marks.volunteer.hull && !(s.upgrades.cd47 && s.cloakCd <= 0 && p.energy >= CONFIG.cloak.energy && s.tagged <= 0) && s.flora <= 0 && !cloaked(s) && s.enemies.filter((e) => e.mood === 'chase' && dist(e, p) < 7).length >= CONFIG.marks.volunteer.hunters) { meet(s, 'kin-volunteer'); s.ask = { kind: 'volunteer', item: { x: p.x - p.face.x * 1.5, y: p.y - p.face.y * 1.5, kind: 'kin' } }; stop(s); }
   if (!s.selfTest && s.time > CONFIG.trust.selfTest && trustBand(s.trust) === 2 && !s.junction && !s.tutorial) { s.selfTest = true; shepherd(s, Story.SELF_TEST); }
   if (s.junction && !s.due.length && !s.flags.ending) for (const [i, ex] of s.junction.exits.entries()) if (dist(p, mid(ex.at)) < 1.4) {
+    if (ex.assigned && s.junction.kind === 'heart' && s.chapter >= 2 && s.chapter <= 4 && !s.tutorial && !s.escortSaid && s.flags.escortAsked !== s.chapter && !(s.slip && !s.slip.result)) { if (!s.ask) { meet(s, 'escort-refuse'); s.ask = { kind: 'escort', item: { ...mid(ex.at), kind: 'kin' } }; stop(s); } break; }
     s.junction.chose = i; s.status = 'won'; emit(s, 'win');
     if (s.flags.route2 === 'live') { s.flags.route2 = 'done'; take(s, 'route-2', ex.to === 'hepatic' ? 'obey' : 'deviate', { mute: true }); }
-    if (ex.assigned && s.silent && s.chapter >= 2) take(s, 'escort-refuse', 'deviate');
     if (s.slipAt >= 0 && s.slip?.kind === 'fork' && !s.slip.result && !s.slipLive) beginSlip(s); // into a mouth before the order had finished arriving
     if (s.slipLive && s.slip?.kind === 'fork') resolveSlip(s, ex.to === 'hepatic' ? 'A' : ex.to === 'gastric' ? 'B' : null, 0);
     for (const th of s.thoughts) if (th.keep && th.t > s.time) s.rulings.push({ who: th.who, text: th.text, st: th.st });
@@ -2049,17 +2057,23 @@ export function markOrder(s: State): string {
 }
 /** Shepherd's marks on a liver in the later chapters: a place to hold still and do something to her, or a particular cell to take. */
 function placeMarks(s: State, r: () => number) {
-  if (s.place !== 'liver' || s.chapter !== 3 || s.tutorial) return; // chapter 4 has orders of its own: see lastOrders
+  if (s.tutorial || s.junction || s.chapter < 3) return;
   const free = (id: string) => !s.took[id] && DECISIONS[id].ch.includes(s.chapter);
-  const hold = free('ethanol-correction') && (alcohol(s.host.hour) > 0.15 || s.flags.drank) ? 'ethanol-correction' : free('fever-damp') && fever(s) >= 1 ? 'fever-damp' : free('pain-damp') ? 'pain-damp' : free('ethanol-correction') && s.chapter >= 4 ? 'ethanol-correction' : '';
-  if (hold) { const at = freeTile(s, r, (x, y, d) => d > 9 && d < 17 && !s.niche.has(idx(s, x, y)) && dist(mid(s.vein), { x, y }) > 5); if (at) s.marks.push({ id: hold, kind: 'hold', at: mid(at), t: 0, done: false, met: false, say: 9 }); }
+  const put = (id: string, say: number) => { const at = freeTile(s, r, (x, y, d) => d > 9 && d < 17 && !s.niche.has(idx(s, x, y)) && dist(mid(s.vein), { x, y }) > 5 && s.marks.every((m) => dist(m.at, { x, y }) >= CONFIG.marks.apart)); if (at) s.marks.push({ id, kind: 'hold', at: mid(at), t: 0, done: false, met: false, say }); };
+  // A fever is everywhere in her, so the order about it can come anywhere there is ground to hold on.
+  if (s.place !== 'liver') { if (s.place !== 'lung' && free('fever-damp') && fever(s) >= 1) put('fever-damp', 9); return; }
+  if (s.chapter !== 3) return; // chapter 4's liver has orders of its own: see lastOrders
+  // Up to two places to hold: her drinking first, then her fever if she has one, else her pain.
+  const holds = [free('ethanol-correction') && (alcohol(s.host.hour) > 0.15 || s.flags.drank) ? 'ethanol-correction' : '', free('fever-damp') && fever(s) >= 1 ? 'fever-damp' : free('pain-damp') ? 'pain-damp' : ''].filter(Boolean);
+  holds.forEach((id, n) => put(id, 9 + n * 30));
+  const hold = holds.length;
   if (free('marked-cell')) {
     let best: Point | null = null, near = Infinity;
     for (let y = 2; y < s.size - 2; y++) for (let x = 2; x < s.size - 2; x++) {
       if (s.tiles[idx(s, x, y)] !== 'cell' || s.tumor.has(idx(s, x, y)) || ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => open(s, x + dx, y + dy))) continue;
       const d = Math.abs(dist(s.player, { x, y }) - 8); if (d < near) { near = d; best = { x, y }; }
     }
-    if (best) s.marks.push({ id: 'marked-cell', kind: 'strip', at: mid(best), t: 0, done: false, met: false, say: hold ? 40 : 9 });
+    if (best) s.marks.push({ id: 'marked-cell', kind: 'strip', at: mid(best), t: 0, done: false, met: false, say: 9 + hold * 30 });
   }
 }
 /** How she, or whoever reads her slide, will take what is on it (decisions.md 6.1). */
