@@ -1774,3 +1774,11 @@ test('unit-17.2: two places to hold in a chapter 3 liver, a fever order wherever
   assert.ok(G.answer(h, 'refuse' as 'salvage')); assert.equal(h.took['escort-refuse'], 'deviate'); assert.equal(h.flags.noEscort, true);
   run(h, 0.2); assert.equal(h.status, 'won');
 });
+
+test('unit-17.6: the road home from the last liver is still Shepherd\'s road', async () => {
+  const T = await import('../src/trip');
+  const t = T.newTrip(1); t.carry = { ...G.carryOf(quiet(4)), excised: CONFIG.tumor.goal };
+  const leg = (from: string, to: string) => T.LEGS.find((l) => l.from === from && l.to === to)!;
+  assert.ok(T.assigned(t, leg('liver', 'hvein'))); assert.ok(T.assigned(t, leg('hvein', 'heart'))); assert.ok(T.assigned(t, leg('heart', 'lungs')));
+  assert.ok(!T.assigned(t, leg('heart', 'hepatic')), 'with the tumour out, the only order at the heart is the lungs');
+});

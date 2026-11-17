@@ -71,7 +71,7 @@ export const commanded = (t: Trip) => stageOf(t.carry?.aware ?? 0) < 4;
 /** Shepherd escorts units that keep to the route it assigned: the reward for doing as you are told. */
 export const escorted = (t: Trip, leg: Leg) => assigned(t, leg) && !t.carry?.flags?.noEscort && !t.offRoute && commanded(t) && (t.carry?.trust ?? CONFIG.trust.start) >= CONFIG.trust.nominal;
 /** Is this leg on the route Shepherd has assigned right now? Once the tumor is out the only order is the lungs. */
-export const assigned = (t: Trip, leg: Leg) => !!leg.ordered && ((t.carry?.excised ?? 0) < TUMOR_GOAL || leg.to === 'lungs');
+export const assigned = (t: Trip, leg: Leg) => !!leg.ordered && ((t.carry?.excised ?? 0) < TUMOR_GOAL || leg.to === 'lungs' || leg.from !== 'heart'); // the road home from the last liver is still the road home
 export const riskWord = (r: number) => (r === 0 ? '' : r < 0.35 ? 'lightly patrolled' : r < 0.6 ? 'patrolled' : 'heavily patrolled');
 
 /** Vessels you could take from where you are. */
