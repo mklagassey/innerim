@@ -612,3 +612,26 @@ Accepted. Where the build differs from the spec:
   - The last trip starts at 02:30.
   - The amber map and marked niches for m15 are deferred.
 - **Rules names:** `trail, ring, memoryCarry, tagOnTouch, cloakDecay, scanHeading, dropAhead, drain, mend`.
+
+### 11.8 Vigilant retune (QA on Version 77)
+
+Deaths in QA's crude bots, which have no cloak, niches or upgrades:
+
+| Bot | Suppressed | Typical | Vigilant |
+|---|---|---|---|
+| Attack | 0 | 4/20 | 20/20 |
+| Stealth | 0 | 0 | 13/20 |
+
+Suppressed is on target.
+
+Vigilant's multipliers compound: damage 1.4 × hp 1.25 × spawns 1.3 is about 2.3 times the threat. On top of that, `tagOnTouch` punishes every contact. That is a wall, not a level.
+
+Changes:
+- Vigilant multipliers: damage 1.4 → **1.2**, hp 1.25 → **1.1**, spawns 1.3 → **1.15**. That is about 1.5 times the threat, and the new rules carry the rest of the identity.
+- `tagOnTouch`: 20 s → **10 s**, and only antibodies within 8 tiles drift.
+
+Targets are now relative to the bots, since they overstate deaths on every level:
+- Vigilant attack: 2 to 2.5 times Typical attack deaths (about 40 to 50% with these bots).
+- Vigilant stealth: no worse than Typical attack (about 20%).
+
+The gap between the attack and stealth bots on Vigilant must stay large. That gap is what answers Mick's "go in swinging".
