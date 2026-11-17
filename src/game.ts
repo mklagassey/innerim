@@ -53,6 +53,7 @@ export interface State {
   antibodies: Antibody[];
   sinceHurt: number; // seconds since the hull last took damage
   ledger: Ledger;
+  starved: boolean; // the ship died of an empty tank, not of anything that caught it
   drained: number; // fractions of host health the tumor has taken, not yet a whole point
   cloakOffered: boolean; // the first liver cache always offers the cloak, once
   arrived: { energy: number; hp: number }; acidTime: number; // for the run report
@@ -191,7 +192,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
-    sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
@@ -278,7 +279,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
-  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota} energy to leave by the central vein.`);
+  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
   look(s);
   return s;
 }
@@ -638,13 +639,15 @@ export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.pla
 export function stripTarget(s: State): Point | null {
   if (s.place === 'vessel' || s.place === 'lung') return null; // vessel walls are not worth eating
   const p = tileOf(s.player);
-  let best: Point | null = null, bestD: number = CONFIG.energy.strip.reach;
+  let best: Point | null = null, bestD: number = CONFIG.energy.strip.reach, tumor = false;
   for (let y = p.y - 1; y <= p.y + 1; y++)
     for (let x = p.x - 1; x <= p.x + 1; x++) {
       if (x < 2 || y < 2 || x >= s.size - 2 || y >= s.size - 2 || s.tiles[idx(s, x, y)] !== 'cell') continue;
       if (s.place === 'stomach' && !s.rich.has(idx(s, x, y))) continue; // only the parietal cells are worth it here
-      const d = dist(s.player, mid({ x, y }));
-      if (d < bestD) { bestD = d; best = { x, y }; }
+      const d = dist(s.player, mid({ x, y })), isTumor = s.tumor.has(idx(s, x, y));
+      if (d > CONFIG.energy.strip.reach || (tumor && !isTumor)) continue;
+      // A tumor cell in reach always comes before a healthy one: nobody means to cut the wrong cell.
+      if (d < bestD || (isTumor && !tumor)) { bestD = d; best = { x, y }; tumor = isTumor; }
     }
   return best;
 }
@@ -667,10 +670,13 @@ function interrupt(s: State) { s.player.channel = null; }
 export function moveTo(s: State, x: number, y: number): boolean {
   if (s.status !== 'playing') return false;
   const N = s.size, from = tileOf(s.player), startI = idx(s, from.x, from.y);
-  const prev = new Int32Array(N * N).fill(-1);
+  // First look for a way that keeps out of open acid; only wade if there is none that gets as close.
+  let prev = new Int32Array(0), best = startI, bestD = Infinity;
+  for (const dry of s.acid ? [true, false] : [false]) {
+  prev = new Int32Array(N * N).fill(-1);
   prev[startI] = startI;
   const queue = [startI];
-  let best = startI, bestD = Math.hypot(from.x + 0.5 - x, from.y + 0.5 - y);
+  best = startI; bestD = Math.hypot(from.x + 0.5 - x, from.y + 0.5 - y);
   for (let head = 0; head < queue.length; head++) {
     const cur = queue[head], cx = cur % N, cy = Math.floor(cur / N);
     const d = Math.hypot(cx + 0.5 - x, cy + 0.5 - y);
@@ -679,10 +685,13 @@ export function moveTo(s: State, x: number, y: number): boolean {
       const nx = cx + dx, ny = cy + dy;
       const ok = (ax: number, ay: number) => open(s, ax, ay) && s.explored[idx(s, ax, ay)] === 1;
       if (!ok(nx, ny) || prev[idx(s, nx, ny)] !== -1) continue;
+      if (dry && s.acid![idx(s, nx, ny)] === 2 && s.acid![cur] !== 2) continue; // never step from dry ground into acid
       if (dx && dy && (!ok(cx + dx, cy) || !ok(cx, cy + dy))) continue;
       prev[idx(s, nx, ny)] = cur;
       queue.push(idx(s, nx, ny));
     }
+  }
+  if (dry && bestD < 0.8) break; // the dry way gets there
   }
   const path: Point[] = [];
   for (let k = best; k !== startI; k = prev[k]) path.unshift({ x: k % N, y: Math.floor(k / N) });
@@ -859,7 +868,7 @@ function hurtEnemy(s: State, e: Enemy, dmg: number) {
   e.goal = tileOf(s.player);
 }
 
-function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
+function hurtPlayer(s: State, dmg: number, by: EnemyKind | 'hunger') {
   const p = s.player;
   p.hp -= dmg;
   p.hurt = 0.25; s.sinceHurt = 0;
@@ -871,7 +880,8 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
     p.hp = 0;
     s.status = 'dead';
     emit(s, 'dead');
-    say(s, by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : by === 'warden' ? 'The warden takes you apart, neatly, for parts.' : by === 'tcell' ? 'The killer T cell punches holes in the hull until there is no hull.' : 'The neutrophils dissolve you where you stand.');
+    s.starved = by === 'hunger';
+    say(s, by === 'hunger' ? 'Nothing left to burn. The ship comes apart.' : by === 'kupffer' ? 'The Kupffer cell engulfs and digests you.' : by === 'warden' ? 'The warden takes you apart, neatly, for parts.' : by === 'tcell' ? 'The killer T cell punches holes in the hull until there is no hull.' : 'The neutrophils dissolve you where you stand.');
   }
 }
 
@@ -1182,7 +1192,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     else {
       say(s, 'You are running on empty and starting to break down.');
       emit(s, 'starve');
-      hurtPlayer(s, en.starveDamage, 'neutrophil');
+      hurtPlayer(s, en.starveDamage, 'hunger');
       if (s.status !== 'playing') return;
     }
   }

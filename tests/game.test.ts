@@ -1002,3 +1002,27 @@ test('the ledger keeps plain counts of how the host was treated, across maps', (
   assert.equal(w.harm, 10 + 2 + (100 - next.ledger.hostLowest));
   assert.equal(w.care, 8 + 5);
 });
+
+test('a click across the stomach walks round the acid when there is a dry way', () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const s = G.createGame(seed, undefined, 'stomach');
+    s.explored.fill(1);
+    assert.ok(G.moveTo(s, s.vein.x + 0.5, s.vein.y + 0.5));
+    const wet = s.player.path.filter((t) => s.acid![G.idx(s, t.x, t.y)] === 2).length;
+    assert.equal(wet, 0, 'seed ' + seed + ' wades through ' + wet + ' acid tiles');
+    const end = s.player.path[s.player.path.length - 1];
+    assert.ok(G.dist({ x: end.x + 0.5, y: end.y + 0.5 }, { x: s.vein.x + 0.5, y: s.vein.y + 0.5 }) < 1, 'and still gets there');
+  }
+});
+
+test('beside a tumor cell and a healthy one, the tumor is what gets cut', () => {
+  const s = quiet(6);
+  besideCell(s);
+  const p = { x: Math.floor(s.player.x), y: Math.floor(s.player.y) };
+  // A healthy cell sits right beside us at x+1; make a diagonal neighbour tumor, which is further away.
+  const far = G.idx(s, p.x + 1, p.y + 1);
+  s.tiles[far] = 'cell'; s.tumor.add(far);
+  s.player.x = p.x + 0.8; s.player.y = p.y + 0.6;
+  const t = G.stripTarget(s)!;
+  assert.ok(s.tumor.has(G.idx(s, t.x, t.y)), 'picked the tumor cell');
+});

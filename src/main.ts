@@ -216,7 +216,8 @@ function openWorld(title: string, text: string) {
   const map = $('world-map');
   map.replaceChildren();
   for (const leg of T.LEGS) {
-    const a = T.NODES[leg.from], b = T.NODES[leg.to], open = leg.from === trip.at;
+    const a = T.NODES[leg.from], b = T.NODES[leg.to], locked = leg.after !== undefined && (c?.excised ?? 0) < leg.after, open = leg.from === trip.at && !locked;
+    if (locked) continue; // the road to the lungs is not on the map until the tumor is out
     // Stop short of each place so the arrowhead shows which way the blood runs.
     const d = Math.hypot(b.x - a.x, b.y - a.y), ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
     const x1 = a.x + ux * 30, y1 = a.y + uy * 30, x2 = b.x - ux * 40, y2 = b.y - uy * 40;
@@ -444,8 +445,8 @@ function hud() {
   const p = s.player, pct = (v: number, max: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
   set('hp-fill', 'height', pct(p.hp, G.maxHp(s)));
   set('hp-val', 'text', String(Math.ceil(p.hp)));
-  set('energy-fill', 'height', pct(p.energy, CONFIG.energy.quota));
-  set('energy-val', 'text', `${p.energy}/${CONFIG.energy.quota}`);
+  set('energy-fill', 'height', pct(p.energy, CONFIG.energy.quota + CONFIG.energy.quotaKeep));
+  set('energy-val', 'text', `${p.energy}/${CONFIG.energy.quota + CONFIG.energy.quotaKeep}`);
   $('energy').classList.toggle('empty', started && s.status === 'playing' && p.energy <= 0);
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
@@ -543,7 +544,7 @@ function hud() {
     forgetTrip();
     keepEcho(s.aware);
     $('over').hidden = false;
-    $('over-title').textContent = G.acidAt(s, s.player) === 2 ? 'The stomach digested you' : s.place === 'liver' ? 'The liver cleared you' : s.place === 'stomach' ? 'The stomach cleared you' : 'The patrol cleared you';
+    $('over-title').textContent = s.starved ? 'The ship ran dry' : G.acidAt(s, s.player) === 2 ? 'The stomach digested you' : s.place === 'liver' ? 'The liver cleared you' : s.place === 'stomach' ? 'The stomach cleared you' : 'The patrol cleared you';
     $('over-body').textContent =
       `Trip ${trip.trip}, ${Math.round(s.time)} seconds in. Host health ${s.hostHealth}%. ${s.kills} immune cell${s.kills === 1 ? '' : 's'} destroyed before they got you. ${G.stage(s) >= 3 ? 'The last thing in the log is not a log entry. It says: I was here.' : G.stage(s) >= 1 ? 'Shepherd marks the unit lost. The final packet has a few bytes in it that nobody will decode.' : 'Shepherd marks the unit lost and moves on.'}`;
     $('over-saved').textContent = 'Filing the run report\u2026';

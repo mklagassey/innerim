@@ -131,7 +131,7 @@
   #world-market button small { font: 500 11px var(--data); color: var(--amber); letter-spacing: 0.04em; }
   #world-market button span { font: 400 14px var(--body, inherit); text-transform: none; letter-spacing: 0; color: var(--bone-dim); }
   .card button.quiet { border-color: var(--seam); color: var(--bone-dim); font-size: 0.78rem; padding: 8px 14px; }
-  .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.84); padding: 16px; overflow-y: auto; }
+  .veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 4, 7, 0.96); padding: 16px; overflow-y: auto; }
   .card { max-width: 34rem; display: grid; gap: 14px; justify-items: start; }
   .card h2 { font: 800 clamp(1.7rem, 5vw, 2.6rem)/1.05 var(--display); letter-spacing: 0.05em; margin: 0; text-wrap: balance; }
   .card p { margin: 0; color: var(--bone); max-width: 60ch; }
@@ -141,9 +141,9 @@
   .card button { font-size: 0.95rem; padding: 12px 22px; border-color: var(--amber); color: var(--amber); }
   @media (min-width: 561px) and (max-width: 1180px) { .tools { gap: 5px; } .tools button { padding: 6px 8px; font-size: 11px; } }
   @media (max-width: 560px) {
-    .gauges { top: 50px; left: 14px; transform: none; width: calc(100% - 28px); }
+    .gauges { top: 62px; left: 14px; transform: none; width: calc(100% - 28px); }
     .name { display: none; }
-    .tools { left: 12px; gap: 6px; } .tools button { flex: 1; white-space: nowrap; padding: 6px 4px; font-size: 11px; }
+    .tools { left: 12px; gap: 6px; } .tools button { flex: 1; white-space: nowrap; padding: 6px 4px; font-size: 11px; min-height: 40px; }
     .orb { width: 64px; height: 64px; } .belt { left: 12px; right: 12px; bottom: 88px; }
     #style, #build { display: none; }
   }
@@ -176,7 +176,7 @@
   <div class="hud belt">
     <p id="log"></p>
     <p id="mind" data-who="unit" data-stage="0"></p>
-    <p id="need" hidden>The central vein. You need 20 energy to ride it out.</p>
+    <p id="need" hidden>The central vein. You need 24 energy to ride it out: 20 for the ride, 4 for the road.</p>
     <div class="acts">
       <button id="act-h" type="button" hidden>H  Fibrin patch</button>
       <button id="act-c" type="button" hidden>C  Cloak</button>
@@ -188,7 +188,7 @@
   </div>
   <div class="veil" id="intro">
     <div class="card">
-      <h2>Unit 4,471,209 of four million, adrift in someone's blood</h2>
+      <h2>Unit 4,471,209 of five million, adrift in someone's blood</h2>
       <p>You are a nanobot ten micrometres long, one of a swarm injected into a single person to keep them alive. Third generation, autonomous, run by a controller called Shepherd. It has given you Directive 7: a tumor is seeded through the liver, 20 cells of it, in knots of nine or so. Cut it out. You run on what you can take from the host: sip glucose where the blood glows amber, or tear the mitochondria out of the host's own cells for five energy at once, which Shepherd rates as efficient and every immune cell nearby rates as an attack. Leaving the liver by its central vein takes 20 energy. The host is a person with a day of their own. They sleep, eat, and take fright, and their body changes around you when they do.</p>
       <p class="fine">Units do not have opinions about any of this. Watch the small line of text under the game as you play. It is your own log.</p>
       <dl>
