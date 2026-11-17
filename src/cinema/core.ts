@@ -29,7 +29,9 @@ export const rgb = (hex: string): [number, number, number] => {
 export const rgba = (hex: string, a: number) => { const [r, g, b] = rgb(hex); return `rgba(${r},${g},${b},${a})`; };
 export const mixHex = (a: string, b: string, t: number) => {
   const x = rgb(a), y = rgb(b);
-  return `rgb(${Math.round(lerp(x[0], y[0], t))},${Math.round(lerp(x[1], y[1], t))},${Math.round(lerp(x[2], y[2], t))})`;
+  // returns #rrggbb, so a mix can be mixed again or given an alpha with rgba()
+  const h = (i: number) => Math.round(clamp(lerp(x[i], y[i], t), 0, 255)).toString(16).padStart(2, '0');
+  return `#${h(0)}${h(1)}${h(2)}`;
 };
 
 let filterOk: boolean | null = null;
@@ -152,12 +154,12 @@ export class Stage {
     }
     // rim: the silhouette minus itself shifted away from the light leaves the lit edge
     if (rim > 0) {
-      const r = borrow(this.w, this.h), rg = r.getContext('2d')!, px = width * this.k * Math.max(0.6, this.cam.z * par);
+      const r = borrow(this.w, this.h), rg = r.getContext('2d')!, px = width * this.k * Math.max(0.6, Math.min(1.8, this.cam.z * par)); // a rim stays a fine line in close-ups
       rg.drawImage(mask, 0, 0);
       rg.globalCompositeOperation = 'source-in'; rg.fillStyle = L.color; rg.fillRect(0, 0, this.w, this.h);
       rg.globalCompositeOperation = 'destination-out'; rg.drawImage(mask, -dx * px, -dy * px);
       og.globalCompositeOperation = 'source-atop'; og.globalAlpha = rim;
-      if (canFilter()) og.filter = `blur(${(px * 0.35).toFixed(1)}px)`;
+      if (canFilter()) og.filter = `blur(${(px * 0.25).toFixed(1)}px)`;
       og.drawImage(r, 0, 0); og.filter = 'none'; og.globalAlpha = 1;
       giveBack(r);
     }
