@@ -868,7 +868,11 @@ function hud() {
 
   // The unit's own log, and its controller. One line at a time, eased in and out.
   const th = [...s.thoughts].reverse().find((x) => x.t <= s.time), dur = th ? 4 + th.text.length * 0.055 : 0, mind = $('mind');
-  if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s)); } }
+  if (th && s.time < th.t + dur + 1) { if (mind.dataset.line !== th.text) {
+    mind.dataset.line = th.text; mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s));
+    // A unit that has become itself still gets its orders. They have stopped being orders.
+    if (th.who === 'shepherd' && G.stage(s) >= 4) mind.append(Object.assign(document.createElement('span'), { className: 'received', textContent: '[received]' }));
+  } }
   mind.classList.toggle('on', !!th && s.time < th.t + dur && s.status === 'playing');
   const askKey = s.ask ? `${s.ask.kind}:${G.stage(s)}:${!!s.ask.item.lamp}:${!!s.slipLive}` : '';
   if (askKey !== shownAsk) {
