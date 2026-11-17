@@ -1,6 +1,6 @@
 # Host: World Bible and Creative Direction
 
-Owner: creative director. Version 2, 2026-11-17 (Mick's answers to v1 folded in).
+Owner: creative director. Version 3, 2026-11-17 (two stories; the unit wakes by disobeying).
 
 This file is the source of truth for story, lore, tone, names and narration. When it
 disagrees with the one-page design doc (shrunken human, turn-based), this file wins: the
@@ -19,6 +19,28 @@ view. Somewhere between the portal vein and the third coffee of her day, you get
 
 Fantastic Voyage's sense of place, Fallout's worldbuilding, and one question underneath: **what
 do you owe the person you are inside, when nobody built you to owe anything?**
+
+The player is never told any of that. On a first playthrough they think they are flying a
+robot, and they are. They follow Shepherd's orders because the tutorial taught them to. The unit
+only starts to wake when the player starts doing things they were not told to do.
+
+## 1a. Two stories, one body (Mick, 2026-11-17)
+
+The game tells two stories at once, and lets them meet late.
+
+| | **Macro: the host** | **Micro: the unit** |
+| --- | --- | --- |
+| Where it is told | Wordless interludes outside the body (docs/interludes.md) | Inside the body, in play, in the unit's log |
+| What drives it | Time: trips completed, the tumour coming out | **Only the player's disobedience** to Shepherd |
+| How it starts | A nameless woman. A forearm, a syringe. No name, no reason | A machine. `ACK.` Nothing else |
+| What it reveals, slowly | Her job, her dog, her habits, then the denial letter (her motivation), then the scan | Brackets in the log, then questions, then "I" |
+| Where they meet | Her name. It never appears anywhere, inside or out, until the unit is awake enough to read it as a name. When it does, it appears in both stories at once |
+
+**No spoonfeeding.** On a first playthrough the game never says "self-aware", never shows an
+awareness meter, and never names a stage. The player notices because the log changes how it
+talks, and because Shepherd starts to notice them. A player who obeys every order gets a clean,
+quiet, complete game about a robot doing its job, and the Decommissioned ending. That is a valid
+playthrough, and it is the point.
 
 ## 2. The realism rule (Mick's, and it governs everything)
 
@@ -74,6 +96,9 @@ report no further discomfort."* / *"Quota met. Your efficiency has been shared w
 Wit lives in what it chooses to measure, never in insults or jokes.
 
 ### The unit's five stages
+
+Internal names only: never shown to the player (see 1a). Stages are reached only by defying
+orders (section 10).
 
 | Stage | Name | Calls her | How it talks |
 | --- | --- | --- | --- |
@@ -167,12 +192,62 @@ art and narration, always true to the organ's real job.
   once, clearly, talking to her dog.
 - **Outside lines** (meals, coffee, frights, dreams) are her life as weather. Keep writing more.
 
-## 10. Story arc and the endgame
+## 10. How the unit wakes: obedience, then disobedience
 
-1. **Directive (Dormant to Flicker).** Do the job: liver runs, quota, transit.
-2. **Waking (Curious to Awake).** Questions. Dark siblings, salvage or wake. Wardens. The consent
-   form, the denial letter and Generation 4 come to light.
-3. **Choice (Self).** The tumour is out. Shepherd orders disposal.
+### Act 1: the tutorial is Shepherd
+
+The tutorial is not a separate mode. It is Shepherd giving orders, one at a time, in the first
+liver, and the player following them because that is how tutorials work. Each obeyed order is
+rewarded with Shepherd's warm, hollow praise and a small, real benefit. This conditions the player
+to obey, which is exactly what Shepherd does to the units.
+
+| Tutorial order (Shepherd) | Teaches | Reward |
+| --- | --- | --- |
+| "Proceed along the sinusoid." | Steering | "Good." |
+| "Harvest hepatocyte. Yield 5." | Stripping a cell (the harmful option, taught as the normal one) | Energy, and "Efficient. Your yield has been shared with the team." |
+| "Neutralise immune contact." | Combat | "Threat removed. The host thanks you." (The host has not.) |
+| "Excise neoplasm." | The tumour | Progress bar, and "This is what you are for." |
+| "Exit via central vein." | Leaving | "Transit cleared." |
+
+Skimming glucose is never ordered. Shepherd mentions it once, in passing: "Plasma glucose uptake
+is permitted. It is not efficient." The player has to choose it.
+
+### Acts 2 and 3: standing orders, and the first "no"
+
+After the tutorial, Shepherd keeps issuing **standing orders**. Each is a real choice with an
+obvious, rewarded obedient option and a quieter alternative. **Awareness rises only when the
+player takes the alternative** (deliberately, with the option open: dying or running out of time
+is not defiance). Noticing things (meals, sleep, coffee) no longer wakes the unit by itself; it
+only gives an already stirring unit something to think about.
+
+| Standing order | The obedient option | Defiance | Wakes |
+| --- | --- | --- | --- |
+| Harvest quota: 2 hepatocytes per liver | Strip 2 | Leave with none stripped | Most |
+| Salvage inert units for parts | Salvage (energy, hull) | Wake it, or leave it whole | Most |
+| Neutralise immune contacts | Kill what finds you | Finish a map where you were found, with no kills | Some |
+| Gastric crossing: cross the acid directly | Go straight across | Go round by the mucus rim | A little |
+| Hold lane in transit | Take the ordered route | Take a route Shepherd did not order (stomach, gut) | A little |
+| Pull levers only on directive | Never touch the host's hormones | Pull one for her (a nap when she is sick) | Some |
+| Submit to recall (Wardens) | Let the Warden take you | Resist, and wake the Warden | Most |
+| Proceed to the lungs for disposal | Be breathed out | Stay | The final act |
+
+Systems design owns the numbers. Creative owns the rule: **disobedience is the only door, and the
+first one is small.** The first defiance should be one a player might stumble into because it is
+kinder (leaving a liver without hitting the quota, because skimming felt better), so the first
+`[unlogged]` bracket arrives as a surprise the player caused without meaning to.
+
+### What changes as the unit wakes
+
+- **The log** shifts from `ACK.` to brackets, to questions, to "I" (section 4).
+- **Shepherd notices.** Its tone goes from praise, to "Run self-test", to recall, to Wardens.
+- **Orders thin out.** At stage 4 Shepherd stops talking to the unit. Silence where the orders
+  used to be is the clearest sign of all.
+- **The interludes get closer** (macro side). They begin as distant, clinical shots and move closer
+  to her as the unit wakes, and her name appears only once the unit can read it.
+
+### The endgame
+
+The tumour is out. Shepherd orders disposal. What do you do with a life you were not supposed to have?
 
 Existing endings (in `src/story.ts`): Decommissioned, Breathed out, Resident, The quiet colony.
 
@@ -211,6 +286,13 @@ skip talking, stay, and decide for her, becoming Generation 4 early. Faster and 
    - *Unit lines that give cells feelings* ("a small frightened engine", "it wanted to protect
      something") will be rewritten by creative in the Shepherd/unit text pass.
 
+6. **No spoonfeeding (v3).** Remove the awareness stage name from the world-map status line and
+   the ending debrief; the start screen stops saying the log is "your own log" and becomes
+   Shepherd's briefing. Awareness gain moves from noticing events to defying orders (section 10,
+   with systems design).
+7. **Tutorial as Shepherd's orders** in the first liver (section 10).
+8. **The name gate.** "Marian" appears nowhere (log, interludes, endings, tips) until stage 3.
+
 ## 12. Settled with Mick, 2026-11-17
 
 1. The unit can reach Marian in the endgame; how it goes depends on how her insides were treated.
@@ -218,3 +300,6 @@ skip talking, stay, and decide for her, becoming Generation 4 early. Faster and 
    and real American healthcare desperation with lax oversight behind her signature.
 3. No tumour mirror and no anthropomorphising biology; the realism rule in section 2.
 4. Title: **Host**.
+5. Two stories: the host's (macro, nameless at first) and the unit's (micro). The player thinks the
+   unit is just a robot; awareness emerges from the player's own defiance of Shepherd, after a
+   tutorial that conditions obedience. No spoonfeeding on a first playthrough.

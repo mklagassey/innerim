@@ -1,132 +1,139 @@
 # Host: Interludes
 
-Owner: creative director. Version 1, 2026-11-17. Responds to Mick's playtest (he skimmed the
-story lines; wants to step outside the game loop; Pixar's wordless openings as the bar).
+Owner: creative director. Version 2, 2026-11-17. This version adds Mick's two-stories direction:
+the host's story (macro) is told here, nameless at first; the unit's story (micro) is told in play
+and wakes only through disobedience (world-bible.md sections 1a and 10).
 
 ## The idea
 
-The game happens inside Marian. The interludes happen **outside**: short, wordless scenes of
+The game happens inside a woman. The interludes happen **outside**: short, wordless scenes of
 her ordinary life, shown full-screen between legs of the trip. The player spends the game
-caring for a body; the interludes make sure they know *whose*.
+caring for (or harvesting) a body; the interludes slowly tell them *whose*, and why she let five
+million machines into her arm.
 
-How Pixar does it, and what we steal:
+### What we take from Pixar
 
-1. **No dialogue.** Words appear only where they would really be printed: a letter, a label,
-   a brochure. At most two short lines per scene.
-2. **Motifs that repeat and change.** Up has the adventure book and the tie. We have four
-   objects that come back in nearly every scene, each slightly different each time:
+1. **No dialogue.** The only words are ones that would really be printed: a letter, a label,
+   a brochure. Each scene has at most two short lines.
+2. **Motifs that repeat and change.** Four objects come back in nearly every scene, each a
+   little different each time:
    - **The mug**: a chipped lab mug from the hospital where she works.
-   - **The dog**: an old, grey-muzzled mutt. It is never named on screen.
-   - **The fridge**: the insurer's denial letter is pinned under a magnet next to the trial brochure.
-   - **Her right side**: once in a while she touches it, under the ribs, where the liver is.
+   - **The dog**: an old, grey-muzzled mutt. It is never named.
+   - **The fridge**: a letter under a magnet next to a glossy brochure. You can't read either until scene 3.
+   - **Her right side**: once in a while she touches it under the ribs, where the liver is.
 3. **Match cuts between outside and inside.** Each scene ends on a motion that cuts straight into
-   the body: she lifts the coffee, and the artery surges; she sighs, and the lungs move. That cut is
-   the whole trick. It ties the game's systems to her life, and it is true to the physiology.
-4. **Restraint.** No tears, no swelling music, no close-ups of suffering. Small, quiet,
-   specific details. If it ever feels maudlin, cut a beat.
+   the body: she lifts the coffee and the artery surges. It ties the game's systems to her life,
+   and the physiology is true.
+4. **Restraint.** No tears, no swelling strings, no close-ups of suffering. Small, specific details.
 
-Everything stays inside the realism rule: real places, real medicine, real physiology.
+### Rules for the macro story (v2)
+
+- **Nameless until the unit is awake.** Her name appears nowhere until the unit reaches stage 3,
+  in the interludes or in the game. Before that, labels read **TITHONUS 0001**, and she is "the host".
+  When the unit is awake, the same labels read **V., MARIAN · TITHONUS 0001**. A player who never
+  disobeys never learns her name.
+- **Her motivation comes late.** The cold open shows only the injection. Her job, her dog and her
+  habits come first. The denial letter (why she signed up) is not readable until scene 3.
+- **The camera comes closer as the unit wakes.** At stages 0 to 1, every shot is wide, high and still,
+  like a security camera or trial footage: the macro story is being observed, not felt. From stage 2
+  shots are at her height, and from stage 3 we see her hands up close. The scenes are the same; only
+  the framing changes. Art can do this with one zoom and offset per beat, chosen by stage.
+- **Time drives the macro story, not awareness.** Scenes trigger on trips and events, so an obedient
+  player sees the same life, from further away. One scene (4) appears only to a player whose unit
+  has woken.
+
+Everything follows the realism rule: real places, real medicine, real physiology.
 
 ## The scenes
 
-Unless marked, each scene plays once per mission, pauses the game and can be skipped with a tap
-after 2 seconds. Lengths are targets. "Beat" means a slow fade-in, a hold, then a fade-out. Nothing
-cuts hard and nothing flashes.
+Each plays once per mission, pauses the game, and can be skipped with a tap after 2 seconds.
+"Beat" means a slow fade-in, a hold, then a fade-out. Nothing cuts hard and nothing flashes.
 
-### 0. Cold open: "More mornings"
-- **Trigger:** Begin, the very first time only. After that, show it from a "Prologue" button on
-  the start screen.
-- **Length:** about 40 s, in 7 beats.
+### 0. Cold open: "Injection"
+- **Trigger:** the first Begin. After that, replay it from the Prologue button.
+- **Length:** about 20 s, 4 beats.
 - **Seen:**
-  1. Night, a hospital lab. Marian, seen from behind, at a microscope. A stained blood smear on the
-     slide (seen from above: pink red cells, one purple white cell). The mug beside her.
-  2. Her kitchen. An envelope opened on the table. The letter, legible for one beat:
-     **"...not medically necessary at this time."**
-  3. She pins it to the fridge with a magnet, next to a glossy brochure: **TITHONUS. More mornings.**
-  4. The dog watches her from its bed.
-  5. A clinic. Her forearm, a gloved hand, a syringe. The vial label: **H-O · GEN 3**.
-  6. Close on the plunger as it goes down. **Match cut:** inside the vein, a slow cloud of tiny
-     lights pours into the dark red current, millions of them, and one among them, no different.
-  7. Title fades in: **HOST**. Then the game starts in the bloodstream.
-- **Words:** only the letter line, the brochure line and the vial label.
+  1. A clinic, shot wide and high, like footage from a ceiling camera. A woman in a chair, her
+     sleeve rolled up. We can't make out her face.
+  2. Her forearm, a gloved hand, a syringe. The vial label: **H-O · GEN 3 · TITHONUS 0001**.
+  3. The plunger goes down. **Match cut:** inside the vein, a slow cloud of tiny lights pours into the
+     dark red current. There are millions of them, and one among them is no different from the rest.
+  4. Title: **HOST**. Then Shepherd's first order, and the tutorial begins.
+- **Words:** only the vial label.
 
 ### 1. "The plaster"
-- **Trigger:** first arrival back at the heart after the first liver.
-- **Length:** about 15 s, in 3 beats.
-- **Seen:** Morning, the kitchen. Coffee in the chipped mug. A small plaster on her forearm at the
-  injection site; she scratches it absently. The dog nudges the leash hanging on its hook.
-  **Match cut:** she lifts the mug, and the artery surges (the caffeine).
+- **Trigger:** first return to the heart (end of trip 1).
+- **Length:** about 15 s, 3 beats.
+- **Seen:** Morning in a kitchen. Coffee in the chipped mug. A small plaster on her forearm; she
+  scratches at it absently. In the background, a letter and a brochure on the fridge, too far away
+  to read. The dog nudges the leash on its hook.
+  **Match cut:** she lifts the mug, and the artery surges.
 
 ### 2. "Evening"
-- **Trigger:** first time the drink habit fires, or the second return to the heart if it hasn't.
+- **Trigger:** the first time the drink habit fires.
 - **Length:** about 15 s.
-- **Seen:** Sofa, television light, one glass. The dog asleep across her feet. Without looking away
-  from the screen, she presses two fingers under her right ribs, then lets it go.
+- **Seen:** A sofa, television light, one glass. The dog asleep across her feet. Without looking
+  away from the screen, she presses two fingers under her right ribs, then lets go.
   **Match cut:** the glass tilts, and the liver goes amber and slow.
 
-### 3. "Her own blood" (stage Curious)
-- **Trigger:** awareness reaches stage 2 (Curious).
-- **Length:** about 20 s.
-- **Seen:** The lab again, daytime. She is drawing her own blood for the trial's weekly check:
-  tourniquet, tube, the label with her name and **TITHONUS 0001**. She makes the smear herself, as
-  she has done ten thousand times for strangers, and looks down the eyepiece.
-  **Match cut:** the eyepiece view becomes the game's view: the same pink cells, moving now.
-  She has, without knowing it, looked straight at you. (This is the first time "HOST 0001" in the
-  unit's log has a face.)
+### 3. "The letter"
+- **Trigger:** second return to the heart (end of trip 2).
+- **Length:** about 20 s, 4 beats.
+- **Seen:**
+  1. Night. The kitchen light is the only one on in the house. She takes the letter down from the fridge.
+  2. The letter, readable at last: **"...not medically necessary at this time."**
+  3. She turns it over, looks at the brochure still on the fridge: **TITHONUS. More mornings.**
+     She pins them both back up, side by side.
+  4. She touches her right side. **Match cut:** the liver, and the tumour's ringed nodule on the scan.
+- **Words:** the letter line and the brochure line. This is the moment the player learns why she
+  signed, and that the job they have been doing is the only treatment she could get.
 
-### 4. "The same heart" (stage Self)
-- **Trigger:** awareness reaches stage 4 (Self).
+### 4. "The same heart" (only if the unit has woken)
+- **Trigger:** the unit reaches stage 4.
 - **Length:** about 20 s.
-- **Seen:** Night, in bed. The dog has climbed up and laid its head on her chest. She lets it stay.
-  Close on the dog's ear, very still, rising and falling.
-  **Match cut:** inside, the unit is holding still in a vessel, its lamp dimmed, in time with
-  the same heartbeat. No words. Two things keeping watch over one heart, and only one of them
-  knows the other exists. (The dog is an animal doing what dogs do: no liberty taken.)
+- **Seen:** Night, in bed, shot close. The dog has climbed up and laid its head on her chest. She lets
+  it stay. Close on the dog's ear, very still, rising and falling.
+  **Match cut:** inside, the unit is holding still in a vessel, its lamp dimmed, in time with the same
+  heartbeat. Two things keep watch over one heart, and only one of them knows the other is there.
 
-### 5. "The scan" (before the lungs)
-- **Trigger:** the tumour is fully excised, on the world map, before the lungs leg.
+### 5. "The scan"
+- **Trigger:** the tumour is fully excised, on the world map before the lungs leg.
 - **Length:** about 20 s.
-- **Seen:** A clinic follow-up. An ultrasound or CT on a screen, and a radiologist's gloved finger
-  pointing to where the lesion was. There's nothing there now. Marian looks, says nothing, and lets
-  out one long breath.
+- **Seen:** A follow-up at the clinic. A CT on a screen, and a radiologist's gloved finger pointing where the
+  lesion was; now there is nothing there. The patient label on the screen is **TITHONUS 0001**,
+  or **V., MARIAN** if the unit is awake. She lets out one long breath.
   **Match cut:** the long breath becomes the lungs, and the final leg begins.
 
 ### E. Endings: "The kitchen, after"
-- **Trigger:** each ending, before the debrief text.
+- **Trigger:** each ending, before the debrief.
 - **Length:** about 20 s.
-- **Seen:** The same kitchen as scene 1, some weeks later. What has changed comes from the
-  run's stewardship ledger, so the player reads the consequences rather than being told:
+- **Seen:** The same kitchen as scene 1, weeks later, framed by the unit's final stage (wide and
+  far for a unit that never woke, close for one that did). The details come from the stewardship
+  ledger, so the player reads the consequences instead of being told them:
 
 | Ledger | Detail in the kitchen |
 | --- | --- |
 | Lowest host health high | She is standing, dressed for work, keys in hand |
 | Lowest host health low | She is sitting, in a dressing gown, with a row of pill bottles by the mug |
-| Few cells stripped | The dog's leash is gone from the hook, because they are out walking |
+| Few cells stripped | The leash is gone from its hook, because they are out walking |
 | Many cells stripped | The leash still hangs there, and the dog waits by the door |
-| Drink habit left alone (no "correction") | One clean glass on the drying rack |
-| Tumour out | The denial letter is gone from the fridge. The brochure is still there |
-| Stay endings | Late at night, she wakes, hand on her right side, for no reason she can name, then sleeps again |
+| Drink habit never "corrected" | One clean glass on the drying rack |
+| Tumour out | The letter is gone from the fridge, but the brochure is still there |
+| Stay endings | Late at night she wakes with a hand on her side, for no reason she can name, then sleeps again |
 
-The ending's existing text follows the scene, unchanged.
+## Look and sound (owned by the art and audio thread)
 
-## Look and sound (for the art and audio thread to own)
-
-- **Outside looks different from inside.** Suggestion: flat, warm, lamp-lit silhouettes with only
-  2 or 3 tones, like paper cut-outs or a dim domestic photograph. No faces in detail: Marian is
-  always seen from behind, in profile against a window, or as hands. That keeps her universal, and
-  it is cheap to draw in canvas or SVG.
-- **Sound:** the in-body music drops out. Room tone, a fridge hum, a spoon on the mug, the dog's
-  claws, all faintly muffled, as if heard through tissue. On the match cut, the body's sound
-  comes back at full volume.
-- **Motion:** slow fades and gentle drifts only. Nothing faster than a heartbeat, and nothing
-  strobes.
+- **Outside looks different from inside.** Flat, warm, lamp-lit silhouettes in 2 or 3 tones. She is
+  only ever seen from behind, in profile against a window, or as hands; no detailed face. That keeps
+  her universal, and it is cheap to draw in SVG.
+- **Framing by stage**, as above: one zoom and offset per beat.
+- **Sound:** the in-body music drops out, leaving room tone: a fridge hum, a spoon on the mug, the
+  dog's claws, all faintly muffled, as if heard through tissue. On the match cut the body's sound comes back.
+- **Motion:** slow fades and gentle drifts. Nothing faster than a heartbeat, and nothing strobes.
 
 ## In-game text: say less, so it lands
 
-Mick skimmed the in-game lines because they arrive mid-fight. Proposed rules for engineering:
-
-- Unit thoughts appear only at **quiet moments**: no enemy within sight, and not while taking
-  damage. Otherwise they wait their turn.
-- At most **one** unit thought per map, besides Shepherd's order on arrival.
-- Waking lines (stage changes) get a brief, gentle slow-motion plus a vignette at the edges,
-  so the player feels a beat land without leaving play.
+- Unit thoughts appear only at **quiet moments**: no enemy in sight, not while taking damage.
+- At most **one** unit thought per map, plus Shepherd's order on arrival.
+- At stages 0 and 1 the unit says almost nothing: `ACK.` and short log lines. The first `[unlogged]`
+  bracket should arrive right after the player's first act of defiance, so they connect the two.
