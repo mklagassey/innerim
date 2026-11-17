@@ -6,8 +6,12 @@
 // Every picture is viewBox 0 0 320 200. The motifs are drawn the same way every time: the mug has
 // its chip on the left of the rim, the dog is a grey-muzzled mutt with one ear folded.
 
-const svg = (body: string, label: string) =>
-  `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label}">${body}</svg>`;
+const BODIES = new Map<string, { body: string; label: string }>();
+const svg = (body: string, label: string) => {
+  const out = `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label}">${body}</svg>`;
+  BODIES.set(out, { body, label });
+  return out;
+};
 
 /** A soft pool of light: the only gradient a picture is allowed. */
 const pool = (id: string, cx: number, cy: number, r: number, color: string, a = 0.55) =>
@@ -39,6 +43,23 @@ const DAWN = { bg: '#18120e', mid: '#4a3324', dark: '#0c0806', lamp: '#f0c48a' }
 const CLINIC = { bg: '#0e1416', mid: '#2c3a3e', dark: '#070b0c', lamp: '#cfe0e4' };
 
 export const ART = {
+  /** A clinic seen from a ceiling camera: a woman in a chair, sleeve rolled up, face turned away. */
+  chair: svg(
+    `<rect width="320" height="200" fill="${CLINIC.bg}"/>` + pool('ch', 170, 90, 150, CLINIC.lamp, 0.32) +
+    // floor tiles seen from above and the chair from high up: a clinical, observed angle
+    `<path d="M0 90 L320 70 L320 200 L0 200 Z" fill="${CLINIC.mid}"/>` +
+    [0, 1, 2, 3, 4, 5, 6].map((k) => `<path d="M${k * 56 - 20} 200 L${k * 46 + 10} 80" stroke="#22302f" stroke-width="1"/>`).join('') +
+    `<path d="M0 130 L320 112" stroke="#22302f" stroke-width="1"/><path d="M0 165 L320 150" stroke="#22302f" stroke-width="1"/>` +
+    // trolley with a tray
+    `<rect x="226" y="98" width="46" height="6" fill="#5a6c72"/><rect x="230" y="104" width="3" height="34" fill="#3a4c52"/><rect x="266" y="104" width="3" height="34" fill="#3a4c52"/><rect x="242" y="90" width="5" height="8" fill="#a9c6cc"/>` +
+    // the reclining chair, and her in it: shoulders, the back of her head, one arm out on the rest, sleeve rolled
+    `<path d="M120 150 l70 -12 l10 22 l-70 12 z" fill="#1d2729"/><path d="M110 120 l30 -6 l14 36 l-30 6 z" fill="#1d2729"/>` +
+    `<path d="M126 136 q-4 -20 10 -26 q14 -4 22 8 q10 14 20 22 l-12 12 q-22 4 -36 -4 z" fill="${CLINIC.dark}"/><circle cx="132" cy="114" r="9" fill="${CLINIC.dark}"/>` +
+    `<path d="M176 140 l46 -10 l2 6 l-46 10 z" fill="${CLINIC.dark}"/><rect x="170" y="139" width="8" height="8" fill="#8fa7ae" transform="rotate(-12 174 143)"/>` +
+    // the nurse, standing, gloved hands at her arm
+    `<path d="M214 60 q12 -6 20 4 q6 10 0 30 l6 40 l-30 4 l2 -40 q-8 -24 2 -38 z" fill="#3e5258"/><circle cx="222" cy="52" r="8" fill="#2b3a3e"/><path d="M212 108 q-2 14 6 22 l6 -2 q-6 -8 -4 -20 z" fill="#8fb7c4"/>`,
+    'A clinic seen from high in a corner. A woman in a reclining chair, sleeve rolled up, her face turned away. A nurse beside her.'),
+
   /** Night, a hospital lab: Marian from behind at a microscope, the mug beside her. */
   lab: svg(
     `<rect width="320" height="200" fill="${NIGHT.bg}"/>` + pool('labL', 196, 92, 120, NIGHT.lamp, 0.45) +
@@ -166,3 +187,39 @@ export const ART = {
     `<path d="M178 84 q8 6 6 20 l-6 2 z" fill="${DAWN.dark}"/>` + steam(169, 76, DAWN.lamp) + `</g>`,
     'A hand lifts the chipped mug toward her, steam rising.'),
 };
+
+/** Where each picture's close-up sits: her hands, or the object that matters. */
+const FOCUS: Partial<Record<keyof typeof ART, [number, number]>> = {
+  chair: [180, 140], lab: [190, 120], letter: [160, 150], fridge: [130, 80], dog: [196, 132], clinic: [190, 110],
+  swarm: [190, 110], coffee: [184, 122], plaster: [130, 118], lift: [172, 92],
+};
+
+/**
+ * The same picture framed for how awake the unit is (interludes v2, the camera comes closer):
+ * - stages 0 and 1: wide, high and still, like trial footage. The scene sits small in a dark
+ *   frame, drained of colour, with camera corner marks: observed, not felt.
+ * - stage 2: at her height, the picture as drawn.
+ * - stage 3 and on: close on her hands, or on the object that matters.
+ * The inside-the-body picture (swarm) is never framed as footage.
+ */
+export function frame(key: keyof typeof ART, stage: number): string {
+  const art = BODIES.get(ART[key]);
+  if (!art) return ART[key];
+  const id = `${key}${stage}`;
+  if (stage >= 3 && FOCUS[key]) {
+    const [fx, fy] = FOCUS[key]!, w = 176, h = 110, x = Math.max(0, Math.min(320 - w, fx - w / 2)), y = Math.max(0, Math.min(200 - h, fy - h / 2));
+    return `<svg viewBox="${x} ${y} ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Close: ${art.label}">${art.body}</svg>`;
+  }
+  if (stage <= 1 && key !== 'swarm') {
+    const mark = (x: number, y: number, dx: number, dy: number) => `<path d="M${x + dx * 14} ${y} L${x} ${y} L${x} ${y + dy * 10}" fill="none" stroke="#7d8a8c" stroke-width="1.2" opacity="0.6"/>`;
+    return `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="From a distance, as if on a camera: ${art.label}">` +
+      `<defs><filter id="${id}f"><feColorMatrix type="saturate" values="0.25"/></filter>` +
+      `<radialGradient id="${id}m" cx="0.5" cy="0.5" r="0.5"><stop offset="0.6" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient><mask id="${id}k"><rect width="320" height="200" fill="url(#${id}m)"/></mask></defs>` +
+      `<rect width="320" height="200" fill="#060505"/>` +
+      `<g mask="url(#${id}k)"><g filter="url(#${id}f)" transform="translate(70 44) scale(0.56)" opacity="0.85">${art.body}</g></g>` +
+      mark(58, 34, 1, 1) + mark(262, 34, -1, 1) + mark(58, 166, 1, -1) + mark(262, 166, -1, -1) +
+      `<circle cx="252" cy="44" r="2.2" fill="#9a3a32" opacity="0.7"/></svg>`;
+  }
+  return ART[key];
+}
+export type Picture = keyof typeof ART;
