@@ -317,19 +317,19 @@ Goal: going in swinging is a real choice with a real price, even with plating an
 - **Neutrophil hp** 8 → **10**, so strikes take three blows without elastase, two with it. Paired with first strike (S17), sneaking up is now clearly better than brawling.
 - Fights still pay: a kill drops a patch (20%) as now.
 
-**Done when.** The skim bot fighting everything it meets loses 25 to 40% hull per liver on Standard with a full Tank build, and dies on trip 2 or 3 in at least a quarter of seeds without one.
+**Done when.** The skim bot fighting everything it meets loses 25 to 40% hull per liver on Typical with a full Tank build, and dies on trip 2 or 3 in at least a quarter of seeds without one.
 
 ### S19 (P1). Difficulty settings
 
-Chosen on the start screen, stored in `Carry.difficulty`, shown in the run report, changeable only at Begin. Multipliers only, so balance work happens on Standard.
+Chosen on the start screen, stored in `Carry.difficulty`, shown in the run report, changeable only at Begin. Multipliers only, so balance work happens on Typical. Names (creative director) describe Marian's immune system, which is why the game gets easier or harder.
 
 | Setting | Name | Enemy damage | Enemy hp | Spawns | Healing (clotting, patches, sleep) | Starting energy | Detection |
 |---|---|---|---|---|---|---|---|
-| Easy | **Observer** | × 0.6 | × 0.8 | × 0.7 | × 1.3 | 12 | × 0.8 |
-| Normal | **Standard** | × 1 | × 1 | × 1 | × 1 | 8 | × 1 |
-| Hard | **Clinical** | × 1.4 | × 1.25 | × 1.3 | × 0.7 | 6 | × 1.15 |
+| Easy | **Suppressed** | × 0.6 | × 0.8 | × 0.7 | × 1.3 | 12 | × 0.8 |
+| Normal | **Typical** | × 1 | × 1 | × 1 | × 1 | 8 | × 1 |
+| Hard | **Vigilant** | × 1.4 | × 1.25 | × 1.3 | × 0.7 | 6 | × 1.15 |
 
-"Detection" scales `scent.reach` and `contact`. Clinical also turns off the auto patch (patches are used by hand). The names are world-flavoured; the creative director can rename them.
+"Detection" scales `scent.reach` and `contact`. Vigilant also turns off the auto patch (patches are used by hand).
 
 ### S20 (P1). Less repetitive trips
 
