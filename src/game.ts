@@ -1217,7 +1217,7 @@ function finishChannel(s: State, ch: Channel) {
   if (rich && s.chapter >= 2) take(s, 'parietal', 'obey', { mute: !!s.flags['n:parietal:obey'] });
   const mk = s.marks.find((m) => m.kind === 'strip' && !m.done);
   if (mk && Math.floor(mk.at.x) === ch.x && Math.floor(mk.at.y) === ch.y) { mk.done = true; p.energy += CONFIG.marks.yield - c.gain; take(s, 'marked-cell', 'obey'); }
-  else if (mk?.met) mk.other = true; // a different cell: what that was is settled on leaving, in case the marked one is taken after all
+  else if (mk?.met && !ordered) mk.other = true; // the quota is an order too, so only a cell beyond it counts. // a different cell: what that was is settled on leaving, in case the marked one is taken after all
   raiseAlert(s, Math.max(1, c.alert - bonus(s, 'apoptosis')));
   // A dying cell's signals pull in everything nearby, and first responders ride in on the blood.
   const reach = 26 - s.upgrades.apoptosis * 8;

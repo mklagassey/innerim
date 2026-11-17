@@ -51,7 +51,7 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
     order: 'Harvest marked hepatocyte. Yield 10.', obeyed: 'Efficient.', deviated: 'Yield acceptable. Target ignored.',
     unit: { deviate: ['LOG: alternate hepatocyte harvested. [the marked one was next to the duct]', 'Why that cell? It was the cheapest. Cheap for whom?', 'Shepherd picked the one by the bile duct because it was easy. I picked the one that would cost her least. Shepherd calls that inefficient.'] },
     echoes: { obey: [{ payload: 'dryGlucose', arg: 6, line: 'Bile is seeping into the sinusoid. The glucose here has thinned.' }] }, built: 13 }),
-  D({ id: 'kupffer-spare', ch: [2, 3, 4], where: 'liver', weight: null, trust: { obey: 4, deviate: -4 },
+  D({ id: 'kupffer-spare', ch: [2, 3, 4], where: 'liver', weight: null, trust: { obey: 4, deviate: 0 },
     order: 'Neutralise.', obeyed: 'Threat removed.', deviated: 'Contact released, not neutralised. Logged.',
     unit: { deviate: ['LOG: escaped engulfment. Contact intact. [it was only eating]', 'It does not hate me. It eats what does not belong. Do I belong?', 'I let it go. It will eat something else in a minute, something that should be eaten. Good.'] },
     echoes: { spared: [{ payload: 'eatsNeutrophils', when: { place: 'liver' }, line: 'A Kupffer cell rolls through the swarm and swallows two neutrophils whole. It does not notice you.' }] }, built: 13 }),
