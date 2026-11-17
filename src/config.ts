@@ -181,7 +181,7 @@ export const CONFIG = {
   // The one garbled order of a game (decisions.md 4). fright: seconds into the vessel before it arrives.
   slip: { fright: 6, window: 20, hold: 15, near: 3, harvest: { gain: 5, host: 5 }, lamp: 2, reply: 6, hesitate: 8, fork: 1.5 },
   wake: { floor: 0.25 }, // each defiance adds weight x max(floor, 1 - awareness/100): Self is for a unit that keeps choosing
-  mend: { each: 3, night: 18, cap: 90, rest: 5, restCap: 95, cold: 4, prodrome: 6 }, // overnight the liver grows back: host health per hepatocyte stripped since she last slept, the most in one night, and how well it can make her
+  mend: { each: 3, night: 21, cap: 90, rest: 5, restCap: 95, cold: 4, prodrome: 6 }, // overnight the liver grows back: host health per hepatocyte stripped since she last slept, the most in one night, and how well it can make her
   story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, kin: { most: 3, gift: 2 }, quota: 2, orders: { most: 15, some: 8, little: 4, first: 12, fullTimes: 2, escort: 0.25, acid: 2, spotted: 2, levers: 80, repeat: 45, steer: 6, nobody: 10 }, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
   flora: { cost: 4, aboard: 2, most: 4, lure: 8, lasts: 12, feast: 5, hostDamage: 2 }, // gut bacteria stuck to the hull, shed as bait
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
