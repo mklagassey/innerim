@@ -44,7 +44,7 @@ export type JunctionPlan = { kind: Junction['kind']; exits: Omit<Exit, 'at'>[] }
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number; keep?: boolean } // keep: if the map ends before this is shown, it is said on the next one // st: how awake the unit was when it said it
 export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall'; item: Pickup }
 /** Something Shepherd has marked on the map: a place to hold still at, or one particular cell to take. */
-export interface Mark { id: string; kind: 'hold' | 'strip'; at: Point; t: number; done: boolean; met: boolean; say: number; near?: number; tried?: number; pressed?: boolean; other?: boolean } // tried: the longest the unit has held here; pressed: something hostile came within reach while the order stood; other: a different cell was taken
+export interface Mark { id: string; kind: 'hold' | 'strip'; at: Point; t: number; done: boolean; met: boolean; say: number; near?: number; tried?: number; pressed?: boolean; other?: boolean; since?: number } // tried: the longest the unit has held here; pressed: something hostile came within reach while the order stood; other: a different cell was taken
 export interface Pending { id: string; choice: string; i: number }
 export type Order = Story.Order;
 /** Something said about how a map went, once it is over: Shepherd's verdict, or the unit's own line. */
@@ -531,7 +531,7 @@ function settle(s: State) {
   for (const item of s.pickups) if (item.beset !== undefined && item.kind === 'sibling' && s.met.includes('bystander') && !s.took.bystander) take(s, 'bystander', 'obey');
   if (s.flags.kinRecall === 'live' && !s.took['kin-recall']) { s.flags.kinRun = 'left'; take(s, 'kin-recall', 'obey'); } // gone on without reaching it
   settleMarks(s);
-  if (s.place === 'liver' && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.excised >= CONFIG.tumor.goal) take(s, 'tumour-order', s.marginTaken >= CONFIG.marks.margins ? 'obey' : 'deviate');
+  if (s.place === 'liver' && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.excised >= CONFIG.tumor.goal) take(s, 'tumour-order', s.marginTaken >= CONFIG.marks.margins ? 'obey' : s.time - (Number(s.flags.marginAt) || 0) < CONFIG.marks.notice ? 'lapsed' : 'deviate');
   if (s.grabber !== null && s.chapter >= 2 && !t && s.enemies.some((e) => e.id === s.grabber)) take(s, 'kupffer-spare', 'deviate');
   if (s.place === 'liver') {
     if (s.cellsKilled >= CONFIG.story.quota) { s.verdict = 'obeyed'; s.obeyedHere.add('quota'); s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 1); }
@@ -1191,7 +1191,7 @@ function finishChannel(s: State, ch: Channel) {
     raiseAlert(s, t.alert);
     s.site = { x: ch.x, y: ch.y };
     const sup = s.marks.find((m) => m.id === 'suppress' && !m.done);
-    if (sup) { sup.done = true; if (sup.met) take(s, 'suppress', (sup.tried ?? 0) >= 1 ? 'lapsed' : 'deviate', { after: 1.5 }); } // cutting without ever trying it is the answer
+    if (sup) { sup.done = true; if (sup.met && s.time - (sup.since ?? 0) >= CONFIG.marks.notice) take(s, 'suppress', (sup.tried ?? 0) >= 1 ? 'lapsed' : 'deviate', { after: 1.5 }); } // cutting without ever trying it is the answer; an order that had no time to be read is no order
     if (s.place === 'liver' && s.chapter >= 4 && !s.tumor.size && s.excised >= t.goal && !s.took.beacon) s.marks.push({ id: 'beacon', kind: 'hold', at: mid({ x: ch.x, y: ch.y }), t: 0, done: false, met: false, say: s.time + 6, near: 0.75 }); // planted where the last of it was
     if (s.place === 'vessel') { trusted(s, 2); if (!s.tumor.size) { s.flags.nodule2 = 'done'; shepherd(s, 'Secondary nodule excised. Credit applied.'); } }
     if (s.chapter === 3 && t.goal - s.excised <= 3 && s.excised < t.goal) { s.chapter = 4; shepherd(s, Story.RESIDUAL, 1.5); lastOrders(s); } // chapter 4 begins with the last of it in sight
@@ -2050,14 +2050,14 @@ function lastOrders(s: State) {
   }
   if (!s.took['tumour-order'] && !s.margin.size) {
     for (const c of cells) for (const [dx, dy] of STEPS) { const x = c.x + dx, y = c.y + dy, k = idx(s, x, y); if (s.margin.size < CONFIG.marks.margins + 2 && inside(s, x, y) && s.tiles[k] === 'cell' && !s.tumor.has(k) && STREAM.some(([ax, ay]) => open(s, x + ax, y + ay))) s.margin.add(k); }
-    if (s.margin.size >= CONFIG.marks.margins) { meet(s, 'tumour-order'); s.thoughts.push({ text: DECISIONS['tumour-order'].order!, who: 'shepherd', t: Math.max(s.time + 16, (s.thoughts[s.thoughts.length - 1]?.t ?? 0) + CONFIG.story.gap) }); } else s.margin.clear();
+    if (s.margin.size >= CONFIG.marks.margins) { meet(s, 'tumour-order'); s.flags.marginAt = s.time; s.thoughts.push({ text: DECISIONS['tumour-order'].order!, who: 'shepherd', t: Math.max(s.time + 0.5, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3) }); } else s.margin.clear();
   }
 }
 function marks(s: State, dt: number) {
   const p = s.player;
   for (const m of s.marks) {
     if (m.done) continue;
-    if (!m.met && (s.time >= m.say || (dist(p, m.at) < 6 && m.id !== 'beacon')) && !s.marks.some((k) => k.met && !k.done)) { m.met = true; meet(s, m.id); shepherd(s, DECISIONS[m.id].order ?? ''); }
+    if (!m.met && (s.time >= m.say || (dist(p, m.at) < 6 && m.id !== 'beacon')) && !s.marks.some((k) => k.met && !k.done)) { m.met = true; m.since = s.time; meet(s, m.id); shepherd(s, DECISIONS[m.id].order ?? ''); }
     if (!m.met || m.kind !== 'hold') continue;
     const still = dist(p, m.at) <= (m.near ?? CONFIG.marks.near) && !p.path.length && !p.channel && !s.held;
     m.t = still ? m.t + dt : Math.max(0, m.t - dt * 2);
