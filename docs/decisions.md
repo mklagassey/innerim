@@ -576,7 +576,7 @@ Right now the three levels are multipliers only (damage, hp, spawns, healing, en
 
 | | Suppressed | Typical | Vigilant |
 |---|---|---|---|
-| Who she is | Chemo-recovering, low white count | Healthy 58-year-old | Recently vaccinated, primed immune system |
+| Who she is | On a steroid course for her arthritis, low white count | Healthy 58-year-old | Recently vaccinated, primed immune system |
 | Multipliers | as now | as now | as now |
 | **Scent** | Footprints fade ×1.5 faster; the search ring shrinks ×1.5 faster | — | Footprints last ×1.3 longer |
 | **Memory** | Immune memory decays between maps (×0.5 carried) | Memory carries | Memory carries **and** antibodies tagged to the hull: after a cell touches you, every antibody on the map drifts towards you for 20 s |
@@ -584,7 +584,7 @@ Right now the three levels are multipliers only (damage, hp, spawns, healing, en
 | **Shepherd** | Scans show the nearest hunter's heading | as now | Supply drops only above trust 80; no drop ahead |
 | **Clock** | Tumour drain ×0.8 | — | Tumour drain ×1.2; night mend ×0.7 |
 
-The Suppressed and Vigilant blurbs on the start screen should name the reason ("She is recovering from chemotherapy" / "She had her flu jab last week"). This is the creative director's text to write, and I'll send the request.
+The Suppressed and Vigilant blurbs on the start screen should name the reason (creative: a steroid course for her arthritis / a flu jab last week; text in decisions-text.md section 13). This is the creative director's text to write, and I'll send the request.
 
 Engineering: `DIFFICULTY.<level>.rules = { footFade, ringShrink, memoryCarry, tagOnTouch, cloakDecay, scanHeading, dropTrust, drain, mend }`. Defaults equal Typical.
 
