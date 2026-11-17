@@ -381,3 +381,51 @@ All of these are accepted. Each entry gives what shipped and, where it differs f
 - **Kin recall race.** Refusing the recall opens a vessel race (`CONFIG.marks.kinRun`: time 60, lead 13, speed 0.55, prey Warden). Reaching the kin first sets `siblingSaved`; losing sets `kinLost`.
   - Tuning target: a player who goes straight for the kin wins about 70% of the time, and a player who detours or fights loses it.
   - The win rate is to be read from run reports once Mick has played. Until then the numbers stay as shipped.
+
+### 6.5 Retune after QA's whole-mission bot runs (Version 65)
+
+QA ran whole missions with bots (`scripts/qa-endings.cjs` on the QA branch) and found three problems.
+
+**Finding 1: obeying kills her.**
+- The all-obey bot ended with the host dead or at 9 to 11% in 3 of 3 runs. Defiant bots ended at 74 to 98%.
+- Host health per map went 100, 83, 66, 65, 25, 0. The chapter 3 liver alone costs about 40%: the marked cell, quota-2 and margins, at 8 per cell.
+
+This is not intended. The design depends on the obedient run being a *success* for her: she lives, and the unit is breathed out having never been anyone. That is the ending a replay should make the player question. A compliant player who watches her die learns "Shepherd is evil", which is the trope we are avoiding (pillar: the company is well-meaning).
+
+Changes:
+- **Ordered strips are lighter.** Quota, marked-cell and margin strips do 4 host damage, not 8. A strip the player chooses outside an order stays at 8. Shepherd's orders pick surplus cells; the player does not know which cells are surplus. (Real: removing a small share of hepatocytes is well tolerated.)
+- **Liver regeneration.** Each host sleep restores 3 host health per healthy hepatocyte stripped since the last sleep, up to 12 per night. It never raises her above 90. (Real: the liver regenerates within days to weeks; we compress the time, The Martian style.)
+- **Targets for the all-obey bot:**
+  - lowest host health ≥ 40 on every map;
+  - host health at the end 55 to 70;
+  - host never dies in 20 seeds.
+- **Targets for the kind or defiant bot:** host at the end 70 to 95, unchanged.
+
+The point of the gap is that obedience costs her something visible but survivable. A replay shows how much better she could have been.
+
+**Finding 2: awareness overshoots.**
+- Every defiant policy ended at awareness 80 to 94.
+- A bot that switched to full obedience at 60 still rose another 15 to 25 points.
+- Past 80, Shepherd stops issuing orders. That closes the Recalled, Recurrence and Tithonus windows.
+
+Changes:
+- **Diminishing gain.** `gain = weight × max(0.25, 1 − awareness/100)`. A Most (15) deviation at awareness 20 gives 12; at awareness 60 it gives 6; at 80 it gives 3.75.
+  - The first-deviation floor of 12 is unchanged.
+  - The ×0.5 after a repair is unchanged.
+- **Echoes and refusals do not add awareness on their own.** Only `take()` on a deviation does. Refusing the review counts as one Most deviation through the same curve. If any echo payload currently adds awareness, remove it.
+- **Shepherd never stops ordering.** It does not know what the unit has become. Orders keep coming at every stage; what changes with stage is the unit's inner text, not the order flow. This keeps margins (Recurrence) and beacon plus ethanol (Tithonus) reachable at any stage.
+- **Recalled has no awareness cap.** Trust under 20 at a chapter 3+ heart sends the warden whatever the stage; the warden fight (D14) decides the rest.
+- **Targets:**
+  - fully defiant 70 to 85;
+  - mixed 35 to 60;
+  - all-obey 0;
+  - a bot that switches to obey at 60 ends ≤ 70.
+  - Stage 4 (80+) should be reached only by players who defy nearly everything.
+
+**Finding 3: Tithonus hangs on the clock.**
+- Ethanol-correction was offered only while alcohol was in her blood. That needs a drinking hour to line up with a chapter 3 liver, which bots never hit.
+- The order is about enzyme expression (her habit), not one drink.
+
+Change: offer ethanol-correction at the first chapter 3+ liver visit if she has had a drink at any point in the game. Every host has one evening drink in the first two host days, so this is effectively guaranteed. While she has a drink in her blood, its hold mark still has priority (10.8a).
+
+**Branch sim note.** `scripts/branch-sim.py` modelled awareness and trust but not host health, which is why it missed finding 1. QA's whole-mission bot is now the reference for endings; the branch sim stays for quick weight checks.
