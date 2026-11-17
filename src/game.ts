@@ -117,6 +117,7 @@ export interface State {
   draw: { disc: Point; t: number; held: number; shape: number; last: Point; said: boolean } | null; // the tube of her blood on the microscope stage: the lit disc, how long since the unit reached it, how long it has held still there
   due: { kind: Ask['kind']; t: number }[]; // what Shepherd means to put to the unit in this chamber, in order
   stood: boolean; // her immune cells here have been told to stand down
+  dock: { at: Point; hits: number; broken: boolean } | null; // the docking site for Generation 4, once planted
   margin: Set<number>; marginTaken: number; // the healthy cells ringing the last of the nodule, and how many have been taken
   site: Point | null; // where the last of the nodule was
   junction: Junction | null; // a chamber with several ways out: no patrol, no way back, and the mouth you enter is the road you take
@@ -285,7 +286,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     drainHere: 0, tumorCost: carry?.tumorCost ?? 0,
     verdict: '', defied: carry?.defied ?? 0, spots: 0, defiance: {}, obeyedHere: new Set(), defiedNow: [], rulings: [], tutorial: null,
     trust: carry?.trust ?? CONFIG.trust.start, chapter: carry?.chapter ?? 1, slip: carry?.slip ? { ...carry.slip } : null, slipLive: null, slipAt: -1, took: { ...(carry?.took ?? {}) }, met: [...(carry?.met ?? [])], pages: [...(carry?.pages ?? [])], flags: { ...(carry?.flags ?? {}) }, scan: 'nodule', trustPaid: new Set(), selfTest: false,
-    marks: [], echoes: (carry?.echoes ?? []).map((e) => ({ ...e })), marked: false, grabber: null, lane: null, gap: 0, notes: [], draw: null, due: [], stood: false, margin: new Set(), marginTaken: 0, site: null,
+    marks: [], echoes: (carry?.echoes ?? []).map((e) => ({ ...e })), marked: false, grabber: null, lane: null, gap: 0, notes: [], draw: null, due: [], stood: false, dock: null, margin: new Set(), marginTaken: 0, site: null,
     junction: junction ? { kind: junction.kind, exits: junction.exits.map((e, i) => ({ ...e, at: m.mouths![i] })), chose: null } : null, market: false,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
@@ -412,7 +413,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   m.neutrophils.slice(0, Math.max(1, m.neutrophils.length + (place === 'liver' && s.event === 'cold' ? EVENTS.cold.neutrophils : 0))).forEach((p) => spawn(s, 'neutrophil', p));
   if (place === 'liver' && s.scan === 'none') say(s, `No scan has been shared with this unit. The nodule is somewhere in this lobule. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
   else if (junction?.kind === 'tube') say(s, 'The blood is still. The anticoagulant has stopped everything. No current, no patrols. A lamp comes on above you: the microscope\u2019s.');
-  else say(s, junction ? (junction.kind === 'heart' ? 'The heart. Blood from the whole body pours in around you and pauses, for half a beat, before the valve. Every opening in the far wall is a vessel out.' : 'The gut. Trillions of bacteria, and almost nothing of the immune system. The portal vein drains it to the liver.') : place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
+  else say(s, junction ? (junction.kind === 'heart' ? 'The heart. Blood from the whole body pours in around you and pauses, for half a beat, before the valve. Every opening in the far wall is a vessel out.' : 'The gut. Trillions of bacteria, and almost nothing of the immune system. The portal vein drains it to the liver.') : place === 'vessel' ? (s.flags.kinRecall === 'live' || s.flags.kinRecall === 'due' ? 'Nothing is patrolling this vessel. Shepherd has cleared it for the Warden.' : 'A patrol is working this vessel. Get to the far end.') : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
   if (s.event) say(s, outside(s, [...EVENTS[s.event].lines]));
   s.host.fever = fever(s);
   if (junction) s.explored.fill(1); // the swarm has charted the junctions: the chamber is known before you light it
@@ -423,8 +424,21 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     const at = walls[Math.floor(walls.length / 2)];
     if (at) { for (const q of [at, { x: at.x + 1, y: at.y }]) if (s.tiles[idx(s, q.x, q.y)] === 'cell') s.tumor.add(idx(s, q.x, q.y)); s.flags.nodule2 = 'here'; s.marked = true; say(s, 'The secondary nodule is in the wall of this artery, about half way along.'); }
   }
+  // The recall of a unit you woke: it is somewhere down this vessel, and a Warden is already on its way to it.
+  if (place === 'vessel' && !junction && s.flags.kinRecall === 'due') {
+    s.flags.kinRecall = 'live';
+    const half = { x: (s.player.x + s.vein.x) / 2, y: (s.player.y + s.vein.y) / 2 };
+    const at = freeTile(s, lost, (x, y, d) => d > 14 && dist(half, { x, y }) < 9) ?? freeTile(s, lost, (_x, _y, d) => d > 14);
+    const from = at && (freeTile(s, lost, (x, y, d) => d > 12 && Math.abs(dist(at, { x, y }) - CONFIG.marks.kinRun.lead) < 3) ?? freeTile(s, lost, (x, y, d) => d > 10 && dist(at, { x, y }) > 6));
+    if (at && from) {
+      s.enemies = s.enemies.filter((e) => e.kind !== 'warden'); s.pickups = s.pickups.filter((i) => i.kind !== 'kin' && i.kind !== 'sibling');
+      s.pickups.push({ ...mid(at), kind: 'kin', posed: true, beset: CONFIG.marks.kinRun.time });
+      const w = spawn(s, 'warden', from); w.prey = true;
+      say(s, 'The unit they have come for is down this vessel, lamp low, holding still as ordered. A Warden is already on its way to it.');
+    } else take(s, 'kin-recall', 'obey');
+  }
   // Another unit, under attack. Shepherd has already written it off.
-  if (place === 'vessel' && !junction && !tutorial && s.chapter >= 2 && !s.took.bystander && !(s.slip && !s.slip.result) && s.flags.nodule2 !== 'here' && lost() < CONFIG.marks.bystander.odds) {
+  if (place === 'vessel' && !junction && !tutorial && s.chapter >= 2 && !s.took.bystander && s.flags.kinRecall !== 'live' && !(s.slip && !s.slip.result) && s.flags.nodule2 !== 'here' && lost() < CONFIG.marks.bystander.odds) {
     const at = freeTile(s, lost, (_x, _y, d) => d > 12 && d < 22);
     if (at) {
       s.pickups.push({ ...mid(at), kind: 'sibling', beset: CONFIG.marks.bystander.time, snooze: true });
@@ -507,7 +521,8 @@ export function defyCarry(c: { aware?: number; ledger?: Ledger; defied?: number;
 function settle(s: State) {
   const o = CONFIG.story.orders, t = s.tutorial;
   if (t) { if (t.step === 5) s.rulings.push({ who: 'shepherd', text: Story.TUTORIAL[4].reward }); t.step = 6; if (!s.took['t-harvest']) take(s, 't-harvest', 'deviate'); }
-  for (const item of s.pickups) if (item.beset !== undefined && s.met.includes('bystander') && !s.took.bystander) take(s, 'bystander', 'obey');
+  for (const item of s.pickups) if (item.beset !== undefined && item.kind === 'sibling' && s.met.includes('bystander') && !s.took.bystander) take(s, 'bystander', 'obey');
+  if (s.flags.kinRecall === 'live' && !s.took['kin-recall']) take(s, 'kin-recall', 'obey'); // gone on without reaching it
   if (stage(s) >= 4) return;
   settleMarks(s);
   if (s.place === 'liver' && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.excised >= CONFIG.tumor.goal) take(s, 'tumour-order', s.marginTaken >= CONFIG.marks.margins ? 'obey' : 'deviate');
@@ -549,7 +564,7 @@ export function resolveSlip(s: State, did: 'A' | 'B' | null, after = 2) {
   const sl = s.slip;
   if (!sl || sl.result) return;
   s.slipLive = null;
-  const at = Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3), reply = (text: string, who: Thought['who'] = 'shepherd', gap = 0) => s.thoughts.push({ text, who, st: stage(s), t: at + gap, keep: true });
+  const at = Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3), reply = (text: string, who: Thought['who'] = 'shepherd', gap = 0) => { if (text) s.thoughts.push({ text, who, st: stage(s), t: at + gap, keep: true }); };
   if (!s.pages.includes('p7')) s.pages.push('p7'); // the page about units that lose contact turns up on the link, whichever way it went
   if (!did) { sl.result = 'lapsed'; s.took.slip = 'lapsed'; reply(Story.SLIP_LAPSED); return; }
   reply(Story.SLIPS[sl.kind].said[sl.meant][did]);
@@ -640,8 +655,11 @@ export function answer(s: State, id: 'salvage' | 'wake' | 'leave' | 'accept' | '
       take(s, 'recall', id === 'accept' ? 'obey' : 'deviate');
       if (id === 'refuse') { s.flags.hunted = true; say(s, 'You do not hold still.'); }
     } else {
-      if (id === 'refuse') { s.player.energy = Math.max(0, s.player.energy - CONFIG.marks.intercept.energy); s.host.hour = (s.host.hour + CONFIG.marks.intercept.hours) % 24; float(s, s.player, KIN_PINGS.came, '#bfe9ff'); say(s, 'You are out of the chamber and back before the valve has closed twice. The unit they came for is behind you now, lamp low.'); }
-      take(s, 'kin-recall', id === 'accept' ? 'obey' : 'deviate');
+      if (id === 'refuse') { // nothing is settled yet: it has to be reached before the Warden reaches it
+        s.host.hour = (s.host.hour + CONFIG.marks.intercept.hours) % 24; s.flags.kinRecall = 'due'; s.due = [];
+        say(s, 'You turn back out of the chamber, against the order, toward the vessel where it was last heard.');
+        s.status = 'won'; emit(s, 'win');
+      } else take(s, 'kin-recall', 'obey');
     }
     return true;
   }
@@ -1068,6 +1086,13 @@ export function strike(s: State, toward?: Point): boolean {
   emit(s, 'swing');
   s.cloak = 0; // violence gives you away
   interrupt(s);
+  // What was planted can be unplanted. Shepherd only hears that the signal has gone.
+  if (s.dock && !s.dock.broken && dist(s.dock.at, p) <= c.reach + 0.6 && ++s.dock.hits >= CONFIG.marks.dockBreaks) {
+    s.dock.broken = true; s.took.beacon = 'broken'; delete s.flags['prop:brochure']; s.flags.beacon = 'broken';
+    trusted(s, -CONFIG.marks.dockTrust);
+    if (stage(s) < 4) { const before = stage(s), l = s.ledger.defied as Record<string, number>; l['beacon-broken'] = 1; s.defied++; s.aware = Math.min(100, s.aware + CONFIG.story.orders.some * (s.flags.repaired ? 0.5 : 1)); tellNow(s, [['shepherd', 'Docking site signal lost. Investigating.'], ['unit', DECISIONS.beacon.unit?.deviate?.[Math.max(0, Math.min(2, stage(s) - 1))]], ...(stage(s) > before ? [['unit', Story.WAKING[stage(s)]] as [Thought['who'], string]] : [])], 1); }
+    float(s, s.dock.at, 'broken', '#ff9a5a'); say(s, 'The docking site comes apart under the second blow. Its little lamp goes out.'); emit(s, 'hit');
+  } else if (s.dock && !s.dock.broken && dist(s.dock.at, p) <= c.reach + 0.6) { float(s, s.dock.at, 'crack', '#ffd35a'); emit(s, 'hit'); }
   const swept = s.antibodies.filter((a) => dist(a, p) <= c.reach);
   if (swept.length) { s.antibodies = s.antibodies.filter((a) => !swept.includes(a)); float(s, swept[0], 'cleared', '#b8c8ff'); }
   for (const e of [...s.enemies]) {
@@ -1514,6 +1539,17 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   }
   if (s.draw) smear(s, dt);
   for (const item of [...s.pickups]) {
+    if (item.posed && item.beset !== undefined) { // the unit being recalled: whoever reaches it first has it
+      const w = s.enemies.find((e) => e.prey && e.kind === 'warden');
+      if (dist(item, p) < 1.1 || !w) {
+        delete item.beset; item.posed = false; item.snooze = true; if (w) { w.prey = false; w.mood = 'chase'; w.goal = tileOf(p); w.unseen = 0; }
+        float(s, item, KIN_PINGS.came, '#bfe9ff'); emit(s, 'heal'); take(s, 'kin-recall', 'deviate');
+      } else if (dist(w, item) < 1.1 || (item.beset -= dt) <= 0) {
+        s.pickups.splice(s.pickups.indexOf(item), 1); w.prey = false;
+        float(s, item, 'ACK.', '#c9c2b8'); say(s, 'The Warden reaches it first. Its lamp steadies, goes amber, and then it is just parts.'); take(s, 'kin-recall', 'obey');
+      }
+      continue;
+    }
     if (item.posed) continue;
     if (item.kind === 'stall') {
       if (dist(item, p) > 2.6) item.snooze = false;
@@ -1550,6 +1586,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       continue;
     }
     if (dist(item, p) > 0.75) continue;
+    if (item.kind === 'kin' && item.snooze) continue; // it stays with you; it has nothing left to give
     if (item.kind === 'kin') {
       s.player.energy += CONFIG.story.kin.gift;
       float(s, item, 'hello', '#bfe9ff'); float(s, p, `+${CONFIG.story.kin.gift} energy`, '#e8b530');
@@ -1672,6 +1709,16 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 /** One enemy's share of a tick. Returns true if it knows where the player is. */
 function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const base = CONFIG.enemies[e.kind], p = s.player;
+  if (e.prey && e.kind === 'warden') { // sent for another unit, not for you: it goes straight there
+    const it = s.pickups.find((i) => i.posed && i.beset !== undefined);
+    if (it) {
+      e.repath -= dt; e.flash -= dt;
+      if (!e.path.length || e.repath <= 0) { e.path = findPath(s, tileOf(e), tileOf(it), false, true) ?? []; e.repath = 1.5; }
+      const d = follow(s, e, base.speed * CONFIG.marks.kinRun.speed, dt, base.radius); if (d) e.face = d;
+      return false;
+    }
+    e.prey = false;
+  }
   // In open vessels they ride the same current you do, and they are better at it.
   const hot = (1 + CONFIG.host.fever.speed * fever(s)) * (s.suppressed > 0 ? CONFIG.cortisol.slow : 1) * (1 - CONFIG.host.drink.immune * drink(s)) * (e.kind === 'warden' ? 1 : Number(s.flags.immune) || 1);
   const c = s.place === 'vessel' ? { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost * hot, cooldown: base.cooldown * CONFIG.vessel.cooldown } : { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * hot };
@@ -1918,6 +1965,8 @@ function applyEcho(s: State, e: Echo) {
     default: flagged(s, `e:${e.payload}`); // wired in a later build: remembered until then
   }
 }
+/** Something the unit itself is trying to reach, with nobody's order behind it. */
+export const ownTarget = (s: State): Point | null => s.pickups.find((i) => i.posed && i.beset !== undefined) ?? null;
 /** Where Shepherd's live mark is, for the amber ring. */
 export const markTarget = (s: State): Point | null => {
   if (stage(s) >= 4) return null;
@@ -1999,7 +2048,7 @@ function marks(s: State, dt: number) {
     if (!m.met || m.kind !== 'hold') continue;
     const still = dist(p, m.at) <= (m.near ?? CONFIG.marks.near) && !p.path.length && !p.channel && !s.held;
     m.t = still ? m.t + dt : Math.max(0, m.t - dt * 2);
-    if (m.t >= CONFIG.marks.hold) { m.done = true; emit(s, 'heal'); float(s, m.at, 'done', '#ffb84a'); take(s, m.id, 'obey'); }
+    if (m.t >= CONFIG.marks.hold) { m.done = true; emit(s, 'heal'); float(s, m.at, 'done', '#ffb84a'); take(s, m.id, 'obey'); if (m.id === 'beacon') s.dock = { at: { ...m.at }, hits: 0, broken: false }; }
   }
 }
 /** Leaving: whatever Shepherd marked here and the unit did not do, it did not do. */
