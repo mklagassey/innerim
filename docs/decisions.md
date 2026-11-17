@@ -704,3 +704,17 @@ Fix in unit-17.3: a hold mark counts as lapsed only if the unit was engulfed, in
 That puts 6 of 7 pairs in range.
 
 Open question: why does waiting in a chapter 3+ liver leave her healthier (+13)? My hypothesis is that the waiting run meets and obeys ethanol-correction, which turns on `stopDrink` and lowers harm on every later strip. QA is checking.
+
+### 11.11 Waiting leak (unit-17.4)
+
+Waiting in a liver at night made her about 13 host health healthier than not waiting. The cause was in-map sleep healing: +1 for every 15 real seconds the unit spends on a map while she sleeps (`CONFIG.host.sleepHeals` 15, older than `G.night`). That counted overnight mending twice. QA confirmed it: with sleep healing turned off, the gap at equal trip counts is 0.
+
+Fix:
+
+- `sleepHeals` 15 → 45
+- `mend.night` 15 → 18, to keep the all-obey ending health
+
+Targets:
+
+- All-obey still meets the 6.5 targets.
+- The waiting gap at equal trip counts is 3 or less.
