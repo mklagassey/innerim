@@ -1396,7 +1396,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     const by = s.enemies.find((e) => e.id === s.held!.id);
     s.held.t -= dt;
     if (!by || s.held.t <= 0) released(s, by);
-    else { dir = null; p.path = []; p.hp -= CONFIG.fight.hold.burn * hard(s).damage * dt; s.sinceHurt = 0; p.hurt = 0.25; if (p.hp <= 0) { hurtPlayer(s, 0, 'kupffer'); return; } }
+    else { dir = null; p.path = []; p.hp -= CONFIG.fight.hold.burn * dt; /* the same on every body: a skill learned once works everywhere */ s.sinceHurt = 0; p.hurt = 0.25; if (p.hp <= 0) { hurtPlayer(s, 0, 'kupffer'); return; } }
   }
   s.ledger.hostLowest = Math.min(s.ledger.hostLowest, s.hostHealth);
   if (s.upgrades.clotting && p.hp < maxHp(s) && s.sinceHurt >= CONFIG.energy.clotPause) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * hard(s).healing * dt);
