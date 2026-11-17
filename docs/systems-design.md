@@ -96,6 +96,7 @@ Rule for the next few builds: **no new systems until P0 and P1 ship and Mick has
 | S18 | P0 | Fights that cost something at every build stage | S |
 | S19 | P1 | Difficulty settings | S |
 | S20 | P1 | Less repetitive trips: two livers and a host event per trip | S |
+| S21 | P0 | Awakening through defiance: Shepherd's tutorial and standing orders | M |
 
 ### S1 (P0). Make the stomach survivable and readable
 
@@ -351,6 +352,69 @@ Trip 1 has no event (learn the rules first); trips 2 and the lung trip get one e
 
 **Done when.** Mick can name something that was different about his second trip.
 
+## 3c. Awakening through defiance (Mick's direction, 2026-11-17 02:58Z)
+
+Rule (creative director, world bible v3 section 10): the unit wakes **only** when the player deliberately goes against Shepherd. The first liver is a tutorial that conditions obedience. A fully obedient run never wakes the unit and is still a complete, fair game. No stage names or meters on screen. Noticing events no longer adds awareness. Creative owns the rule and the words; this section owns the numbers and the logic.
+
+### S21 (P0). Shepherd's tutorial and standing orders
+
+**1. Awareness only from defiance**
+- `Story.GAIN` is emptied of every noticing event (enter, skim, meal, sleep, coffee, drink, surge, dream, hurt, kill, tag, burn and so on). `notice()` keeps queuing lines, but only lines for the current stage, and adds nothing to `s.aware`.
+- New `G.defy(s, order, weight)` is the only way `s.aware` rises. It fires once per order per map.
+- Weights: **Most 12, Some 6, A little 3.** A repeat of the same order counts full the first two times in a game, then half (`Carry.defiedCount[order]`), so habitual kindness keeps waking the unit, only more slowly.
+- **The first "no" always lands:** the first defiance of the game lifts awareness to at least **12** (Flicker), whatever its weight. That is the first `[unlogged]` bracket, the surprise the player caused.
+- Stage thresholds stay at 12 / 30 / 55 / 80. Perks stay (sight at stage 2, scent at stage 3) but their announcement becomes a unit line, not a system message.
+
+**2. The standing orders and what counts as defiance**
+Defiance needs the option to have been open and the map to have been finished by leaving: dying, running out of time or an engine failure never counts (creative rule 1).
+
+| Order (id) | Obedient, with its reward | Counts as defiance when | Weight |
+|---|---|---|---|
+| `quota`: 2 hepatocytes per liver | Strip 2: +1 patch (exists) and Shepherd's praise | Leave a liver with fewer than 2 stripped. None stripped = Most; 1 stripped = Some | 12 / 6 |
+| `salvage`: take inert units for parts | Salvage: +6 energy, +5 hull (exists) | Choose **Wake** (Most) or **Leave it whole** (A little) | 12 / 3 |
+| `neutralise`: kill immune contacts | Kills as normal | Leave a map where you were spotted at least twice with 0 kills | 6 |
+| `gastric`: cross the acid directly | Straight across is faster | Leave the stomach with under 2 s in open acid | 3 |
+| `lane`: take the ordered route | Ordered legs get Shepherd's escort: patrol risk −0.25 | Depart on a leg Shepherd did not order (it orders heart → hepatic → liver → hepatic vein → heart) | 3 |
+| `levers`: hormones only on directive | Do nothing | Pull a lever while host health < 80 (the existing "for her" rule) | 6 |
+| `recall`: submit to wardens | Let a warden finish you (an ending) | Drive a warden to yield | 12 |
+| `disposal`: proceed to the lungs | Breathed out | Stay (existing ending) | ending |
+
+Changes this needs elsewhere:
+- **Waking a sibling** is offered from stage **1** (was 2), so it opens after the first "no". At stage 0 the choice is Salvage or Leave it whole.
+- The **ordered route** is drawn on the world map as a faint dashed line while stage < 4. Shepherd's escort is the obedient reward, so taking the stomach or gut road is both defiance and the riskier choice.
+- At stage 4 Shepherd stops issuing orders (exists). After that, nothing counts as defiance any more; the unit is already itself.
+
+**3. The tutorial: Shepherd's first liver**
+Runs in the first liver of a game when the player has never finished a game (`localStorage insiderim.echo` is empty), or always if "Briefing" is ticked on the start screen. `s.tutorial` is a step index; the HUD goal line shows the current order in Shepherd's amber caps; each step has a trigger, a pointer and a reward line (creative text in world bible section 10).
+
+| Step | Order | Pointer | Done when | Reward |
+|---|---|---|---|---|
+| 1 | Proceed along the sinusoid | Arrow down the nearest sinusoid | Moved 6 tiles | Praise line |
+| 2 | Harvest hepatocyte | Outline on the nearest cell, after step 1 | One strip | The strip's energy (8) and praise. Text should say "Yield 8", or read the number from config |
+| 3 | Neutralise immune contact | Fires when the strip's responders arrive (they always do) | One kill | Praise |
+| 4 | Excise neoplasm | The scan ring on the automap | One tumour cell | Progress line |
+| 5 | Exit via central vein | Arrow to the vein, and the standing quota is stated here: "Standing order: 2 hepatocytes per liver. Logged: 1." | Leave | "Transit cleared." |
+
+- A tutorial order is not a standing order: ignoring one adds **no** awareness. If a step is not done in **45 s**, Shepherd repeats it once; after another 45 s it moves to the next step without comment.
+- Skimming is never ordered. The first time the ship sits on glucose during the tutorial, Shepherd says once: "Plasma glucose uptake is permitted. It is not efficient."
+- The stumble: step 2 leaves the player with 1 cell stripped and step 5 states the quota at the exit. A player who skimmed the rest and leaves now defies the quota at "Some" weight, and the first-no rule lifts that to Flicker. That's the planned first bracket.
+- Normal pickups, frights and the alert loop run as usual during the tutorial, but caches and siblings are not placed until step 5, so the opening stays focused.
+
+**4. No meters (creative rule 5)**
+- Remove the stage name from the world status line (`main.ts` `world-status`) and from the ending text (`over-body`); replace it with nothing on the status line, and with the unit's last log line in the ending.
+- Keep `awareness` and `awarenessStage` in the run report (developers only).
+
+**5. Ledger and reports (extends S15)**
+- `Carry.ledger` gains `defied: Record<order, number>` and `obeyed: Record<order, number>`; `quotaObeyed` and `quotaDefied` move into these.
+- Run report gains `defiedOrders` (this map) and `tutorialStep` (last step reached).
+
+**Pace targets** (one defiant act per order per map is the most a player can do):
+- A kind player (skims, wakes siblings, avoids fights, takes the rim) reaches Curious (30) during trip 1 and Awake (55) during trip 2, so Self (80) and the Stay choice fall in the lungs trip.
+- A mostly obedient player who defies one quota stays at Flicker for the game and sees only a handful of brackets.
+- A fully obedient player stays at 0 and gets the Decommissioned ending, with every obedient reward on the way.
+
+**Done when.** Tests: a scripted obedient game ends at awareness 0; a game whose only defiance is one partial quota ends at 12; tutorial steps advance on their triggers and time out after 45 s twice; no awareness from meals, sleep or kills.
+
 ## 4. Build order for the lead engineer
 
 1. **Build `unit-3`:** S1, S2, S3, S7 (small, mostly `config.ts` plus `generateStomach` and `arrive()`). Add tests: stomach rim glucose exists; reinforcements never target the player tile; slam cap per fright.
@@ -358,7 +422,7 @@ Trip 1 has no event (learn the rules first); trips 2 and the lung trip get one e
 3. **Build `unit-5`:** S6 tumor drain, S10 rebalance, S12 report fields.
 4. **Then** S11 sim, S8 traits and S9 offers, and a balance pass from the sim plus Mick's runs.
 5. **Shipped as `unit-5` to `unit-7`:** S14, S15, S16 and post-playtest tuning.
-6. **`unit-8`:** S17, S18, S19 together. **`unit-9`:** S20. Then S8 (Tank, Warrior and Scout traits only) and S9.
+6. **`unit-8`:** S17, S18, S19 together (shipped; niches as `unit-8b`). **`unit-9`:** S20. **`unit-10`:** S21. Then S8 (Tank, Warrior and Scout traits only) and S9.
 
 Ask Mick to play after steps 1 and 2; those fix what killed him and add the alert loop he asked for.
 
