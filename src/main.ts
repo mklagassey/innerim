@@ -9,6 +9,9 @@ import * as T from './trip';
 import * as Story from './story';
 import * as Scenes from './scenes';
 import * as Art from './scene-art';
+import * as Reels from './cinema/reels';
+import { Cinema } from './cinema/player';
+import * as Score from './cinema/score';
 import { travel, Way } from './transit';
 import { DECISIONS, KIN_PINGS } from './decisions';
 
@@ -151,11 +154,13 @@ const seenScenes = (): string[] => { try { return JSON.parse(localStorage.getIte
 let sceneEnd: (() => void) | null = null;
 /** Plays the scene for this moment once per mission, then carries on. With no scene to play it carries on at once. */
 function playScene(when: string, then: () => void, again = false) {
-  const sc = Scenes.sceneFor(when);
+  const sc = Scenes.sceneFor(when), reel = Reels.reelFor(when), once = reel?.once ?? sc?.once;
   const everSeen = (): string[] => { try { return JSON.parse(localStorage.getItem(EVER) ?? '[]'); } catch { return []; } };
-  if (!sc || noScenes || (!again && (sc.once === 'ever' ? everSeen() : seenScenes()).includes(when))) { then(); return; }
-  try { localStorage.setItem(sc.once === 'ever' ? EVER : SEEN, JSON.stringify([...new Set([...(sc.once === 'ever' ? everSeen() : seenScenes()), when])])); } catch { /* it will play again; no harm */ }
+  if ((!sc && !reel) || noScenes || (!again && (once === 'ever' ? everSeen() : seenScenes()).includes(when))) { then(); return; }
+  try { localStorage.setItem(once === 'ever' ? EVER : SEEN, JSON.stringify([...new Set([...(once === 'ever' ? everSeen() : seenScenes()), when])])); } catch { /* it will play again; no harm */ }
   $('prologue').hidden = false;
+  if (reel) { playReel(reel, then); return; }
+  if (!sc) { then(); return; }
   const box = $('scene'), line = $('scene-line');
   let k = -1, timer = 0, over = false;
   const end = () => {
@@ -191,6 +196,59 @@ function playScene(when: string, then: () => void, again = false) {
   const began = performance.now();
   box.onclick = (e) => { if ((e.target as HTMLElement).id === 'scene-skip') end(); else if (performance.now() - began > 2000) next(); };
   timer = window.setTimeout(next, view.still ? 200 : 1300);
+}
+
+// The finished cut scenes: a reel of shots drawn live on a canvas (src/cinema), cross-dissolving
+// one into the next. Framed by how awake the unit is: CCTV footage, then an eye, then close.
+let film: Cinema | null = null;
+function fitFilm(canvas: HTMLCanvasElement) {
+  const vw = innerWidth, vh = innerHeight, aspect = vw >= vh ? 2.39 : 1.2; // scope on landscape; nearly square on a phone held upright
+  const w = Math.min(vw, (vh - 24) * aspect), h = w / aspect;
+  film?.size(Math.round(w), Math.round(h), devicePixelRatio || 1);
+  canvas.style.left = `${Math.round((vw - w) / 2)}px`; canvas.style.top = `${Math.round((vh - h) / 2)}px`;
+}
+function playReel(reel: Reels.Reel, then: () => void) {
+  const box = $('scene'), line = $('scene-line'), canvas = $('scene-film') as HTMLCanvasElement, c = trip.carry, stage = Story.stageOf(c?.aware ?? 0);
+  Reels.brief({ stage, compliance: G.compliance(c?.ledger), kin: c?.kin, excised: c?.excised ?? 0, goal: CONFIG.tumor.goal, hostLowest: c?.ledger?.hostLowest, maxHealth: CONFIG.host.maxHealth, stripped: c?.ledger?.stripped });
+  film ??= new Cinema(canvas, view.still);
+  film.setMode(Reels.modeFor(stage));
+  fitFilm(canvas);
+  const onResize = () => fitFilm(canvas);
+  addEventListener('resize', onResize);
+  let k = -1, timer = 0, over = false;
+  const end = () => {
+    if (over) return;
+    over = true; sceneEnd = null; clearTimeout(timer); removeEventListener('resize', onResize);
+    Score.stop(view.still ? 0 : 1.2);
+    Sound.outside(false);
+    box.classList.remove('on');
+    timer = window.setTimeout(() => { box.hidden = true; box.classList.remove('film'); film?.stop(); then(); }, view.still ? 0 : 1200);
+  };
+  const next = () => {
+    if (over) return;
+    clearTimeout(timer);
+    if (++k >= reel.cuts.length) { end(); return; }
+    const cut = reel.cuts[k];
+    film!.cue(cut.shot, cut.hold, k === 0 ? 0 : 0.9);
+    $('scene-print').textContent = cut.print ?? '';
+    line.classList.toggle('on', !!cut.print);
+    if (cut.sound) Sound.room[cut.sound]();
+    Score.cut(k, reel);
+    timer = window.setTimeout(next, cut.hold * 1000);
+  };
+  $('scene-art').innerHTML = ''; $('scene-seen').textContent = ''; $('scene-print').textContent = '';
+  line.classList.remove('on');
+  box.dataset.light = 'night';
+  box.classList.add('film');
+  box.hidden = false;
+  void box.offsetWidth;
+  box.classList.add('on');
+  sceneEnd = end;
+  Sound.outside(true);
+  Score.start(reel, view.still);
+  const began = performance.now();
+  box.onclick = (e) => { if ((e.target as HTMLElement).id === 'scene-skip') end(); else if (performance.now() - began > 2000) next(); };
+  next();
 }
 $('prologue').addEventListener('click', () => { Sound.start(); $('intro').hidden = true; playScene('begin', () => { $('intro').hidden = false; }, true); });
 try { $('prologue').hidden = !JSON.parse(localStorage.getItem(EVER) ?? '[]').includes('begin'); } catch { /* stays hidden */ }
@@ -941,6 +999,8 @@ const qa = {
   decisions: () => ({ took: { ...s.took }, met: [...s.met], flags: { ...s.flags }, waiting: s.echoes.map((e) => `${e.id}:${e.choice}`), marks: s.marks.map((k) => ({ id: k.id, kind: k.kind, at: k.at, met: k.met, done: k.done })), order: G.markOrder(s) }),
   /** Keeps the hull and the tanks full. */
   god(on = true) { godMode = on; },
+  /** Plays a cut scene by its `when` key (scenes.ts or cinema/reels.ts), as if it had come up in play. */
+  play(when: string) { playScene(when, () => {}, true); },
   /** Scenes end the moment they would start. */
   skipScenes(on = true) { noScenes = on; if (on) { sceneEnd?.(); cardEnd?.(); } },
   /** Puts the ship at the way out of the map it is in, with the fare paid, so the map ends on the next frame. */

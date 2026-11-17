@@ -323,3 +323,10 @@ export const room = {
   /** A mug set down on a table. */
   set: () => out((t, to) => { ping(t, to, 180, 0.12, 0.2); rustle(t, to, 900, 0.08, 0.1, 2); }),
 };
+
+/** For the cut-scene score (src/cinema/score.ts): the context and the muffled room bus, once sound is on. */
+export function outsideBusNow(): { ac: AudioContext; to: AudioNode; noise: AudioBuffer } | null {
+  if (!ac || !on || !noise) return null;
+  outsideBus();
+  return { ac, to: outBus!, noise };
+}
