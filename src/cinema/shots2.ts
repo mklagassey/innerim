@@ -364,7 +364,7 @@ export const SHOTS2: Record<string, ShotDef> = {
     },
   },
   'ct-screen': {
-    label: 'The CT slice on the screen. A gloved finger traces where the lesion was. There is nothing there.',
+    label: 'The CT slice on the screen. The radiologist\'s cursor rings where the lesion was. There is nothing there.', // a cursor, not a finger: radiologists read on screen with a mouse
     look: 'clinic', a: { x: 620, y: 156, z: 3.6 }, b: { x: 616, y: 158, z: 3.9 }, wide: { x: 500, y: 210, z: 0.95 },
     draw: (st) => consult(st, { scan: cine.liver === 'recur' ? 'recur' : cine.liver === 'fatty' ? 'fatty' : 'clean', finger: st.p, label: label(st) }),
   },
@@ -383,9 +383,9 @@ export const SHOTS2: Record<string, ShotDef> = {
     },
   },
   'ct-recur': {
-    label: 'The gloved finger stops at the edge of the old lesion, on a small bright spot.',
+    label: 'The cursor stops at the edge of the old lesion and rings a small bright spot: 6 mm.',
     look: 'clinic', a: { x: 600, y: 150, z: 5.2 }, b: { x: 596, y: 150, z: 5.6 }, wide: { x: 500, y: 210, z: 0.95 },
-    draw: (st) => consult(st, { scan: 'recur', finger: Math.min(st.p, 0.5) * 0, label: label(st) }),
+    draw: (st) => consult(st, { scan: 'recur', finger: st.p, label: label(st) }),
   },
   'not-breathing': {
     label: 'Over her shoulder: she does not breathe out. Hold.',
@@ -718,7 +718,65 @@ export const SHOTS2: Record<string, ShotDef> = {
       st.lit(1, (c) => hand(c, { x: 534, y: 140, a: -0.17, len: 40, side: -1, curl: [0.3, 0.38, 0.46, 0.55], thumb: 0.1, spread: 0.05, arm: 5 }), { body: PAL.dawn.dark, rim: 1, width: 1.1, fill: 0.3, at: [470, 152, 160] });
     },
   },
+
+  // ---------- E4 · Tithonus (the dark ending): the same wide frame, lit the same way, weeks apart ----------
+  'tithonus-tea': {
+    label: 'The kitchen, the same frame, weeks apart. A herbal tea where the coffee was: a paper tag hangs over the mug\'s rim.',
+    look: 'dawn', a: { x: 500, y: 206, z: 1.0 }, b: { x: 500, y: 206, z: 1.0 }, wide: { x: 500, y: 206, z: 0.95 }, close: [{ x: 500, y: 206, z: 1.0 }, { x: 500, y: 206, z: 1.0 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => { kitchen(st, { ...tithonusKit(st) }); st.layer(0.94, (c) => { c.strokeStyle = rgba('#f0e8d8', 0.8); c.lineWidth = 0.8; c.beginPath(); c.moveTo(538, 181); c.quadraticCurveTo(546, 184, 546, 196); c.stroke(); c.fillStyle = '#e8d8a8'; c.fillRect(543, 195, 7, 8); }); },
+  },
+  'tithonus-rack': {
+    label: 'No glass on the drying rack. The bottle in the open cupboard, dusty.',
+    look: 'dawn', a: { x: 500, y: 206, z: 1.0 }, b: { x: 500, y: 206, z: 1.0 }, wide: { x: 500, y: 206, z: 0.95 }, close: [{ x: 500, y: 206, z: 1.0 }, { x: 500, y: 206, z: 1.0 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => kitchen(st, { ...tithonusKit(st), rack: true, bottle: 'dusty' }),
+  },
+  'tithonus-radio': {
+    label: 'The radio on the counter, its dial lit. She stands at the window with her back to it and does not react.',
+    look: 'day', a: { x: 500, y: 206, z: 1.0 }, b: { x: 500, y: 206, z: 1.0 }, wide: { x: 500, y: 206, z: 0.95 }, close: [{ x: 500, y: 206, z: 1.0 }, { x: 500, y: 206, z: 1.0 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => {
+      kitchen(st, { ...tithonusKit(st), time: 'day', her: { x: 420, y: 384, s: 268, face: 1, lean: 0.02, slump: 0.1, neck: 0.05, head: 0.02, near: { sh: 0.05, el: 0.1, grip: 'open' }, far: { sh: 0.05, el: 0.1 }, breath: breath(st), clothes: 'cardigan', stride: 0.05 } });
+      st.layer(1, (c) => {
+        // a small radio on the counter: a grille, a lit dial, steady (a radio does not blink)
+        c.fillStyle = '#2a2420'; c.beginPath(); c.roundRect(250, 196, 64, 34, 5); c.fill();
+        c.fillStyle = '#3a322c'; for (let i = 0; i < 5; i++) c.fillRect(256 + i * 6, 202, 3, 22);
+        c.fillStyle = rgba('#f0c080', 0.85); c.fillRect(290, 206, 18, 6);
+        c.strokeStyle = '#1a1612'; c.lineWidth = 2; c.beginPath(); c.moveTo(306, 196); c.lineTo(326, 166); c.stroke();
+      });
+      st.glow(299, 209, 14, '#f0c080', 0.2, 1);
+    },
+  },
+  'tithonus-nine': {
+    label: 'Night, the same frame. The clock over the door at nine. The hall light beyond goes off.',
+    look: 'night', a: { x: 500, y: 206, z: 1.0 }, b: { x: 500, y: 206, z: 1.0 }, wide: { x: 500, y: 206, z: 0.95 }, close: [{ x: 500, y: 206, z: 1.0 }, { x: 500, y: 206, z: 1.0 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => {
+      kitchen(st, { ...tithonusKit(st), time: 'night', steam: false, mug: false });
+      const off = smooth((st.p - 0.55) / 0.3);
+      st.layer(1, (c) => {
+        // the hall, through the open door: lit, then not
+        c.fillStyle = rgba('#e8b870', 0.35 * (1 - off)); c.fillRect(884, 44, 102, 294);
+        // the wall clock over the door, at nine
+        c.fillStyle = '#d8d0c0'; c.beginPath(); c.arc(936, 22, 14, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#1a1612'; c.lineWidth = 1.6; c.stroke();
+        c.lineWidth = 2; c.beginPath(); c.moveTo(936, 22); c.lineTo(926, 22); c.moveTo(936, 22); c.lineTo(936, 11); c.stroke();
+      });
+    },
+  },
+  'tithonus-gen4': {
+    label: 'A second brochure on the fridge beside the first: TITHONUS GEN 4. Stay well, always. The frame holds a beat too long.',
+    look: 'dawn', a: { x: 500, y: 236, z: 0.92 }, b: { x: 500, y: 240, z: 0.94 }, wide: { x: 500, y: 236, z: 0.9 }, close: [{ x: 500, y: 236, z: 1.0 }, { x: 500, y: 240, z: 1.02 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => fridgeClose(st, { ...tithonusKit(st), gen4: true }, 'dawn'),
+  },
 };
+
+/** The dark ending's kitchen: everything in its place, nothing out of place, nobody in it. */
+function tithonusKit(st: Stage): Kit {
+  return { time: 'dawn', letter: false, brochure: true, gen4: false, leash: true, rack: false, mug: true, steam: true, dog: { x: 150, y: 388, d: 118, face: 1, pose: 'sleep', breath: breath(st, 3.6) }, her: null };
+}
 
 /** Her at the counter (the plaster's opening), reused by the endings' mornings. */
 function SHOTS2_her(st: Stage): Pose {

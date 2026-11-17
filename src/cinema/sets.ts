@@ -150,6 +150,14 @@ export function kitchen(st: Stage, k: Kit) {
     }
   });
   if (k.mug !== false) {
+    if (k.bottle && k.bottle !== 'none') st.layer(0.94, (c) => {
+      // a wine bottle at the back of the counter by the tiles; 'dusty' has lost its shine and wears a grey bloom
+      const x = 400, y = 206, dusty = k.bottle === 'dusty';
+      c.fillStyle = mixHex('#1a2418', '#000', night ? 0.6 : 0.2); c.beginPath(); c.moveTo(x - 9, y); c.lineTo(x - 9, y - 40); c.quadraticCurveTo(x - 9, y - 50, x - 3, y - 54); c.lineTo(x - 3, y - 70); c.lineTo(x + 3, y - 70); c.lineTo(x + 3, y - 54); c.quadraticCurveTo(x + 9, y - 50, x + 9, y - 40); c.lineTo(x + 9, y); c.closePath(); c.fill();
+      c.fillStyle = mixHex('#e8dcc0', '#000', night ? 0.6 : 0.25); c.fillRect(x - 8, y - 34, 16, 18); // the label
+      if (dusty) { c.fillStyle = rgba('#b8b0a0', 0.3); c.fillRect(x - 9, y - 70, 18, 70); }
+      else { c.fillStyle = rgba(P.key, 0.5); c.fillRect(x + 4, y - 44, 2, 30); }
+    });
     st.layer(0.94, (c) => mug(c, 532, 206, 26, night ? -1 : 1, { light: P.key, dark: night ? 0.55 : 0.2 }));
     if (k.steam !== false) st.steam(0.94, 532, 176, 1, '#fff4e4', night ? 0.18 : 0.3, 3);
   }

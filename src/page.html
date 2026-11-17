@@ -169,6 +169,11 @@
   #scene-print { margin: 0; text-align: center; font: 500 clamp(1rem, 3.6vw, 1.35rem)/1.4 var(--data); letter-spacing: 0.06em; color: var(--bone); text-wrap: balance; }
   #scene-seen:empty, #scene-print:empty { display: none; }
   #scene-line.on { opacity: 1; }
+  #scene-film { position: fixed; display: none; background: #000; }
+  #scene.film #scene-film { display: block; }
+  #scene.film #scene-light { display: none; }
+  #scene.film #scene-line { position: fixed; left: 0; right: 0; bottom: max(16px, 6vh); margin: 0 auto; min-height: 0; padding: 0 16px; z-index: 1; }
+  #scene.film #scene-print { text-shadow: 0 1px 8px #000, 0 0 2px #000; }
   #scene-skip { position: absolute; right: 16px; bottom: 16px; opacity: 0.55; font-size: 11px; }
   @media (prefers-reduced-motion: reduce) { #scene, #scene-line, #scene-light { transition: none; } }
   #difficulty { display: flex; gap: 8px; flex-wrap: wrap; } #difficulty button[aria-checked="true"] { border-color: var(--amber); color: var(--amber); }
@@ -292,6 +297,7 @@
   <div id="transit" hidden><canvas id="transit-view"></canvas><div id="transit-label"></div></div>
   <div id="scene" data-light="day" hidden>
     <div id="scene-light"></div>
+    <canvas id="scene-film"></canvas>
     <div id="scene-line"><div id="scene-art"></div><p id="scene-seen"></p><p id="scene-print"></p></div>
     <button id="scene-skip" type="button">Skip</button>
   </div>

@@ -129,7 +129,9 @@ export type ShotName = keyof typeof SHOTS;
 /** The camera for a shot in a framing mode, `p` through its hold. */
 export function shotCam(s: ShotDef, mode: Mode, p: number): Cam {
   const e = ease(p);
-  if (mode === 'footage') return s.wide ?? { x: s.a.x, y: s.a.y - 8, z: s.a.z * 0.8 };
+  // Footage is a locked camera. For a wide shot that is the wide framing; for an insert it is a
+  // camera zoomed in and holding still (pulling an insert out to the room would show it floating).
+  if (mode === 'footage') return s.wide && s.wide.z >= s.a.z * 0.7 ? s.wide : { x: s.a.x, y: s.a.y, z: s.a.z * 0.92 };
   if (mode === 'close') {
     const [a, b] = s.close ?? [{ x: s.focus?.[0] ?? s.b.x, y: s.focus?.[1] ?? s.b.y, z: s.b.z * 1.6 }, { x: s.focus?.[0] ?? s.b.x, y: s.focus?.[1] ?? s.b.y, z: s.b.z * 1.72 }];
     return { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e), z: lerp(a.z, b.z, e) };
