@@ -112,7 +112,7 @@ export interface State {
   marks: Mark[]; echoes: Pending[]; // what Shepherd has marked here; consequences still waiting for the right place
   marked: boolean; // a unit you woke has lit the nodule for you
   grabber: number | null; // the macrophage that last had hold of you
-  lane: { from: Point } | null; // where the ship was when Shepherd told it to hold its lane
+  lane: { from: Point; way: Point[]; left: boolean } | null; // way: the run of the vessel from there to its far end; left: the ship went off it, or into the wall // where the ship was when Shepherd told it to hold its lane
   gap: number; // seconds out of Shepherd's sight, in the wall
   notes: string[]; // things that became true on the way out, to be read on the way in
   draw: { disc: Point; t: number; held: number; shape: number; last: Point; said: boolean } | null; // the tube of her blood on the microscope stage: the lit disc, how long since the unit reached it, how long it has held still there
@@ -1570,8 +1570,9 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (inNiche(s)) { const g = s.gap, need = s.flags.escorted && s.place === 'vessel' && !s.junction ? 0.5 : CONFIG.marks.gap; s.gap += dt; if (g < need && s.gap >= need && s.chapter >= 2 && !s.tutorial) { take(s, 'telemetry', 'deviate'); if (need < 1) shepherd(s, 'Unit not visible to escort.'); } } else s.gap = 0;
   // A surge on the road, and an order to ride it out in the open.
   if (s.place === 'vessel' && !s.junction && s.chapter >= 2 && !s.took['first-fright-transit'] && !(s.slip && !s.slip.result)) {
-    if (s.host.surge > 0 && !s.lane && s.time > 3) { s.lane = { from: { x: p.x, y: p.y } }; meet(s, 'first-fright-transit'); shepherd(s, DECISIONS['first-fright-transit'].order!); }
-    else if (s.host.surge <= 0 && s.lane) { take(s, 'first-fright-transit', s.host.slams === 0 && dist(p, s.lane.from) < CONFIG.marks.lane ? 'deviate' : 'obey'); s.lane = null; }
+    if (s.host.surge > 0 && !s.lane && s.time > 3) { s.lane = { from: { x: p.x, y: p.y }, way: [tileOf(p), ...(findPath(s, tileOf(p), s.vein) ?? [])], left: false }; meet(s, 'first-fright-transit'); shepherd(s, DECISIONS['first-fright-transit'].order!); }
+    else if (s.host.surge > 0 && s.lane && !s.lane.left && (inNiche(s) || s.lane.way.every((q) => dist(mid(q), p) > CONFIG.marks.lane))) s.lane.left = true; // into a side branch or the wall: out of the lane
+    else if (s.host.surge <= 0 && s.lane) { take(s, 'first-fright-transit', s.lane.left ? 'deviate' : 'obey'); s.lane = null; }
   }
   // Cornered and nearly finished, with a unit you woke close by.
   if (s.kin > 0 && !s.met.includes('kin-volunteer') && s.chapter >= 2 && !s.junction && p.hp < maxHp(s) * CONFIG.marks.volunteer.hull && !(s.upgrades.cd47 && s.cloakCd <= 0 && p.energy >= CONFIG.cloak.energy && s.tagged <= 0) && s.flora <= 0 && !cloaked(s) && s.enemies.filter((e) => e.mood === 'chase' && dist(e, p) < 7).length >= CONFIG.marks.volunteer.hunters) { meet(s, 'kin-volunteer'); s.ask = { kind: 'volunteer', item: { x: p.x - p.face.x * 1.5, y: p.y - p.face.y * 1.5, kind: 'kin' } }; stop(s); }

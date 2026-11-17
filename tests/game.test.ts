@@ -1782,3 +1782,10 @@ test('unit-17.6: the road home from the last liver is still Shepherd\'s road', a
   assert.ok(T.assigned(t, leg('liver', 'hvein'))); assert.ok(T.assigned(t, leg('hvein', 'heart'))); assert.ok(T.assigned(t, leg('heart', 'lungs')));
   assert.ok(!T.assigned(t, leg('heart', 'hepatic')), 'with the tumour out, the only order at the heart is the lungs');
 });
+
+test('unit-17.7: holding the lane in a surge is obeying unless the ship goes off the vessel\'s run', () => {
+  const mk = () => { const s = G.createGame(2, carried({ chapter: 2, slip: null }), 'vessel', 2, 'artery'); s.enemies = []; s.host.surge = 6; s.host.nextSurge = 999; run(s, 3.2); return s; };
+  const a = mk(); assert.ok(a.lane, 'the order is given'); run(a, 8);
+  assert.equal(a.took['first-fright-transit'], 'obey', 'holding still and not being hit is still holding the lane');
+  const b = mk(); b.lane!.left = true; run(b, 8); assert.equal(b.took['first-fright-transit'], 'deviate');
+});
