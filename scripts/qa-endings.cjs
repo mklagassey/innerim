@@ -23,7 +23,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const BASE = { route: 'assigned', quota: 'obey', units: 'salvage', contacts: 'fight', marks: 'obey', asks: { 'telemetry-review': 'refuse', recall: 'refuse', 'kin-recall': 'refuse', 'kin-volunteer': 'refuse' }, end: 'breath', light: 'hold' };
 const DEFY = { route: 'off', quota: 'defy', contacts: 'avoid', marks: 'defy' };
 const POLICIES = {
-  decommissioned: {},
+  decommissioned: { asks: { 'telemetry-review': 'accept' } }, // obeys everything, the review included
   repaired: { quota: 'defy', units: 'leave', marks: 'defy', asks: { 'telemetry-review': 'accept' }, afterReview: 'obey' }, // a repaired unit goes back to doing as it is told
   breathed: { ...DEFY, units: 'leave' },
   company: { ...DEFY, units: 'wake' },
