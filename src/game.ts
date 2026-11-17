@@ -549,7 +549,7 @@ export function resolveSlip(s: State, did: 'A' | 'B' | null, after = 2) {
   const sl = s.slip;
   if (!sl || sl.result) return;
   s.slipLive = null;
-  const at = Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3), reply = (text: string, who: Thought['who'] = 'shepherd', gap = 0) => s.thoughts.push({ text, who, st: stage(s), t: at + gap, keep: true });
+  const at = Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3), reply = (text: string, who: Thought['who'] = 'shepherd', gap = 0) => { if (text) s.thoughts.push({ text, who, st: stage(s), t: at + gap, keep: true }); };
   if (!s.pages.includes('p7')) s.pages.push('p7'); // the page about units that lose contact turns up on the link, whichever way it went
   if (!did) { sl.result = 'lapsed'; s.took.slip = 'lapsed'; reply(Story.SLIP_LAPSED); return; }
   reply(Story.SLIPS[sl.kind].said[sl.meant][did]);

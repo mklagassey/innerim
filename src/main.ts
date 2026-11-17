@@ -362,7 +362,7 @@ function enter(next: G.State, where: string, way: Way, label: string) {
   closeTip(); keys.clear(); release();
   // What was waiting to be said is said here, in the unit's log and on its link, not on a screen between maps.
   let at = Math.max(2.2, ...s.thoughts.map((t) => t.t + CONFIG.story.gap));
-  for (const r of inbox) { s.thoughts.push({ text: r.text, who: r.who, st: r.st, t: at }); at += 4 + r.text.length * 0.055 + 1; }
+  for (const r of inbox) if (r.text.trim()) { s.thoughts.push({ text: r.text, who: r.who, st: r.st, t: at }); at += 4 + r.text.length * 0.055 + 1; }
   for (const line of news) s.log.push({ text: line, t: 0.01 });
   inbox = []; news = [];
   $('where').textContent = where;
