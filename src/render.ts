@@ -218,6 +218,11 @@ function pulseAt(time: number, delay: number): number {
   return 0;
 }
 /** How full the lungs are, 0 to 1. The first half of each breath is in. */
+/** How full one air sac is, 0 to 1: the breath reaches sacs further from the airway a moment later. */
+function lungFill(s: State, x: number, y: number): number {
+  const len = CONFIG.host.breath[hostState(s)], lag = Math.hypot(x - s.vein.x, y - s.vein.y) * 0.05;
+  return 0.5 - 0.5 * Math.cos((((s.time - lag) % len + len) % len) / len * Math.PI * 2);
+}
 export const breath = (s: State) => { const len = CONFIG.host.breath[hostState(s)]; return 0.5 - 0.5 * Math.cos(((s.time % len) / len) * Math.PI * 2); };
 interface Sway { dx: number; dy: number; sx: number; sy: number }
 const REST: Sway = { dx: 0, dy: 0, sx: 1, sy: 1 };
@@ -238,9 +243,11 @@ function sway(s: State, v: View, x: number, y: number): Sway {
     dx += (to.x / len) * 5 * squeeze; dy += (to.y / len) * 5 * squeeze;
     sy *= 1 + 0.08 * squeeze; sx *= 1 - 0.05 * squeeze;
   } else if (s.place === 'lung') {
-    // Air sacs fill and empty; each one a little out of step with its neighbour.
-    const b = breath(s), own = 0.9 + 0.2 * hash(x + 3, y + 7), full = 0.9 + 0.17 * b * own;
-    sx *= full; sy *= full;
+    // Air sacs fill and empty. The breath arrives as a wave rolling out from the airway, so you can
+    // watch it travel across the field. (Readability bend: real alveoli swell by roughly this much,
+    // but all at once and too slowly to notice; the wave makes the breath legible at a glance.)
+    const b = lungFill(s, x, y), own = 0.9 + 0.2 * hash(x + 3, y + 7), full = 0.86 + 0.24 * b * own;
+    sx *= full; sy *= full; dy -= 3 * b * own;
   }
   return { dx, dy, sx, sy };
 }
@@ -404,6 +411,16 @@ export function draw(ctx: Ctx, s: State, v: View) {
             // Squash toward the floor as the cell is torn open.
             if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
             else ctx.drawImage(img, c.x + m.dx - CELL_OX * m.sx, c.y + m.dy - CELL_OY * m.sy, CELL_W * m.sx, CELL_H * m.sy);
+          }
+          if (s.place === 'lung' && glow > 0.01 && !v.still) {
+            // A full sac is stretched thin and flushed with fresh blood; an empty one is slack and duller.
+            const b = lungFill(s, x, y), cx0 = c.x + m.dx + cellShift(variant) * m.sx, cy0 = c.y + m.dy - cellHeight(variant) * m.sy, rr = cellRadius(variant) * m.sx;
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = glow * glass * (0.04 + 0.2 * b);
+            const flush = ctx.createRadialGradient(cx0 - rr * 0.25, cy0 - rr * 0.15, 1, cx0, cy0, rr);
+            flush.addColorStop(0, 'rgba(255,190,205,1)'); flush.addColorStop(1, 'rgba(255,150,170,0)');
+            ctx.fillStyle = flush; oval(ctx, cx0, cy0, rr, rr * 0.5); ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
           }
           ctx.globalAlpha = 1;
           if (hit) {
@@ -671,17 +688,19 @@ export function draw(ctx: Ctx, s: State, v: View) {
   ctx.restore();
 
   if (hot > 0) {
-    // Each kick throws a neon ring out across the floor from where you stand.
-    const grow = 1 - v.kick, tint = hot < 0.55 ? '255,70,60' : '255,40,170';
-    ctx.globalCompositeOperation = 'lighter';
-    for (let k = 0; k < 2; k++) {
-      const r = (0.6 + grow * (R * 0.9) - k * 0.8) * TW * 0.5;
-      if (r <= 0) continue;
-      ctx.strokeStyle = `rgba(${k ? '90,230,255' : tint},${(k ? 0.35 : 0.6) * hot * v.kick})`;
-      ctx.lineWidth = (k ? 2 : 5) * (0.5 + hot);
-      oval(ctx, cam.x, cam.y, r, r * 0.5); ctx.stroke();
+    // Each beat sends a pressure wave out through the fluid from where you stand: a broad, soft band
+    // of inflamed light, not a neon line. Once per beat at most (art direction, section 3).
+    const grow = 1 - v.kick, r = (0.6 + grow * (R * 0.9)) * TW * 0.5, band = (10 + hot * 14);
+    if (r > band) {
+      const tint = hot < 0.55 ? '255,110,70' : '235,50,45';
+      ctx.save(); ctx.translate(cam.x, cam.y); ctx.scale(1, 0.5);
+      const wave = ctx.createRadialGradient(0, 0, r - band, 0, 0, r + band);
+      wave.addColorStop(0, `rgba(${tint},0)`); wave.addColorStop(0.5, `rgba(${tint},${0.28 * hot * v.kick})`); wave.addColorStop(1, `rgba(${tint},0)`);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = wave; ctx.beginPath(); ctx.arc(0, 0, r + band, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.globalCompositeOperation = 'source-over';
   }
 
   ctx.textAlign = 'center';
@@ -697,7 +716,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
 
   // The fluid itself: drifting specks, lamp haze and the place's colour grade (src/atmosphere.ts).
   const here = currentAt(s, p), along = project(here.x, here.y);
-  atmosphere(ctx, { w: v.w, h: v.h, dpr: v.dpr, zoom: v.zoom, time: v.time, still: v.still, kick: v.kick, cam, flow: along, strength: currentStrength(s), reach: reach * v.zoom, place: s.place === 'vessel' ? (s.vessel ?? 'artery') : s.place, breath: air, dt });
+  atmosphere(ctx, { w: v.w, h: v.h, dpr: v.dpr, zoom: v.zoom, time: v.time, still: v.still, kick: v.kick, cam, flow: along, strength: currentStrength(s), reach: reach * v.zoom, place: s.place === 'vessel' ? (s.vessel ?? 'artery') : s.place, breath: air, heat: hot, dt });
 
   // Darkness closing in at the edge of the screen.
   const dark = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.3, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.7);
@@ -705,18 +724,12 @@ export function draw(ctx: Ctx, s: State, v: View) {
   ctx.fillStyle = dark; ctx.fillRect(0, 0, v.w, v.h);
 
   if (hot > 0) {
-    // The edges of the screen glow and throb with the beat: red first, then hot pink.
-    const tint = hot < 0.55 ? '255,40,40' : '255,30,150', a = hot * (0.1 + (v.still ? 0.12 : 0.3 * v.kick));
-    ctx.globalCompositeOperation = 'lighter';
-    const edge = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.34, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.66);
-    edge.addColorStop(0, `rgba(${tint},0)`); edge.addColorStop(1, `rgba(${tint},${a})`);
+    // Fear narrows the view: the dark closes in, and the edges flush with blood on each beat, the way
+    // your own pulse shows at the edge of your sight when you are frightened. Inflamed red, never neon.
+    const inner = Math.min(v.w, v.h) * (0.34 - 0.08 * hot), a = hot * (0.16 + (v.still ? 0.08 : 0.18 * v.kick));
+    const edge = ctx.createRadialGradient(v.w / 2, v.h / 2, inner, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.66);
+    edge.addColorStop(0, 'rgba(60,4,8,0)'); edge.addColorStop(0.6, `rgba(90,8,12,${a * 0.6})`); edge.addColorStop(1, `rgba(120,12,16,${a})`);
     ctx.fillStyle = edge; ctx.fillRect(0, 0, v.w, v.h);
-    if (hot > 0.55 && !v.still) { // scan lines sweep down at full tilt
-      ctx.fillStyle = `rgba(90,230,255,${0.05 * hot * (0.4 + v.kick)})`;
-      const gap = 46, off = (v.time * 90) % gap;
-      for (let y = off - gap; y < v.h; y += gap) ctx.fillRect(0, y, v.w, 1.5);
-    }
-    ctx.globalCompositeOperation = 'source-over';
   }
 
   if (v.mark) {
