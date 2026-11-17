@@ -644,3 +644,5 @@ Changes:
 - QA bots now patch by hand when hull drops below 40%.
 - Breaking free from an engulf no longer scales with difficulty.
 - Vigilant starting energy: 6 → 7.
+
+**Version 80: accepted.** QA bots now patch by hand. Vigilant deaths: attack 50%, about 2.5 times Typical attack. Stealth 25%, close to Typical attack. Typical: attack 20%, stealth 0. Vigilant tuning is done until Mick plays it.
