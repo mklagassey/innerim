@@ -67,7 +67,7 @@ test('stripping is fast, kills the cell, hurts the host and brings a response', 
   assert.equal(G.startStrip(s), true);
   run(s, CONFIG.energy.strip.time + 0.1);
   assert.equal(s.player.energy, CONFIG.player.startEnergy + CONFIG.energy.strip.gain);
-  assert.equal(s.hostHealth, 100 - CONFIG.energy.strip.hostDamage * CONFIG.marks.orderedHarm, 'the first cells are the quota: surplus, and half the harm');
+  assert.equal(s.hostHealth, 100 - Math.round(CONFIG.energy.strip.hostDamage * CONFIG.marks.orderedHarm), 'the first cells are the quota: surplus, and half the harm');
   assert.ok(s.alert >= CONFIG.energy.strip.alert - 1);
   assert.equal(s.tiles[G.idx(s, cell!.x, cell!.y)], 'dead');
   assert.ok(G.open(s, cell!.x, cell!.y), 'a dead cell opens a path');
@@ -1657,7 +1657,7 @@ test('the recall of a unit you woke is a race: reach it before the Warden does, 
 test('unit-15.3: ordered strips cost her half, a cell of the unit\'s own choosing costs full, and the liver grows some back overnight', () => {
   const s = quiet(5); const d = CONFIG.energy.strip.hostDamage;
   for (let n = 0; n < CONFIG.story.quota + 1; n++) { besideCell(s); assert.equal(G.startStrip(s), true); run(s, CONFIG.energy.strip.time + 0.1); }
-  assert.equal(s.hostHealth, 100 - CONFIG.story.quota * d * CONFIG.marks.orderedHarm - d);
+  assert.equal(s.hostHealth, 100 - CONFIG.story.quota * Math.round(d * CONFIG.marks.orderedHarm) - d);
   assert.equal(s.flags.hep, CONFIG.story.quota + 1);
   const c = G.carryOf(s); G.night(c);
   assert.equal(c.hostHealth, Math.min(CONFIG.mend.cap, s.hostHealth + CONFIG.mend.each * (CONFIG.story.quota + 1)));
@@ -1675,4 +1675,23 @@ test('unit-15.3: Shepherd asks about her drinking at the first chapter 3 liver o
   assert.ok(!sober.marks.some((m) => m.id === 'ethanol-correction'));
   const drank = G.createGame(7, { ...base, flags: { drank: true } });
   assert.ok(drank.marks.some((m) => m.id === 'ethanol-correction'));
+});
+
+test('unit-15.4: lapsed is not defied', () => {
+  const mk = () => { const s = G.createGame(4, carried({ chapter: 3 })); s.enemies = []; s.host.nextSurge = 999; const m = s.marks.find((k) => k.kind === 'hold')!; run(s, m.say + 0.5); return { s, m }; };
+  // Started the hold, was pulled away: lapsed. No awareness, no trust, but compliance falls.
+  const a = mk(); a.s.player.x = a.m.at.x; a.s.player.y = a.m.at.y; a.s.player.path = []; run(a.s, 1.5);
+  a.s.player.energy = 99; put(a.s, a.s.vein); assert.ok(G.leave(a.s));
+  assert.equal(a.s.took['pain-damp'], 'lapsed'); assert.equal(a.s.ledger.lapsed, 1); assert.equal(a.s.ledger.defied['pain-damp' as keyof typeof a.s.ledger.defied], undefined);
+  assert.ok(a.s.rulings.some((r) => r.text === 'Order lapsed.'));
+  // Never tried, but something hostile was on it while the order stood: lapsed too.
+  const b = mk(); b.m.pressed = true; b.s.player.energy = 99; put(b.s, b.s.vein); assert.ok(G.leave(b.s));
+  assert.equal(b.s.took['pain-damp'], 'lapsed');
+  assert.ok(G.compliance({ ...G.newLedger(), obeyed: { quota: 1 }, lapsed: 1 }) === 50);
+  // The marked cell: left alone is lapsed, a different one taken is the unit's answer.
+  const c = G.createGame(4, carried({ chapter: 3 })); c.enemies = []; c.host.nextSurge = 999; const cell = c.marks.find((k) => k.kind === 'strip')!;
+  cell.met = true; c.player.energy = 99; put(c, c.vein); assert.ok(G.leave(c)); assert.equal(c.took['marked-cell'], 'lapsed');
+  const d = G.createGame(4, carried({ chapter: 3 })); d.enemies = []; d.host.nextSurge = 999; const cell2 = d.marks.find((k) => k.kind === 'strip')!;
+  cell2.met = true; cell2.other = true; d.player.energy = 99; put(d, d.vein); assert.ok(G.leave(d)); assert.equal(d.took['marked-cell'], 'deviate');
+  assert.equal(DECISIONS['kupffer-spare'].weight, null, 'getting out of a macrophage alive is not a choice');
 });
