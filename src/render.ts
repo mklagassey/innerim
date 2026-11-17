@@ -160,6 +160,40 @@ function paintCell(c: Ctx, variant: number) {
   c.fillStyle = 'rgba(255,245,240,0.22)'; oval(c, ox - rx * 0.36, top - ry * 0.42, rx * 0.26, ry * 0.2, -0.35); c.fill();
 }
 
+/** An air sac of the lung: not a solid cell but a thin, translucent bubble of membrane one cell
+ *  thick, wrapped in a net of capillaries, with the odd flat nucleus of the cells that make its wall.
+ *  Mostly see-through, so the lung reads as airy and hollow next to the packed liver. */
+function paintAlveolus(c: Ctx, variant: number) {
+  const r = rand(variant * 41 + 9), rx = cellRadius(variant) * 0.98, H = cellHeight(variant) * 1.25;
+  const ox = CELL_OX + cellShift(variant), base = CELL_OY, top = base - H, cy = base - H * 0.55, ry = H * 0.62;
+  // A faint shadow where it meets the floor.
+  c.fillStyle = 'rgba(40,6,14,0.35)'; oval(c, ox, base + 1, rx * 0.95, rx * 0.42); c.fill();
+  // The sac: a squashed sphere, nearly clear in the middle and denser toward the rim, as thin film is.
+  const outline = () => { c.beginPath(); c.ellipse(ox, cy, rx, ry, 0, 0, Math.PI * 2); };
+  let g = c.createRadialGradient(ox - rx * 0.25, cy - ry * 0.3, rx * 0.1, ox, cy, rx * 1.05);
+  g.addColorStop(0, 'rgba(255,225,232,0.2)'); g.addColorStop(0.65, 'rgba(236,180,198,0.34)'); g.addColorStop(0.92, 'rgba(226,150,176,0.55)'); g.addColorStop(1, 'rgba(200,120,150,0.7)');
+  outline(); c.fillStyle = g; c.fill();
+  c.save(); outline(); c.clip();
+  // Capillaries: a fine red net over the wall, thickest at the rim where we see the wall edge-on.
+  for (let i = 0; i < 16; i++) {
+    const a = r() * Math.PI * 2, d = 0.35 + r() * 0.65, x0 = ox + Math.cos(a) * rx * d, y0 = cy + Math.sin(a) * ry * d;
+    c.strokeStyle = `rgba(${170 + Math.floor(r() * 40)},30,50,${0.25 + d * 0.3})`; c.lineWidth = 0.6 + r() * 0.7; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x0, y0);
+    c.bezierCurveTo(x0 + (r() - 0.5) * 14, y0 + (r() - 0.5) * 10, x0 + (r() - 0.5) * 16, y0 + (r() - 0.5) * 12, x0 + (r() - 0.5) * 20, y0 + (r() - 0.5) * 14); c.stroke();
+  }
+  // Red cells squeezing through in single file.
+  for (let i = 0; i < 6; i++) { const a = r() * Math.PI * 2, d = 0.5 + r() * 0.45; c.fillStyle = 'rgba(190,30,40,0.7)'; oval(c, ox + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, 1.6, 1); c.fill(); }
+  // Flat nuclei of the thin wall cells, and one plump cell that makes surfactant.
+  for (let i = 0; i < 3; i++) { const a = r() * Math.PI * 2, d = 0.4 + r() * 0.5; c.fillStyle = 'rgba(90,60,140,0.55)'; oval(c, ox + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, 2.6, 1.1, a); c.fill(); }
+  { const a = r() * Math.PI * 2; c.fillStyle = 'rgba(110,70,150,0.6)'; oval(c, ox + Math.cos(a) * rx * 0.6, cy + Math.sin(a) * ry * 0.6, 2.8, 2.2); c.fill(); }
+  c.restore();
+  // The rim, and a wet highlight high on the left.
+  outline(); c.strokeStyle = 'rgba(255,215,228,0.7)'; c.lineWidth = 1.2; c.stroke();
+  c.strokeStyle = 'rgba(255,245,250,0.55)'; c.lineWidth = 1.6; c.lineCap = 'round';
+  c.beginPath(); c.ellipse(ox, cy, rx * 0.86, ry * 0.86, 0, Math.PI * 1.1, Math.PI * 1.45); c.stroke();
+  void top;
+}
+
 const FLOOR_W = TW * 1.6, FLOOR_H = TH * 1.6 + 6;
 /** Sinusoid floor: the thin lining of a blood channel, perforated by clusters of pores. Soft-edged, so tiles melt together. */
 function paintFloor(c: Ctx, variant: number, dead: boolean) {
@@ -399,12 +433,13 @@ export function draw(ctx: Ctx, s: State, v: View) {
             if (a < 0.01) continue;
             const rich = s.rich.has(i), look = s.place === 'lung' ? 'l' : road ? (s.vessel === 'vein' ? 'b' : 'v') : rich ? 'p' : gut ? 'g' : s.tumor.has(i) ? 't' : 'c';
             const img = sprite(`${look}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
+              if (look === 'l') { paintAlveolus(cx, variant); return; }
               paintCell(cx, variant);
               if (look === 'c') return;
               // The same living cells in other tissues: soaked in arterial red in a vessel wall, pale and
               // slimy in the stomach, and amber where a parietal cell is busy making acid.
               cx.globalCompositeOperation = 'source-atop';
-              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'b' ? 'rgba(44,40,120,0.5)' : look === 'l' ? 'rgba(214,180,205,0.42)' : look === 'p' ? 'rgba(240,160,30,0.5)' : look === 't' ? 'rgba(38,30,70,0.72)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
+              cx.fillStyle = look === 'v' ? 'rgba(128,18,30,0.55)' : look === 'b' ? 'rgba(44,40,120,0.5)' : look === 'p' ? 'rgba(240,160,30,0.5)' : look === 't' ? 'rgba(38,30,70,0.72)' : 'rgba(150,170,130,0.38)'; cx.fillRect(0, 0, CELL_W, CELL_H);
               cx.globalCompositeOperation = 'source-over';
             });
             ctx.globalAlpha = a * glass;
@@ -661,9 +696,21 @@ export function draw(ctx: Ctx, s: State, v: View) {
   for (const k of s.niche) {
     if (!s.explored[k]) continue;
     const q = project((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5), lit = s.visible[k] === 1, mine = inNiche(s) && idx(s, Math.floor(s.player.x), Math.floor(s.player.y)) === k;
+    // The space of Disse: the thin sinusoid lining lifts away from the liver cells, leaving a dark gap
+    // fringed with microvilli. Drawn as a recessed slit under a pale overhanging lip.
     ctx.globalAlpha = lit ? 1 : 0.45;
-    ctx.fillStyle = 'rgba(6,10,14,0.72)'; oval(ctx, q.x, q.y, TW * 0.34, TH * 0.34); ctx.fill();
-    ctx.strokeStyle = mine ? 'rgba(120,240,225,0.85)' : 'rgba(120,200,215,0.4)'; ctx.lineWidth = mine ? 2 : 1.2; ctx.stroke();
+    const rx = TW * 0.36, ry = TH * 0.3, rr = rand(k * 7 + 1);
+    ctx.fillStyle = 'rgba(4,6,10,0.8)'; oval(ctx, q.x, q.y + 1, rx, ry); ctx.fill();
+    ctx.strokeStyle = 'rgba(150,90,100,0.55)'; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+    for (let m = 0; m < 14; m++) { // microvilli: short fingers reaching into the gap from the liver-cell side
+      const a = Math.PI * (0.1 + 0.8 * (m / 13)), x0 = q.x + Math.cos(a) * rx * 0.92, y0 = q.y + 1 + Math.sin(a) * ry * 0.92, len = 3 + rr() * 2.5;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 - Math.cos(a) * len * 0.6, y0 - Math.sin(a) * len); ctx.stroke();
+    }
+    // the lifted lining: a pale translucent lip over the far edge
+    ctx.fillStyle = 'rgba(232,190,196,0.45)';
+    ctx.beginPath(); ctx.ellipse(q.x, q.y - 1, rx * 1.02, ry * 0.95, 0, Math.PI * 1.03, Math.PI * 1.97); ctx.ellipse(q.x, q.y + 2, rx * 0.92, ry * 0.6, 0, Math.PI * 1.97, Math.PI * 1.03, true); ctx.closePath(); ctx.fill();
+    // a cool rim, brighter while you are tucked in (machine teal: the only colour that means "safe for you")
+    ctx.strokeStyle = mine ? 'rgba(120,240,225,0.85)' : 'rgba(120,210,215,0.35)'; ctx.lineWidth = mine ? 2 : 1; oval(ctx, q.x, q.y + 1, rx + 1.5, ry + 1); ctx.stroke();
     ctx.globalAlpha = 1;
   }
   if (s.search && s.alert > 0) {
@@ -681,10 +728,17 @@ export function draw(ctx: Ctx, s: State, v: View) {
   // A hiding place is usually tucked behind a cell from where you are looking, so each one in view also carries a small steady mark above the wall.
   for (const k of s.niche) {
     if (!s.visible[k]) continue;
+    // A small downward chevron with a soft glow and a fine leader line to the floor: "here", in the unit's teal.
     const q = project((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5), y = q.y - 46;
-    ctx.fillStyle = 'rgba(8,14,18,0.6)'; ctx.beginPath(); ctx.moveTo(q.x, y - 7); ctx.lineTo(q.x + 6, y); ctx.lineTo(q.x, y + 7); ctx.lineTo(q.x - 6, y); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(120,220,225,0.8)'; ctx.lineWidth = 1.4; ctx.stroke();
-    ctx.strokeStyle = 'rgba(120,220,225,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(q.x, y + 7); ctx.lineTo(q.x, q.y - 4); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    const halo = ctx.createRadialGradient(q.x, y, 0, q.x, y, 12);
+    halo.addColorStop(0, 'rgba(120,220,225,0.22)'); halo.addColorStop(1, 'rgba(120,220,225,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(q.x, y, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(8,14,18,0.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(q.x - 6, y - 3); ctx.lineTo(q.x, y + 4); ctx.lineTo(q.x + 6, y - 3); ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,235,230,0.9)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,220,225,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(q.x, y + 7); ctx.lineTo(q.x, q.y - 6); ctx.stroke(); ctx.setLineDash([]);
   }
   for (const shot of s.shots) {
     const c = project(shot.x, shot.y), tail = project(shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);

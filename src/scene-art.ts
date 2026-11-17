@@ -43,6 +43,27 @@ const DAWN = { bg: '#18120e', mid: '#4a3324', dark: '#0c0806', lamp: '#f0c48a' }
 const CLINIC = { bg: '#0e1416', mid: '#2c3a3e', dark: '#070b0c', lamp: '#cfe0e4' };
 
 export const ART = {
+  /** Her right side: in profile against the window, two fingers pressed under her ribs, where the liver is. */
+  side: svg(
+    `<rect width="320" height="200" fill="${DUSK.bg}"/>` +
+    `<rect x="150" y="10" width="130" height="150" fill="#5a2c18"/>` + pool('sd', 215, 80, 150, DUSK.lamp, 0.45) +
+    `<rect x="213" y="10" width="3" height="150" fill="${DUSK.bg}"/><rect x="150" y="82" width="130" height="3" fill="${DUSK.bg}"/>` +
+    `<path d="M0 170 L320 162 L320 200 L0 200 Z" fill="${DUSK.mid}"/>` +
+    // her in profile, facing right, a dark shape against the lit window: head, neck, shoulder, the curve of her back
+    `<path d="M150 40 q14 -4 22 6 q6 8 4 16 l6 8 l-6 2 q0 8 -6 10 q-4 2 -8 0 l0 10 q26 8 28 40 l4 50 l-70 0 l2 -50 q2 -34 18 -46 q-6 -8 -6 -20 q0 -20 12 -26 z" fill="${DUSK.dark}"/>` +
+    // hair gathered at the back of her head
+    `<circle cx="146" cy="50" r="9" fill="${DUSK.dark}"/>` +
+    // her right arm, bent, two fingers pressed under the ribs at the front
+    `<path d="M150 104 q-6 26 8 40 q12 8 22 2 l2 -6 q-12 2 -20 -4 q-8 -10 -4 -32 z" fill="${DUSK.dark}"/>` +
+    // the hand: flat against the front of her, just below the ribs, fingers slightly spread
+    `<path d="M176 132 q8 -4 14 -2 q4 2 2 6 l-2 6 q-2 4 -8 4 q-6 0 -8 -4 z" fill="${DUSK.dark}"/>` +
+    // window light along the forearm and the knuckles, so the hand reads against her body
+    `<path d="M158 142 q12 8 22 2" fill="none" stroke="${DUSK.lamp}" stroke-opacity="0.45" stroke-width="1.2"/>` +
+    `<path d="M178 131 q7 -4 12 -2 q4 2 2 6" fill="none" stroke="${DUSK.lamp}" stroke-opacity="0.6" stroke-width="1.2"/>` +
+    // the window light catching the edge of her profile
+    `<path d="M176 62 l6 8 l-6 2 q0 8 -6 10" fill="none" stroke="${DUSK.lamp}" stroke-opacity="0.5" stroke-width="1.2"/>` +
+    mug(266, 162, DUSK.dark, DUSK.lamp),
+    'A woman in profile against an evening window, two fingers pressed under her right ribs.'),
   /** A clinic seen from a ceiling camera: a woman in a chair, sleeve rolled up, face turned away. */
   chair: svg(
     `<rect width="320" height="200" fill="${CLINIC.bg}"/>` + pool('ch', 170, 90, 150, CLINIC.lamp, 0.32) +
@@ -190,7 +211,7 @@ export const ART = {
 
 /** Where each picture's close-up sits: her hands, or the object that matters. */
 const FOCUS: Partial<Record<keyof typeof ART, [number, number]>> = {
-  chair: [180, 140], lab: [190, 120], letter: [160, 150], fridge: [130, 80], dog: [196, 132], clinic: [190, 110],
+  side: [176, 140], chair: [180, 140], lab: [190, 120], letter: [160, 150], fridge: [130, 80], dog: [196, 132], clinic: [190, 110],
   swarm: [190, 110], coffee: [184, 122], plaster: [130, 118], lift: [172, 92],
 };
 
