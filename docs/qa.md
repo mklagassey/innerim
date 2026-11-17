@@ -235,3 +235,11 @@ Most wording issues were already fixed by the creative director by Version 40 (g
   - Contacts not neutralised: 2 runs.
   - Bystander saved: 2 runs.
 - The second heart fork shows no "(assigned)" exit in 20 of 40 runs (trip 2). It no longer logs a defiance, but the obedient player gets no route or escort on that leg. Sent to the engineer.
+
+## v87 (unit-17.7) check, 2026-11-17
+
+20 obey-base seeds, 0 errors, 20/20 Decommissioned.
+
+- The heart fork with no "(assigned)" exit happens exactly when the Slip is the fork kind (5 of 5 fork-kind runs, 0 of 15 others). That's by design. The kind for a given seed changes between builds.
+- first-fright-transit: 0 deviations. But the order was met in 9 runs and settled in none. It only settles when the surge ends while the unit is still in the vessel, so obedient units that keep moving never get the obey. Sent to the engineer and systems.
+- `qa-endings.cjs` now records `slipKind`.

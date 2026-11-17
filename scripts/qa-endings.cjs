@@ -176,6 +176,7 @@ async function mission(browser, job) {
     if (r.due && log.dueSeen?.slice(-1)[0] !== r.due) (log.dueSeen ??= []).push(r.due);
     // Each time the trip goes off route: where, and what the last fork offered (lane deviations raise awareness).
     if (r.st && r.st.offRoute !== lastOff) { if (r.st.offRoute) (log.offRoute ??= []).push(`trip${r.st.trip} ch${r.st.chapter} ${r.st.place} a${Math.round(r.st.aware)} after ${log.forks[log.forks.length - 1] ?? 'no fork'}`); lastOff = r.st.offRoute; }
+    if (r.st?.slip?.kind && !log.slipKind) log.slipKind = r.st.slip.kind; // the garbled order's kind, fixed by seed
     if (r.what === 'fork') log.forks.push(`${r.at}:${r.picked} [${r.options.join(' ')}]`);
     if (r.what === 'market') log.maps.push(`market [${r.bought}]`);
     if (r.what === 'ask') { log.asks.push(r.picked + ' a' + Math.round(r.st.aware)); Object.assign(pol, r.pol); }
