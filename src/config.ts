@@ -155,9 +155,9 @@ export const CONFIG = {
   // The space of Disse: the gap between a liver cell and the sinusoid wall. Small enough for you, too small for a phagocyte.
   niche: { count: 10, apart: 6, holds: 20, foul: 1 },
   fight: {
-    swarm: 8, sooner: 5, // a kill draws innate cells within this many tiles, and brings the next arrivals this many seconds sooner
-    primed: { from: 50, damage: 1.5, windup: 0.8 }, // neutrophils at Alarmed and above
-    hold: { time: 2, burn: 2, breaks: 2 }, // a macrophage that lands a blow holds you; this many strikes break free
+    swarm: 6, sooner: 5, // a kill draws innate cells within this many tiles, and brings the next arrivals this many seconds sooner
+    primed: { from: 50, damage: 1.25, windup: 0.8 }, // neutrophils at Alarmed and above
+    hold: { time: 2, burn: 2, breaks: 2, again: 4, clear: 1 }, // a macrophage that lands a blow holds you; this many strikes break free. Once out, that cell cannot take you again for `again` seconds, and nothing can for `clear`
     first: { quiet: 3, times: 3 }, // a strike on a cell that has had no trace of you for this long
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
@@ -167,7 +167,7 @@ export const CONFIG = {
   // Boarding: climb inside a wounded neutrophil and wear it.
   board: { reach: 1.5, below: 0.5, time: 12, speed: 0.8 },
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
-  story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, kin: { most: 3, gift: 2 }, quota: 2, defy: 5, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
+  story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, kin: { most: 3, gift: 2 }, quota: 2, orders: { most: 12, some: 6, little: 3, first: 12, fullTimes: 2, escort: 0.25, acid: 2, spotted: 2, levers: 80, repeat: 45, steer: 6 }, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
   flora: { cost: 4, aboard: 2, most: 4, lure: 8, lasts: 12, feast: 5, hostDamage: 2 }, // gut bacteria stuck to the hull, shed as bait
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long

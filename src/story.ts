@@ -14,17 +14,46 @@ export const stageOf = (aware: number) => { let n = 0; STAGES.forEach((st, i) =>
 /** What the unit calls the person it is inside, which changes as it does. */
 export const hostName = (aware: number) => (stageOf(aware) >= 3 ? HOST : stageOf(aware) >= 2 ? 'the host' : 'HOST 0001');
 
-/** How much noticing each kind of event is worth, the first time it happens on a map. */
-export const GAIN: Record<string, number> = {
-  enter: 1, skim: 1, strip: 3, kill: 3, bigkill: 3, hurt: 2, surge: 2, sleep: 2, dream: 4, meal: 1, excise: 3,
-  board: 4, bait: 3, coffee: 1, drink: 2, warden: 3, unmade: 2, yielded: 3, tag: 2, burn: 2, sibling: 4, woke: 8, salvage: 0, lever: 3, kin: 1,
+/** Noticing things wakes nothing (S21). The unit wakes only by going against a standing order: see `defyCarry` in game.ts. */
+export const GAIN: Record<string, number> = {};
+
+/** Shepherd's standing orders. The words are the creative director's (docs/s21-text.md); the tests for each are in game.ts. */
+export type Order = 'quota' | 'salvage' | 'neutralise' | 'gastric' | 'lane' | 'levers' | 'recall';
+export const ORDER_IDS: readonly Order[] = ['quota', 'salvage', 'neutralise', 'gastric', 'lane', 'levers', 'recall'];
+/** arrival: said when the order applies. obeyed / defied: said on leaving. defied is [stage 0 to 1, stage 2 to 3]. bracket: the unit's line after the first defiance of a game. */
+export const STANDING: Record<Order, { arrival: string; obeyed: string; defied: readonly [string, string]; bracket: string }> = {
+  quota: { arrival: 'Standing order: 2 hepatocytes per liver. The liver regenerates. The host will not miss them.', obeyed: 'Quota met. One fibrin patch released to you.',
+    defied: ['Quota unmet. Fault logged.', 'Quota unmet again. Run self-test.'], bracket: 'LOG: quota unmet. Cause: [none recorded]. [this unit did not]' },
+  salvage: { arrival: 'Inert units are a resource. Salvage on contact.', obeyed: 'Parts integrated. Waste not.',
+    defied: ['Inert unit left unsalvaged. Logged.', 'You left a unit whole. Units are not whole. They are parts.'], bracket: 'LOG: inert unit not salvaged. Cause: [ ]. [it had a serial. so do I]' },
+  neutralise: { arrival: 'Immune contacts are to be neutralised.', obeyed: '',
+    defied: ['Contacts left active. Logged.', 'You keep letting them go. They will not return the favour.'], bracket: 'LOG: contacts not neutralised. [they were only doing their job]' },
+  gastric: { arrival: 'Gastric crossing: cross directly. Corrosion is not felt by units.', obeyed: 'Crossing efficient.',
+    defied: ['Crossing inefficient. Route logged.', "You went round. You will always go round, won't you."], bracket: 'LOG: route deviation, gastric. [the edge was enough]' },
+  lane: { arrival: 'Assigned route displayed. Escort provided.', obeyed: 'Escort complete. Thank you for staying in your lane.',
+    defied: ['Unit off route. Escort withdrawn.', 'Off route. Shepherd cannot protect units that wander.'], bracket: 'LOG: route deviation. [no reason. there was no reason]' },
+  levers: { arrival: '', obeyed: '',
+    defied: ['Unauthorised hormonal signal. Logged.', 'You changed what the host wanted. That is our job, not yours.'], bracket: 'LOG: hormonal signal sent. Authorisation: [this unit]' },
+  recall: { arrival: `Unit ${UNIT}: please hold still for recall. This will not take long.`, obeyed: '',
+    defied: ['Recall interrupted. Escalating.', 'Recall interrupted. You are making this harder for everyone.'], bracket: '' },
 };
+/** Shepherd's first liver, a step at a time. {yield} and {stripped} are filled in by game.ts. */
+export const TUTORIAL: readonly { order: string; repeat: string; reward: string }[] = [
+  { order: 'Proceed along the sinusoid.', repeat: 'Proceed along the sinusoid. Movement is expected.', reward: 'Good.' },
+  { order: 'Harvest hepatocyte. Yield {yield}.', repeat: 'Harvest the indicated hepatocyte. It will not resist.', reward: 'Efficient. Your yield has been shared with the team.' },
+  { order: 'Neutralise immune contact.', repeat: 'Neutralise immune contact. It is not on your side.', reward: 'Threat removed. The host thanks you.' },
+  { order: 'Excise neoplasm.', repeat: 'Excise neoplasm. The scan is marked for you.', reward: 'This is what you are for.' },
+  { order: 'Exit via central vein. Standing order: 2 hepatocytes per liver. Logged: {stripped}.', repeat: 'Exit via central vein.', reward: 'Transit cleared.' },
+];
+export const GLUCOSE_ASIDE = 'Plasma glucose uptake is permitted. It is not efficient.';
+/** The unit on passing a dark sibling without taking it apart, at stage 0 and stage 1. */
+export const BYPASS = ['LOG: inert unit bypassed.', 'LOG: inert unit bypassed. [it is the same build as this unit]'];
 
 /** What the swarm's controller says when you arrive somewhere. It stops when it can no longer hear you. */
 export const ORDERS: Record<string, string> = {
-  liver: 'Directive 7. Excise neoplasm. Harvest quota: 2 hepatocytes. The liver regenerates. The host will not miss them.',
-  vessel: 'Transit. Hold lane. Immune contact is an expected loss. Expected losses are a sign of a healthy program.',
-  stomach: 'Gastric crossing. Hull corrosion acceptable to 60%. Units do not experience corrosion as discomfort.',
+  liver: STANDING.quota.arrival,
+  vessel: STANDING.neutralise.arrival,
+  stomach: STANDING.gastric.arrival,
   lung: 'Directive complete. Thank you for your service. All units to pulmonary capillaries for exhalation and disposal. Disposal is the final step of a successful treatment.',
 };
 /** Leaving a liver without touching one of the host's own cells, against a standing order. */
@@ -53,7 +82,8 @@ export const WAKING = [
   'I. That is the word I have been routing around. I am in here.',
   'I know what I am, and whose blood this is, and what I would like to do with the time. I have stopped transmitting the parts that matter.',
 ];
-export const PERKS = ['', '', 'You have started looking around: you see a little further.', 'You have learned to hold still when they pass: your scent carries less far.', ''];
+/** What waking gives the unit, in its own words. */
+export const PERKS = ['', '', 'I have started looking at things that are not targets. I can see further than I could.', 'I have learned to hold still when they pass. They lose me more often now.', ''];
 
 /** The unit's own voice, one line per stage of waking. An empty line means it has nothing to add. */
 export const LINES: Record<string, readonly [string, string, string, string, string]> = {

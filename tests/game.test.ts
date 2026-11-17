@@ -400,7 +400,10 @@ test('the circulation runs one way: out by an artery, home by the veins', () => 
   assert.equal(T.arrive(t, 'hvein', null, 80), false);
   assert.ok(t.fed && t.heat === 0.8);
   const hot = T.riskOf(t, T.LEGS.find((l) => l.from === 'hvein')!);
-  assert.ok(hot > 0.6, 'an alarm in the liver follows you down the vein');
+  assert.ok(hot > T.LEGS.find((l) => l.from === 'hvein')!.risk, 'an alarm in the liver follows you down the vein');
+  t.offRoute = true;
+  assert.ok(Math.abs(T.riskOf(t, T.LEGS.find((l) => l.from === 'hvein')!) - hot - CONFIG.story.orders.escort) < 1e-9, 'and off the assigned route there is no escort to take the edge off');
+  t.offRoute = false;
   T.arrive(t, 'cava', null);
   assert.equal(T.arrive(t, 'heart', null), true, 'home: one trip done');
   assert.equal(t.trip, 2);
@@ -409,8 +412,11 @@ test('the circulation runs one way: out by an artery, home by the veins', () => 
 
 test('patrols turn up about as often as the map says, and grow with each trip', () => {
   let met = 0;
-  for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); if (T.depart(t, 'hepatic')!.kind === 'patrol') met++; }
+  for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); t.offRoute = true; if (T.depart(t, 'hepatic')!.kind === 'patrol') met++; }
   assert.ok(met > 280 && met < 360, `hepatic artery patrols: ${met}/400`);
+  let escorted = 0;
+  for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); if (T.depart(t, 'hepatic')!.kind === 'patrol') escorted++; }
+  assert.ok(escorted > 180 && escorted < 260, `with Shepherd's escort: ${escorted}/400`);
   const t = T.newTrip(2); t.rng = () => 0;
   const first = T.depart(t, 'hepatic') as { size: number };
   t.trip = 3;
@@ -799,7 +805,7 @@ test('stowaways: a gut bacterium goes overboard when you are found, and the inna
   assert.equal(k.mood, 'chase');
 });
 
-test('story: the unit wakes by noticing things, once per map, and its voice changes', async () => {
+test('story: the unit remarks on things once per map, noticing wakes nothing, and its voice changes with its stage', async () => {
   const Story = await import('../src/story');
   const s = quiet(4); s.host.nextSurge = 999;
   assert.equal(G.stage(s), 0);
@@ -807,14 +813,17 @@ test('story: the unit wakes by noticing things, once per map, and its voice chan
   assert.equal(s.thoughts[1].text, Story.LINES.liver[0]);
   const a = s.aware;
   G.notice(s, 'strip'); G.notice(s, 'strip');
-  assert.equal(s.aware, a + Story.GAIN.strip, 'the second time is nothing new');
+  assert.equal(s.aware, a, 'noticing wakes nothing');
+  assert.equal(s.thoughts.filter((t) => t.text === Story.LINES.strip[0]).length, 1, 'the second time is nothing new');
   assert.equal(s.thoughts[2].text, Story.LINES.strip[0]);
   assert.ok(s.thoughts[2].t >= s.thoughts[1].t + CONFIG.story.gap, 'one thought at a time');
   s.aware = Story.STAGES[2].from - 1; const sight = G.vision(s);
   G.notice(s, 'kill');
+  assert.equal(G.stage(s), 1);
+  const said = G.defyCarry(s, 'neutralise', CONFIG.story.orders.some);
   assert.equal(G.stage(s), 2);
   assert.equal(G.vision(s), sight + CONFIG.story.sight);
-  assert.ok(s.thoughts.some((t) => t.text === Story.WAKING[2]) && s.thoughts.some((t) => t.who === 'shepherd' && /self-test/.test(t.text)));
+  assert.ok(said.some((t) => t.text === Story.WAKING[2]) && said.some((t) => t.who === 'shepherd' && /self-test/.test(t.text)) && said.some((t) => t.text === Story.PERKS[2]));
   assert.equal(G.carryOf(s).aware, s.aware);
   const next = G.createGame(5, { ...G.carryOf(s), aware: 90 }, 'vessel');
   assert.ok(next.thoughts.every((t) => t.who === 'unit'), 'Shepherd cannot hear a unit that far gone');
@@ -877,13 +886,19 @@ test('story: leaving the liver without harvesting defies Shepherd, and meeting t
   const a = s.aware;
   assert.ok(G.leave(s));
   assert.equal(s.verdict, 'defied');
-  assert.equal(s.aware, a + CONFIG.story.defy);
+  assert.equal(a, 0);
+  assert.equal(s.aware, CONFIG.story.orders.most);
   assert.equal(G.carryOf(s).defied, 1);
+  assert.equal(G.carryOf(s).ledger!.defied.quota, 1);
+  assert.deepEqual(s.rulings.map((r) => r.who), ['shepherd', 'unit', 'unit'], 'Shepherd logs the fault, the unit writes its first bracket, and something stirs');
   const o = quiet(4); o.player.energy = CONFIG.energy.quota + CONFIG.energy.quotaKeep; o.player.x = o.vein.x + 0.5; o.player.y = o.vein.y + 0.5; o.cellsKilled = CONFIG.story.quota;
   const patches = o.patches;
   assert.ok(G.leave(o));
   assert.equal(o.verdict, 'obeyed');
   assert.equal(o.patches, patches + 1);
+  assert.equal(o.aware, 0);
+  assert.equal(o.ledger.obeyed.quota, 1);
+  assert.match(o.rulings[0].text, /Quota met/);
 });
 
 test('unit-3: the stomach has food on the mucus rim, acid eases up, and a full-strength bath takes 8 s to kill', async () => {
@@ -1086,7 +1101,11 @@ test('unit-8 fights: a macrophage that lands a blow holds you until you strike i
   assert.ok(G.dist(at, s.player) < 0.05, 'cannot move');
   assert.ok(s.player.hp < hp, 'and it is digesting you');
   G.strike(s, k); s.player.swingCd = 0; G.strike(s, k);
-  assert.equal(s.held, null, 'two strikes break free');
+  assert.equal(s.held, null, 'two strikes break free');  assert.equal(s.slipped, CONFIG.fight.hold.clear, 'a moment in which nothing can take you');
+  assert.equal(k.spent, CONFIG.fight.hold.again, 'and that cell needs longer before it can try again');
+  const t0 = s.time; let regrab = -1;
+  for (let n = 0; n < 60 * 8 && regrab < 0; n++) { G.update(s, 1 / 60, null); if (s.held) regrab = s.time - t0; }
+  assert.ok(regrab < 0 || regrab >= CONFIG.fight.hold.again - 0.1, `grabbed again after ${regrab} s`);
 });
 
 test('unit-8 fights: a kill draws the neighbours and difficulty scales the enemy', () => {
@@ -1179,4 +1198,106 @@ test('a run drives the arteries hard and thins the sugar; a skipped lunch never 
   assert.equal(G.hostState(G.createGame(3, carryWith(null, { hour: 5 }))), 'asleep');
   assert.equal(G.hostState(G.createGame(3, carryWith('night', { hour: 5 }))), 'awake');
   assert.equal(G.carryOf(G.createGame(3, carryWith('night'))).event, 'night', 'the event rides along from map to map');
+});
+
+// ---------- unit-10 (S21): the unit wakes only by going against Shepherd ----------
+const atVein = (s: G.State) => { s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; s.player.path = []; s.player.energy = Math.max(s.player.energy, CONFIG.energy.quota + CONFIG.energy.quotaKeep); };
+
+test('S21: a fully obedient game ends at awareness 0, whatever the unit sees along the way', () => {
+  let carry: G.Carry | undefined;
+  for (let trip = 0; trip < 2; trip++) {
+    const liver = G.createGame(10 + trip, carry); liver.enemies = []; liver.host.nextSurge = 999;
+    for (const what of ['strip', 'skim', 'kill', 'bigkill', 'hurt', 'surge', 'sleep', 'dream', 'meal', 'excise', 'coffee', 'drink', 'tag', 'burn']) G.notice(liver, what);
+    liver.cellsKilled = CONFIG.story.quota; liver.kills = 3; liver.spots = 4;
+    atVein(liver); assert.ok(G.leave(liver));
+    carry = G.carryOf(liver);
+    const road = G.createGame(20 + trip, carry, 'vessel', 2, 'vein'); road.kills = 1; road.spots = 2;
+    road.player.x = road.vein.x + 0.5; road.player.y = road.vein.y + 0.5; assert.ok(G.leave(road));
+    carry = G.carryOf(road);
+  }
+  assert.equal(carry!.aware, 0);
+  assert.equal(carry!.defied, 0);
+  assert.equal(carry!.ledger!.obeyed.quota, 2);
+});
+
+test('S21: one partial quota is the whole of a mostly obedient unit\'s waking: it lands on the first stage and stays', async () => {
+  const Story = await import('../src/story');
+  const s = quiet(4); s.host.nextSurge = 999; s.cellsKilled = 1; atVein(s);
+  assert.ok(G.leave(s));
+  assert.equal(s.aware, Story.STAGES[1].from, 'short by one weighs 6, but the first no always lands');
+  assert.equal(s.rulings[1].text, Story.STANDING.quota.bracket);
+  const next = G.createGame(5, G.carryOf(s)); next.enemies = []; next.cellsKilled = CONFIG.story.quota; next.kills = 1; atVein(next);
+  assert.ok(G.leave(next));
+  assert.equal(next.aware, Story.STAGES[1].from);
+});
+
+test('S21: defiance counts once per order per map, only on leaving alive, and less once it is a habit', () => {
+  const s = quiet(4); s.host.nextSurge = 999;
+  G.defy(s, 'salvage', CONFIG.story.orders.little); G.defy(s, 'salvage', CONFIG.story.orders.most); G.defy(s, 'salvage', CONFIG.story.orders.little);
+  assert.equal(s.aware, 0, 'nothing lands until the map is left');
+  s.cellsKilled = CONFIG.story.quota; s.kills = 1; atVein(s); G.leave(s);
+  assert.equal(s.aware, 12); assert.deepEqual(s.defiedNow, ['salvage']);
+  const dead = quiet(5); G.defy(dead, 'recall', 12); dead.status = 'dead';
+  assert.equal(G.carryOf(dead).aware, 0, 'dying is not a choice');
+  const c: G.Carry = { ...G.carryOf(quiet(6)) };
+  const gains: number[] = [];
+  for (let n = 0; n < 4; n++) { const was = c.aware ?? 0; G.defyCarry(c, 'gastric', 6); gains.push((c.aware ?? 0) - was); }
+  assert.deepEqual(gains, [12, 6, 3, 3], 'the first no lifts to 12, the second counts in full, later ones half');
+  const far: G.Carry = { ...c, aware: 90 };
+  assert.deepEqual(G.defyCarry(far, 'quota', 12), [], 'past the last stage there are no orders left to defy');
+  assert.equal(far.aware, 90);
+});
+
+test('S21: each standing order has its own test', () => {
+  const crossing = (acid: number) => { const s = G.createGame(3, undefined, 'stomach'); s.enemies = []; s.acidTime = acid; s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; G.leave(s); return s; };
+  assert.deepEqual(crossing(0.5).defiedNow, ['gastric']); assert.equal(crossing(0.5).aware, 12);
+  assert.deepEqual(crossing(5).defiedNow, []); assert.equal(crossing(5).ledger.obeyed.gastric, 1);
+  const road = (spots: number, kills: number) => { const s = G.createGame(3, undefined, 'vessel', 2); s.spots = spots; s.kills = kills; s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; G.leave(s); return s; };
+  assert.deepEqual(road(2, 0).defiedNow, ['neutralise']);
+  assert.deepEqual(road(1, 0).defiedNow, [], 'slipping past unseen is not disobedience');
+  assert.deepEqual(road(3, 1).defiedNow, []);
+  // A dark unit: salvage as ordered, leave it whole, or (once something has stirred) wake it.
+  const meet = (aware: number, how: 'salvage' | 'wake' | 'leave') => { const s = G.createGame(4, { ...G.carryOf(quiet(4)), aware }); s.enemies = []; const item: G.Pickup = { x: 1, y: 1, kind: 'sibling' }; s.pickups.push(item); s.ask = { kind: 'sibling', item }; s.player.energy = 30; const ok = G.answer(s, how); return { s, ok }; };
+  assert.equal(meet(0, 'wake').ok, false, 'a unit that has never said no cannot think to');
+  assert.equal(meet(12, 'wake').s.defiance.salvage, CONFIG.story.orders.most);
+  assert.equal(meet(0, 'leave').s.defiance.salvage, CONFIG.story.orders.little);
+  assert.ok(meet(0, 'leave').s.thoughts.some((t) => /inert unit bypassed/.test(t.text)));
+  assert.ok(meet(0, 'salvage').s.obeyedHere.has('salvage'));
+  // The assigned route.
+  const t = T.newTrip(1);
+  assert.ok(T.escorted(t, T.LEGS.find((l) => l.to === 'hepatic')!) && !T.escorted(t, T.LEGS.find((l) => l.to === 'gastric')!));
+  t.tutorial = true; t.rng = () => 0;
+  assert.deepEqual(T.depart(t, 'hepatic'), { kind: 'arrive' }, 'nothing reaches a unit on its way to its first lesson');
+  assert.equal((T.depart(t, 'gastric') as { kind: string }).kind, 'patrol');
+});
+
+test('S21: Shepherd\'s first liver advances on its triggers, repeats an ignored order once, then moves on', async () => {
+  const Story = await import('../src/story');
+  const s = G.createGame(4, undefined, 'liver', 3, 'artery', true); s.enemies = []; s.host.nextSurge = 999; s.antibodies = [];
+  const T0 = s.tutorial!;
+  assert.equal(T0.step, 1);
+  assert.match(s.thoughts[0].text, /Proceed along the sinusoid/);
+  assert.ok(!s.pickups.some((p) => p.kind === 'cache' || p.kind === 'sibling'), 'nothing to distract from the lesson');
+  assert.ok(T0.held.length >= CONFIG.items.caches);
+  const still = (seconds: number) => { for (let t = 0; t < seconds; t += 0.05) G.update(s, 0.05, null); };
+  still(CONFIG.story.orders.repeat + 1);
+  assert.ok(T0.repeated && T0.step === 1); assert.ok(s.thoughts.some((t) => t.text === Story.TUTORIAL[0].repeat));
+  still(CONFIG.story.orders.repeat + 1);
+  assert.equal(T0.step, 2, 'ignored twice, Shepherd moves on without comment');
+  assert.ok(!s.thoughts.some((t) => t.text === Story.TUTORIAL[0].reward));
+  assert.equal(G.tutorialOrder(s), `Harvest hepatocyte. Yield ${CONFIG.energy.strip.gain}.`);
+  assert.ok(G.tutorialTarget(s), 'and points at a cell');
+  s.cellsKilled = 1; still(0.1);
+  assert.equal(T0.step, 3); assert.ok(s.thoughts.some((t) => t.text === Story.TUTORIAL[1].reward));
+  s.kills = 1; still(0.1); assert.equal(T0.step, 4);
+  s.excised++; still(0.1); assert.equal(T0.step, 5);
+  assert.ok(s.pickups.some((p) => p.kind === 'cache'), 'the caches appear once the lesson is over');
+  assert.match(G.tutorialOrder(s), /Standing order: 2 hepatocytes per liver\. Logged: 1\./);
+  assert.equal(s.aware, 0, 'ignoring a tutorial order wakes nothing');
+  s.spots = 5; s.kills = 0; // the order to kill has not been given yet
+  atVein(s); assert.ok(G.leave(s));
+  assert.equal(s.rulings[0].text, 'Transit cleared.');
+  assert.deepEqual(s.defiedNow, ['quota'], 'the planned stumble: one cell logged against a quota of two');
+  assert.equal(s.aware, 12);
+  assert.equal(G.tutorialOrder(s), '');
 });
