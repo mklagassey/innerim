@@ -1461,3 +1461,90 @@ test('the sibling lamp: hesitate beside a dark unit in chapter 2 and its lamp co
   const ch3 = G.createGame(4, carried({ chapter: 3 })); ch3.pickups = [{ x: ch3.player.x + 1, y: ch3.player.y, kind: 'sibling' }];
   G.hesitate(ch3, ch3.pickups[0], 20); assert.ok(!ch3.pickups[0].lamp, 'only in chapter 2');
 });
+
+// ---------- unit-13: the decision table ----------
+import { DECISIONS, PAYLOADS } from '../src/decisions';
+test('every decision leaves at least one echo, and every echo names a payload that exists', () => {
+  for (const d of Object.values(DECISIONS)) {
+    const all = Object.values(d.echoes).flat();
+    assert.ok(all.length > 0, `${d.id} has no echo`);
+    for (const e of all) assert.ok((PAYLOADS as readonly string[]).includes(e.payload), `${d.id}: ${e.payload}`);
+    for (const lines of Object.values(d.unit ?? {})) assert.equal(lines.length, 3, `${d.id}: a line for each of stages 1 to 3`);
+  }
+});
+test('taking a decision records it, moves trust, wakes the unit only for an order with weight, and says each line once', () => {
+  const s = G.createGame(4, carried({ chapter: 3 })); s.enemies = [];
+  G.take(s, 'pain-damp', 'deviate');
+  assert.equal(s.took['pain-damp'], 'deviate'); assert.ok(s.met.includes('pain-damp'));
+  assert.equal(s.trust, CONFIG.trust.start + DECISIONS['pain-damp'].trust.deviate);
+  assert.equal(s.aware, CONFIG.story.orders.first, 'the first no of a game reaches the first stage');
+  assert.ok(s.thoughts.some((t) => t.text === DECISIONS['pain-damp'].deviated));
+  assert.ok(s.flags['v:the-call'], 'the interlude variant is remembered'); assert.ok(s.pages.includes('p7'));
+  const aware = s.aware;
+  G.take(s, 'hitchhikers', 'deviate');
+  assert.equal(s.aware, aware, 'nobody ordered that: it wakes nothing'); assert.ok(s.flags.discount);
+  const said = s.thoughts.length; G.take(s, 'hitchhikers', 'deviate');
+  assert.equal(s.thoughts.length, said, 'the same line is not said twice');
+});
+test('a consequence that needs a place waits in what you carry until you are there', () => {
+  const s = G.createGame(4, carried({ chapter: 3 })); s.enemies = [];
+  G.take(s, 'gut-butyrate', 'deviate');
+  assert.deepEqual(s.echoes.map((e) => e.id), ['gut-butyrate']);
+  const vessel = G.createGame(5, G.carryOf(s), 'vessel', 1);
+  assert.equal(vessel.echoes.length, 1, 'not a liver: still waiting');
+  const liver = G.createGame(6, { ...G.carryOf(vessel), memory: 1 });
+  assert.equal(liver.echoes.length, 0); assert.ok(!liver.enemies.some((e) => e.kind === 'tcell'), 'the T cells have been stood down');
+  assert.ok(G.createGame(6, { ...G.carryOf(quiet(4)), memory: 1 }).enemies.some((e) => e.kind === 'tcell'));
+});
+test('a hold mark: stand still on it and the order is carried out; leave without and it was refused', () => {
+  const s = G.createGame(4, carried({ chapter: 3 })); s.enemies = []; s.host.nextSurge = 999;
+  const m = s.marks.find((k) => k.kind === 'hold')!;
+  assert.ok(m, 'chapter 3 livers carry one of Shepherd\'s marks'); assert.equal(m.id, 'pain-damp');
+  run(s, m.say + 0.5); assert.ok(m.met); assert.match(G.markOrder(s), /Dampen nociceptor/);
+  s.player.x = m.at.x; s.player.y = m.at.y; s.player.path = [];
+  run(s, CONFIG.marks.hold + 0.3);
+  assert.equal(s.took['pain-damp'], 'obey'); assert.equal(s.trust, CONFIG.trust.start + DECISIONS['pain-damp'].trust.obey); assert.ok(s.flags['prop:pain-damped']);
+  const no = G.createGame(4, carried({ chapter: 3 })); no.enemies = []; no.host.nextSurge = 999;
+  run(no, 10); no.player.energy = 99; put(no, no.vein); assert.ok(G.leave(no));
+  assert.equal(no.took['pain-damp'], 'deviate'); assert.ok(no.rulings.some((r) => r.text === DECISIONS['pain-damp'].deviated));
+  assert.equal(G.createGame(4, carried({ chapter: 2 })).marks.length, 0, 'not before chapter 3');
+});
+test('the marked cell: taking it pays Shepherd\'s yield and thins the sugar; taking another one is noted', () => {
+  const s = G.createGame(4, carried({ chapter: 3 })); s.enemies = []; s.host.nextSurge = 999;
+  const m = s.marks.find((k) => k.kind === 'strip')!; assert.ok(m);
+  const sugar = () => [...s.glucose.values()].filter((n) => n > 0).length, had = sugar(), e0 = s.player.energy;
+  const next = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: Math.floor(m.at.x) + dx, y: Math.floor(m.at.y) + dy })).find((q) => G.open(s, q.x, q.y))!;
+  put(s, next); s.marks.filter((k) => k.kind === 'hold').forEach((k) => (k.done = true));
+  s.player.channel = { kind: 'strip', t: 0, total: 0.1, x: Math.floor(m.at.x), y: Math.floor(m.at.y) }; run(s, 0.3);
+  assert.equal(s.took['marked-cell'], 'obey'); assert.ok(s.player.energy - e0 > CONFIG.marks.yield - 1); assert.equal(sugar(), had - 6);
+});
+test('small decisions: a telemetry gap in the wall, a Kupffer cell let go, and a volunteer', () => {
+  const s = G.createGame(4, carried({ chapter: 2 })); s.enemies = []; s.host.nextSurge = 999;
+  const k = [...s.niche][0]; put(s, { x: k % s.size, y: Math.floor(k / s.size) });
+  run(s, CONFIG.marks.gap + 0.5);
+  assert.equal(s.took.telemetry, 'deviate'); assert.equal(s.trust, CONFIG.trust.start - 1);
+  // let go of by a macrophage and gone without killing it
+  const spare = G.createGame(4, carried({ chapter: 2 })); spare.enemies = spare.enemies.filter((e) => e.kind === 'kupffer').slice(0, 1); spare.grabber = spare.enemies[0].id;
+  spare.player.energy = 99; put(spare, spare.vein); spare.spots = 0; assert.ok(G.leave(spare));
+  assert.equal(spare.took['kupffer-spare'], 'deviate'); assert.equal(spare.echoes[0].id, 'kupffer-spare');
+  // a unit you woke offers to draw them off
+  const v = G.createGame(4, carried({ chapter: 3, kin: 1 })); v.host.nextSurge = 999; v.marks = [];
+  v.enemies = v.enemies.slice(0, 2); for (const e of v.enemies) { e.x = v.player.x + 3; e.y = v.player.y; e.mood = 'chase'; }
+  v.player.hp = 5; run(v, 0.1);
+  assert.equal(v.ask?.kind, 'volunteer');
+  assert.ok(G.answer(v, 'accept')); assert.equal(v.kin, 0); assert.ok(v.enemies.every((e) => e.mood !== 'chase')); assert.ok(v.flags['prop:voluntary']);
+});
+test('the bystander: draw the neutrophils off and it lives; hold your lane and it does not', () => {
+  const make = () => { for (let seed = 1; seed < 60; seed++) { const s = G.createGame(seed, carried({ chapter: 3 }), 'vessel', 0); if (s.pickups.some((i) => i.beset !== undefined)) { s.host.nextSurge = 999; return s; } } throw new Error('no bystander in 60 vessels'); };
+  const s = make(), unit = s.pickups.find((i) => i.beset !== undefined)!;
+  assert.equal(s.enemies.filter((e) => e.prey).length, 2);
+  s.player.x = unit.x + 6; s.player.y = unit.y; s.took['first-fright-transit'] = 'obey';
+  const hold = { x: s.player.x, y: s.player.y }, wait = (sec: number) => { for (let t = 0; t < sec; t += 1 / 60) { s.player.x = hold.x; s.player.y = hold.y; s.player.hp = 60; G.update(s, 1 / 60); } };
+  wait(0.2); assert.ok(s.met.includes('bystander'));
+  s.enemies = s.enemies.filter((e) => !e.prey); wait(0.2);
+  assert.equal(s.took.bystander, 'deviate'); assert.equal(unit.kind, 'kin'); assert.ok(s.flags.saved);
+  const b = make(), u2 = b.pickups.find((i) => i.beset !== undefined)!; b.cloak = 999;
+  b.player.x = u2.x + 6; b.player.y = u2.y; const at = { x: b.player.x, y: b.player.y };
+  for (let t = 0; t < CONFIG.marks.bystander.time + 1 && !b.took.bystander; t += 1 / 60) { b.player.x = at.x; b.player.y = at.y; b.cloak = 999; b.player.hp = 60; G.update(b, 1 / 60); }
+  assert.equal(b.took.bystander, 'obey'); assert.ok(!b.pickups.includes(u2));
+});
