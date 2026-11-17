@@ -137,3 +137,78 @@ Each plays once per mission, pauses the game, and can be skipped with a tap afte
 - At most **one** unit thought per map, plus Shepherd's order on arrival.
 - At stages 0 and 1 the unit says almost nothing: `ACK.` and short log lines. The first `[unlogged]`
   bracket should arrive right after the player's first act of defiance, so they connect the two.
+
+---
+
+## v3 additions (overnight, 2026-11-17): chapters, variants, endings
+
+Chapter placement (chapters.md): Prologue = scene 0. Ch1 = 1 "The plaster". Ch2 = 3 "The letter"
+(first night after trip 1). Ch3 = 2 "Evening" (or its corrected variant), 4 "The same heart" (stage 4
+only), and the echo variants. Ch4 = 5 "The scan". Ch5 = the ending scene, then "The kitchen, after".
+
+Shot names are suggestions for art's `shot` field: WIDE, HIGH (ceiling camera), MID, CLOSE,
+INSERT (an object), OTS (over the shoulder), POV (through an eyepiece or a window).
+
+### 2b. "Evening, corrected" (ethanol correction obeyed)
+1. WIDE · the sofa, TV light, the dog across her feet. She lifts the glass. (5 s)
+2. CLOSE · her hand to her cheek; the warm flush, shown only as a slightly warmer tone on her silhouette. (4 s)
+3. INSERT · the glass on the table. She looks at it. (3.5 s)
+4. MID · the kitchen sink, her back to us, the glass tipped out. (4 s)
+5. WIDE · back on the sofa with nothing in her hands. The dog lifts its head, then puts it down. (5 s)
+Match cut: the dark sink drain becomes a hepatic vein, running clear.
+
+### 5b. "The scan, again" (recurrence)
+1. MID · the clinic screen, the same framing as "The scan". (4 s)
+2. INSERT · the radiologist's gloved finger stops at the edge of the old lesion, on a small bright spot. (4.5 s)
+3. OTS · her, not breathing out. Hold. (5 s)
+Match cut: the bright spot on the screen becomes a tumour cell's dark knot, in-game.
+
+### E1. "The slide" (reach: she reads it herself)
+1. HIGH · the lab at night, one lamp, her at the bench. Familiar from "Her own blood". (5 s)
+2. INSERT · a tube, label **V., MARIAN · TITHONUS 0001**, then a drop on glass, then the coverslip. (5 s)
+3. POV · down the eyepiece: pink cells, scattered as always, and across them a line of evenly spaced lights. Hold long. (7 s)
+4. MID · she sits back from the microscope. Her hands in her lap. A long hold. (6 s)
+5. INSERT · the phone on the bench. Her hand goes to it. (4 s)
+6. WIDE · her kitchen that night. She takes the brochure off the fridge. The letter stays. (5 s)
+No match cut: hold on the fridge, then fade to black.
+
+### E2. "A stranger's slide" (reach: too sick, someone else reads it)
+1. HIGH · the lab at night, a different figure at the bench: taller, a cardigan, a coffee in a paper cup. (5 s)
+2. POV · the eyepiece: the same line of lights. (6 s)
+3. MID · he looks twice; he takes out his phone and photographs the eyepiece. (5 s)
+4. INSERT · weeks later: a clinic machine, a bag of pale fluid filling slowly (plasmapheresis). (5 s)
+5. INSERT · a freezer drawer, a sealed bag with a printed label. The drawer closes. (5 s)
+6. WIDE · her kitchen, morning. She is thinner, and alive, making coffee. (5 s)
+
+### E3. "Artifact" (reach: alone, or only one kin)
+1. POV · the eyepiece: scattered pink cells, and one odd speck. (5 s)
+2. INSERT · her pencil writes **artifact** in the margin of a log sheet. (4 s)
+3. INSERT · the slide wiped with a tissue. (3.5 s)
+4. INSERT · the tube in a rack, among others, with her name on it. The lab light goes off. (6 s)
+
+### E4. "Tithonus" (the dark ending)
+Five beats, each the same WIDE kitchen frame, lit the same way, weeks apart:
+1. A herbal tea where the coffee was. (4 s)
+2. No glass on the rack. The bottle in the cupboard, dusty. (4 s)
+3. The radio on. She doesn't react to it. (4 s)
+4. The clock at nine, her bedroom light going off. (4 s)
+5. A second brochure on the fridge: **TITHONUS GEN 4. Stay well, always.** (5 s)
+No match cut. The last frame holds a beat too long.
+
+### E5. "Repaired"
+1. HIGH · the clinic, wide. A nurse gives her a thumbs up. (5 s)
+2. WIDE · the clinic car park. She walks to her car. (5 s)
+Nothing else. It is the most ordinary scene in the game, on purpose.
+
+### E6. "Recalled"
+1. INSERT · her forearm, a plaster, months later, fully healed: no plaster. (4 s)
+2. WIDE · her kitchen, an ordinary morning. (5 s)
+Her life goes on without any sign. That is the whole scene.
+
+### Echo variants (short, 2–3 beats each; the text is in decisions-text.md, section 6)
+- "Liver tests fine", "Hepatic reserve": INSERT of the fridge, then MID of her reading it.
+- "Antacids": MID, kitchen, late; INSERT of the tub; the dog watching.
+- "The nap": WIDE, afternoon light, her asleep, dog on feet; INSERT of the cold mug.
+- "Groggy": CLOSE of the clock; WIDE of her scrambling.
+- "The fridge at three": MID, the fridge light on her face (profile), eating standing up.
+- Shingles (in "The kitchen, after"): she reaches for the mug and stops, a hand to her ribs; a dressing visible at the hem of her shirt.
