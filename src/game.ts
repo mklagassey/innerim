@@ -548,6 +548,7 @@ function settle(s: State) {
   for (const item of s.pickups) if (item.beset !== undefined && item.kind === 'sibling' && s.met.includes('bystander') && !s.took.bystander) take(s, 'bystander', 'obey');
   if (s.flags.kinRecall === 'live' && !s.took['kin-recall']) { s.flags.kinRun = 'left'; take(s, 'kin-recall', 'obey'); } // gone on without reaching it
   settleMarks(s);
+  if (s.lane && !s.took['first-fright-transit']) { take(s, 'first-fright-transit', s.lane.left ? 'deviate' : 'obey'); s.lane = null; } // rode the surge right out of the vessel
   if (s.met.includes('last-harvest') && !s.took['last-harvest']) take(s, 'last-harvest', !Number(s.flags.lastN) && s.time - (Number(s.flags.lastAt) || 0) >= CONFIG.marks.notice ? 'deviate' : 'lapsed');
   if (s.place === 'liver' && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.excised >= CONFIG.tumor.goal) take(s, 'tumour-order', s.marginTaken >= CONFIG.marks.margins ? 'obey' : s.time - (Number(s.flags.marginAt) || 0) < CONFIG.marks.notice ? 'lapsed' : 'deviate');
   if (s.grabber !== null && s.chapter >= 2 && !t && s.enemies.some((e) => e.id === s.grabber)) take(s, 'kupffer-spare', 'deviate');
