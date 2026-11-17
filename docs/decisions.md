@@ -311,4 +311,4 @@ Run report gains `chapter`, `trust`, `compliance`, `met`, `took`, `slip`, `echoe
 2. **unit-13:** `decisions.ts`, `meet` and `take`, echoes and payloads; D4 to D10 and m1 to m10.
 3. **unit-14:** chapter 4 (D11 to D14, kin recall, margins); chapter 5 and the ending matrix; epilogue props; the audit; outcomes; chapter restarts; the previous unit.
 4. **unit-15:** the draw map (D16) and the arm road.
-5. **unit-16:** travel by branch, the heart chamber, flight transitions (with art).
+5. **unit-16:** travel by branch, the heart chamber, flight transitions (with art). **Shipped early as unit-12a (Version 60):** forks at the heart and the gut; other stops carry straight on.
