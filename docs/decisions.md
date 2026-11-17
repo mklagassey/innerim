@@ -466,3 +466,9 @@ Host health:
 - Targets unchanged: all-obey lowest ≥ 40, end 55–70.
 
 QA bot: the all-obey policy should accept the telemetry review.
+
+**As built (unit-15.4, Version 72):** accepted, with two corrections requested:
+1. **Marked-cell.** A deviation needs the player to strip a healthy cell beyond the map's quota, not just one other than the marked cell. Quota strips are themselves ordered.
+2. **Kupffer-spare.** No trust change, as well as no awareness.
+
+The Recurrence soft-lock is fixed.
