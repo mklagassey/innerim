@@ -1754,3 +1754,9 @@ test('unit-17: each difficulty is a different body, not only bigger numbers', ()
   const easy = on('suppressed'); easy.scan = 'nodule'; easy.enemies[0].mood = 'chase';
   assert.ok(G.hunterHeading(easy)); const typ = on('typical'); typ.scan = 'nodule'; typ.enemies[0].mood = 'chase'; assert.equal(G.hunterHeading(typ), null);
 });
+
+test('unit-17: a planted dock is a foreign body, and the liver knows it', () => {
+  const s = G.createGame(4, carried({ chapter: 5, excised: CONFIG.tumor.goal - 2, took: { beacon: 'obey' } }));
+  assert.equal(s.alert, CONFIG.marks.dockAlert);
+  assert.equal(G.createGame(4, carried({ chapter: 5, excised: CONFIG.tumor.goal - 2, took: { beacon: 'broken' } })).alert, 0);
+});
