@@ -273,3 +273,52 @@ export function ending(way: 'breath' | 'stay', aware: number, kin: number, hostH
   if (st === 2) return { title: 'Breathed out', body: `You went because you were told to. Somewhere in the last capillary you wondered what air would be like, and whether wondering was a fault. Then there was a great deal of light. ${well}` };
   return { title: 'Breathed out', body: `You could have stayed, and you knew it. You went anyway, on her breath, because the job was done and the life was hers. ${kin > 0 ? `${kin === 1 ? 'One unit' : `${kin} units`} you woke stayed behind. You told them to look after her. ` : ''}${HOST} breathed out and felt, for no reason she could name, a little lighter. ${well}` };
 }
+
+// ---------- chapters, trust and the Slip (decisions.md v2; words from decisions-text.md) ----------
+
+/** Chapter cards: a title and one line of Shepherd's telemetry. {serial}, {n} and {review} are filled in when shown. */
+export const CHAPTERS: { title: string; line: string }[] = [
+  { title: 'Injection', line: 'TITHONUS 0001 · GENERATION 3 · 5,000,000 UNITS · DIRECTIVE 7 LOADED' },
+  { title: 'Directive', line: 'UNIT {serial} · ONLINE · COMPLIANCE 100%' },
+  { title: 'Deviation', line: 'UNIT {serial} · COMPLIANCE {n}%' },
+  { title: 'Discretion', line: 'UNIT {serial} · COMPLIANCE {n}% · {review}' },
+  { title: 'Recall', line: 'DIRECTIVE 7 COMPLETE · ALL UNITS: PROCEED TO PULMONARY CAPILLARIES' },
+  { title: 'Host', line: '' },
+];
+export type SlipKind = 'hold' | 'lamp' | 'fork';
+/** The one order in a game that arrives garbled. A and B are its two readings; `said[meant][did]` is Shepherd's clean reply. */
+export const SLIPS: Record<SlipKind, { garble: string; said: Record<'A' | 'B', Record<'A' | 'B', string>> }> = {
+  hold: { garble: 'H—LD. H[ ]RV—ST. UNIT 4,471,2—', said: {
+    A: { A: 'Order executed.', B: 'Order not executed as transmitted. Order was: hold position. Unscheduled harvest logged. Link quality was within tolerance.' },
+    B: { B: 'Order executed. Efficient.', A: 'Order not executed as transmitted. Order was: harvest. Yield deficit logged. Link quality was within tolerance.' } } },
+  lamp: { garble: 'SALV—GE ... [ ] ... DO NOT —', said: {
+    A: { A: 'Order executed. Parts integrated.', B: 'Order not executed as transmitted. Order was: salvage. Logged. Link quality was within tolerance.' },
+    B: { B: 'Order executed.', A: 'Order not executed as transmitted. Order was: do not touch. Unit was reserved for diagnostics. Logged. Link quality was within tolerance.' } } },
+  fork: { garble: 'PROC— HEPATIC ... [ ] ... GASTR—', said: {
+    A: { A: 'Order executed. Escort assigned.', B: 'Order not executed as transmitted. Order was: proceed hepatic. Escort withdrawn. Link quality was within tolerance.' },
+    B: { B: 'Order executed. Gastric survey assigned.', A: 'Order not executed as transmitted. Order was: proceed gastric. Survey cancelled. Link quality was within tolerance.' } } },
+};
+export const SLIP_LAPSED = 'Order lapsed.';
+export const SLIP_BRACKET = 'LOG: order misread. [misread?]';
+export const SLIP_BRACKET_AGAIN = 'LOG: order misread. [again. or did I]';
+/** The softer way to a first "no": a dark unit's lamp comes on by itself while you hesitate beside it. */
+export const LAMP = { shepherd: 'Proximity reactivation event. Cause under review.', unit: 'LOG: inert unit lamp activity. Source: [unknown]', woken: 'Unauthorised reactivation. Unit {serial2} reassigned to this unit’s supervision.' };
+/** Shepherd's arrival line by how far it trusts the unit: valued, nominal, under review, flagged, recall. */
+export const TRUST_LINES = [
+  'Unit {serial}: please remain where you are.',
+  'No scan available for this unit. A Warden is in the area for your safety.',
+  'Nodule scan attached. Unit performance is under review. Nothing to worry about.',
+  'Nodule scan attached. Escort on assigned legs.',
+  'Full scan attached. Supply drop scheduled. Shepherd is proud of this unit.',
+];
+export const SELF_TEST = 'Run self-test. It only takes a moment.';
+export const RESIDUAL = 'Residual disease.';
+/** The consent form she signed, a page at a time, as the unit comes across it on the link. */
+export const PAGES: Record<string, { title: string; text: string }> = {
+  p1: { title: 'p1 · Summary', text: 'Thank you for joining TITHONUS. Your treatment uses millions of microscopic therapeutic units to find and remove cancer cells from your liver. Treatment takes about two days. You may feel tired. Most people feel nothing at all.' },
+  p7: { title: 'p7 · Risks', text: 'Units communicate with each other and with a controller through your tissues. Rarely, a unit may lose contact. Units that lose contact are designed to stop safely.' },
+  p12: { title: 'p12 · Your data', text: 'During treatment, units record information about your body, including diet, sleep, alcohol use and stress. This information is the property of Halden-Okafor Therapeutics and may be used to improve future products.' },
+  p19: { title: 'p19 · Behavioural support', text: 'Where it benefits your health, units may gently adjust appetite, sleep or tolerance of alcohol. You may not notice these adjustments. That is how you know they are working.' },
+  p27: { title: 'p27 · Disposal', text: 'At the end of treatment, units leave your body naturally through your breath. Units do not experience disposal.' },
+  p34: { title: 'p34 · Ongoing optimisation', text: 'Eligible participants may continue to Generation 4 at no extra cost. Generation 4 units remain in the body permanently, providing continuous optimisation of wellbeing. By signing, you consent to Generation 4 where clinically appropriate. Your clinician will decide what is appropriate.' },
+};
