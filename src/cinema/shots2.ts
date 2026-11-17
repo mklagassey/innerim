@@ -421,7 +421,12 @@ export const SHOTS2: Record<string, ShotDef> = {
       let her: Pose;
       if (a.healthHigh) {
         her = { x: 600, y: 384, s: 268, face: -1, lean: 0.02, slump: 0.05, neck: 0.05, head: 0, near: { sh: 0.25, el: 0.5, grip: 'fist' }, far: { sh: -0.05, el: 0.1 }, breath: breath(st), clothes: 'coat', stride: 0.3 };
-        if (a.shingles) { const r = reach(her, her.x - 14, 384 - 268 * 0.76, 1); her.far = { sh: r.sh, el: r.el, wr: -0.6, grip: 'open' }; her.slump = 0.3; }
+        if (a.shingles) {
+          // she reaches for the mug and stops short; the other hand goes flat to her side, under the ribs, where the rash is
+          const m = reach(her, 566, 200, 1); her.near = { sh: m.sh, el: m.el, wr: 0.1, grip: 'open' };
+          const r = reach(her, her.x + 16, 384 - 268 * 0.6, 1, true); her.far = { sh: r.sh, el: r.el, wr: 0.4, grip: 'open' };
+          her.slump = 0.22; her.lean = 0.08; her.neck = 0.2;
+        }
       } else {
         her = { x: 520, y: 384, s: 262, face: 1, legs: 'sit', seat: 0.46, lean: 0.12, slump: 0.6, neck: 0.4, head: 0.2, near: { sh: 0.7, el: 0.9, grip: 'open' }, far: { sh: 0.6, el: 0.9, grip: 'open' }, breath: breath(st, 3.6), clothes: 'gown' };
       }
