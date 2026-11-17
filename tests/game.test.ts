@@ -1124,3 +1124,59 @@ test('unit-8b: a niche in the liver wall hides you from innate cells, for a whil
   assert.ok(s.player.hp < hp, 'and it is no place to stay');
   assert.equal(G.createGame(3, undefined, 'stomach').niche.size, 0, 'liver only');
 });
+
+// ---------- unit-9: two livers, a straight road home, and the host having a day ----------
+const carryWith = (event: G.Carry['event'], more: Partial<G.Carry> = {}): G.Carry => ({ ...G.carryOf(G.createGame(3)), event, ...more });
+
+test('two liver visits clear the tumor, and the hepatic vein offers a straight road home', () => {
+  assert.equal(CONFIG.tumor.cells * 2, CONFIG.tumor.goal);
+  const t = T.newTrip(1);
+  t.at = 'hvein';
+  const home = T.ways(t).find((l) => l.to === 'heart')!;
+  assert.equal(home.via, 'cava');
+  assert.equal(home.risk, Math.max(...T.LEGS.filter((l) => !l.via && (l.from === 'cava' || l.to === 'cava')).map((l) => l.risk)), 'one roll at the worse of the two risks');
+  assert.ok(T.ways(t).some((l) => l.to === 'cava'), 'the stop at the vena cava is still there to choose');
+  t.rng = () => 0.99;
+  assert.deepEqual(T.depart(t, 'heart'), { kind: 'arrive' });
+});
+
+test('the first trip is plain; each later trip gets a host event, never the same one twice', () => {
+  const t = T.newTrip(5);
+  t.carry = carryWith(null);
+  assert.equal(t.event, null);
+  const seen: string[] = [];
+  for (let n = 0; n < 6; n++) {
+    t.at = 'cava'; t.fed = true;
+    assert.equal(T.arrive(t, 'heart', null), true);
+    if (n < 5) { assert.ok(t.event, `trip ${t.trip} has an event`); assert.equal(t.carry!.event, t.event); seen.push(t.event!); }
+    else assert.equal(t.event, null, 'the list is used up');
+  }
+  assert.equal(new Set(seen).size, 5);
+});
+
+test('a cold: fewer neutrophils in the liver, a mild fever, more antibodies', () => {
+  const plain = G.createGame(11, carryWith(null, { memory: 0.6 })), cold = G.createGame(11, carryWith('cold', { memory: 0.6 }));
+  const count = (s: G.State) => s.enemies.filter((e) => e.kind === 'neutrophil').length;
+  assert.equal(count(cold), count(plain) - 3);
+  assert.equal(G.fever(plain), 0); assert.equal(G.fever(cold), 1);
+  assert.ok(cold.antibodies.length > plain.antibodies.length);
+  assert.ok(cold.log.some((l) => /sneeze|sore throat|running warm/.test(l.text)), 'the map opens with a line about her day');
+});
+
+test('ibuprofen holds the fever at one step and lets the alarm fade faster', () => {
+  const ill = G.createGame(3, carryWith('ibuprofen', { hostHealth: 30 }));
+  assert.equal(G.fever(ill), 1);
+  const fade = (event: G.Carry['event']) => { const s = G.createGame(3, carryWith(event)); s.enemies = []; s.antibodies = []; s.alert = 20; run(s, 5); return 20 - s.alert; };
+  assert.ok(Math.abs(fade('ibuprofen') / fade(null) - 1.5) < 0.05);
+});
+
+test('a run drives the arteries hard and thins the sugar; a skipped lunch never arrives; a bad night ends early', () => {
+  const road = (event: G.Carry['event']) => G.createGame(3, carryWith(event, { hour: 14 }), 'vessel', 2, 'artery');
+  assert.ok(Math.abs(G.currentStrength(road('run')) / G.currentStrength(road(null)) - CONFIG.host.push.stressed.artery) < 1e-9);
+  assert.equal(G.currentStrength(G.createGame(3, carryWith('run', { hour: 14 }), 'vessel', 2, 'vein')), G.currentStrength(G.createGame(3, carryWith(null, { hour: 14 }), 'vessel', 2, 'vein')));
+  assert.ok(G.digesting(13, -1) > 0.5); assert.equal(G.digesting(13, -1, 'lunch'), 0);
+  assert.ok(G.digesting(19.5, -1, 'lunch') > 0.5, 'dinner still comes');
+  assert.equal(G.hostState(G.createGame(3, carryWith(null, { hour: 5 }))), 'asleep');
+  assert.equal(G.hostState(G.createGame(3, carryWith('night', { hour: 5 }))), 'awake');
+  assert.equal(G.carryOf(G.createGame(3, carryWith('night'))).event, 'night', 'the event rides along from map to map');
+});

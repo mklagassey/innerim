@@ -1,6 +1,6 @@
 // The rules of the liver prototype, simulated in real time. No drawing and no browser
 // APIs in here, so the whole game can be run and tested from plain code.
-import { DIFFICULTY, Difficulty, CONFIG, UPGRADES, UpgradeId } from './config';
+import { DIFFICULTY, Difficulty, EVENTS, HostEvent, CONFIG, UPGRADES, UpgradeId } from './config';
 import * as Story from './story';
 import { generate, generateStomach, generateVessel, mulberry32, Point } from './map';
 
@@ -56,6 +56,7 @@ export interface State {
   sinceHurt: number; // seconds since the hull last took damage
   ledger: Ledger;
   difficulty: Difficulty;
+  event: HostEvent | null; // what is happening to the host this trip
   niche: Set<number>; // liver only: floor tiles tucked into the space of Disse, where innate cells cannot follow
   hiding: boolean;
   nicheTime: number; // seconds spent tucked in; past the limit the hull starts to foul
@@ -137,8 +138,8 @@ export const stewardship = (l: Ledger, excised: number) => ({
 });
 /** A lever pulled while the host is under 80% is for her; otherwise it is for you. */
 export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if (c.hostHealth < 80) l.leversForHer++; else l.leversForMe++; }
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger }, difficulty: s.difficulty });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty; event?: HostEvent | null }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger }, difficulty: s.difficulty, event: s.event });
 export const hard = (s: State) => DIFFICULTY[s.difficulty];
 /** Time passing between maps: the tumor takes its share of the host there too. */
 /** Host health the tumor costs per host hour right now: in step with how much of it is still in. */
@@ -160,11 +161,17 @@ export type HostState = 'asleep' | 'awake' | 'stressed';
 /** What the host is doing right now. A fright overrides everything, even sleep. */
 export function hostState(s: State): HostState {
   const h = CONFIG.host;
-  return s.host.surge > 0 ? 'stressed' : s.host.nap > 0 || s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil ? 'asleep' : 'awake';
+  return s.host.surge > 0 ? 'stressed' : s.host.nap > 0 || s.host.hour >= h.asleepFrom || s.host.hour < wakes(s.event) ? 'asleep' : 'awake';
 }
+/** The hour the host wakes. After a bad night she is up hours before the alarm. */
+export const wakes = (event?: HostEvent | null) => CONFIG.host.asleepUntil - (event === 'night' ? EVENTS.night.awake : 0);
+/** The meals the host will actually eat today. */
+export const mealsOf = (event?: HostEvent | null): readonly number[] => (event === 'lunch' ? CONFIG.host.meals.filter((m) => m !== EVENTS.lunch.meal) : CONFIG.host.meals);
+/** How fast blood sugar comes back under today's event, as a share of normal. */
+const sugar = (s: State) => (s.event === 'run' ? EVENTS.run.glucose : s.event === 'lunch' && s.host.hour >= EVENTS.lunch.meal - 1.5 && s.host.hour < CONFIG.host.meals[2] ? EVENTS.lunch.glucose : 1);
 
 /** How high a fever the host is running, 0 (none) to 3. */
-export const fever = (s: State) => CONFIG.host.fever.below.filter((h) => s.hostHealth < h).length;
+export const fever = (s: State) => { const f = CONFIG.host.fever.below.filter((h) => s.hostHealth < h).length; return s.event === 'cold' ? Math.max(EVENTS.cold.fever, f) : s.event === 'ibuprofen' ? Math.min(EVENTS.ibuprofen.feverCap, f) : f; };
 /** How busy the gut is with a meal: 1 as the host puts their fork down, fading to 0 over a few hours. */
 const fading = (hour: number, at: readonly number[], lasts: number) => { let most = 0; for (const t of at) { const since = (hour - t + 24) % 24; if (since < lasts) most = Math.max(most, 1 - since / lasts); } return most; };
 /** How much coffee is in the host, 1 at the last sip fading to 0. */
@@ -173,9 +180,9 @@ export const caffeine = (hour: number) => fading(hour, CONFIG.host.coffee.at, CO
 export const alcohol = (hour: number) => fading(hour, CONFIG.host.drink.at, CONFIG.host.drink.lasts);
 /** A line about the host's life outside, chosen by the clock so it is never the same twice running. */
 const outside = (s: State, lines: string[]) => lines[Math.floor(s.host.hour * 7 + s.time) % lines.length];
-export function digesting(hour: number, snack = -1): number {
+export function digesting(hour: number, snack = -1, event?: HostEvent | null): number {
   let most = 0;
-  for (const meal of snack >= 0 ? [...CONFIG.host.meals, snack] : CONFIG.host.meals) { const since = (hour - meal + 24) % 24; if (since < CONFIG.host.digestion) most = Math.max(most, 1 - since / CONFIG.host.digestion); }
+  for (const meal of snack >= 0 ? [...mealsOf(event), snack] : mealsOf(event)) { const since = (hour - meal + 24) % 24; if (since < CONFIG.host.digestion) most = Math.max(most, 1 - since / CONFIG.host.digestion); }
   return most;
 }
 /** How strong the stomach's acid is right now, from its resting trickle up to 1. */
@@ -192,7 +199,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   const s: State = {
     place,
     vessel: place === 'vessel' ? vessel : null,
-    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '', acid: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1), soon: -1, slams: 0 },
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1, carry?.event) > 0, fever: 0, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '', acid: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1, carry?.event), soon: -1, slams: 0 },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     riding: 0,
@@ -204,6 +211,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
+    event: carry?.event ?? null,
     difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
@@ -258,7 +266,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   s.host.nextSurge = lo + s.rng() * (hi - lo);
   // Antibodies drift wherever blood runs. Stomach acid takes them apart.
   if (place !== 'stomach')
-    for (let n = Math.round(s.memory * CONFIG.memory.most * (place === 'vessel' ? 0.5 : 1)), tries = 0; s.antibodies.length < n && tries < 4000; tries++) {
+    for (let n = Math.round(s.memory * CONFIG.memory.most * (place === 'vessel' ? 0.5 : 1) * (s.event === 'cold' ? EVENTS.cold.antibodies : 1)), tries = 0; s.antibodies.length < n && tries < 4000; tries++) {
       const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 9) s.antibodies.push({ x: x + 0.5, y: y + 0.5, seed: s.rng() * 100 });
     }
@@ -301,8 +309,11 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
       if (open(s, x, y) && d > 5 && d < 15) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'kin' }); n--; }
     }
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
-  m.neutrophils.forEach((p) => spawn(s, 'neutrophil', p));
+  // With a cold, some of the liver's neutrophils have been called away to the airways.
+  m.neutrophils.slice(0, Math.max(1, m.neutrophils.length + (place === 'liver' && s.event === 'cold' ? EVENTS.cold.neutrophils : 0))).forEach((p) => spawn(s, 'neutrophil', p));
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
+  if (s.event) say(s, outside(s, [...EVENTS[s.event].lines]));
+  s.host.fever = fever(s);
   look(s);
   return s;
 }
@@ -319,7 +330,7 @@ function spawn(s: State, kind: EnemyKind, tile: Point): Enemy {
 /** Notes that something audible happened. The rules never play sound themselves. */
 function emit(s: State, what: string) {
   if (s.events.length < 40) s.events.push(what);
-  const h = CONFIG.host, night = s.host.hour >= h.asleepFrom || s.host.hour < h.asleepUntil;
+  const h = CONFIG.host, night = s.host.hour >= h.asleepFrom || s.host.hour < wakes(s.event);
   const as = what === 'bigkill' ? 'kill' : what === 'surge' && night ? 'dream' : what;
   if (as in Story.GAIN && as in Story.LINES) notice(s, as);
 }
@@ -408,7 +419,8 @@ function flowAt(s: State, at: Point): Point {
 /** How hard the blood pushes: gentle in tissue, strong in an artery, and worse when the host's heart is racing. */
 export function currentStrength(s: State): number {
   const where = s.vessel ?? (s.place === 'vessel' ? 'artery' : s.place);
-  return CONFIG.host.current[where] * CONFIG.host.push[hostState(s)][where] * (where === 'stomach' ? 1 : 1 + CONFIG.host.coffee.push * caffeine(s.host.hour));
+  // Out on a run, her arteries carry blood as hard as they do in a fright, for as long as she keeps going.
+  return CONFIG.host.current[where] * CONFIG.host.push[s.event === 'run' && where === 'artery' ? 'stressed' : hostState(s)][where] * (where === 'stomach' ? 1 : 1 + CONFIG.host.coffee.push * caffeine(s.host.hour));
 }
 /** Your speed over the ground: your engine, helped or hindered by the blood. */
 function drive(s: State): number {
@@ -1053,7 +1065,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.host.nap = Math.max(0, s.host.nap - dt / h.secondsPerHour);
   if (s.host.snack >= 0 && (s.host.hour - s.host.snack + 24) % 24 >= h.digestion) s.host.snack = -1;
   if (s.host.surge > 0) s.host.surge = Math.max(0, s.host.surge - dt);
-  else if ((s.host.nextSurge -= dt * (was === 'awake' ? 1 + h.coffee.jumpy * caffeine(s.host.hour) : h.dreams)) <= 0) { // asleep, the frights are nightmares, and rarer
+  else if ((s.host.nextSurge -= dt * (s.event === 'run' ? EVENTS.run.frights : s.event === 'night' ? EVENTS.night.frights : 1) * (was === 'awake' ? 1 + h.coffee.jumpy * caffeine(s.host.hour) : h.dreams)) <= 0) { // asleep, the frights are nightmares, and rarer
     s.host.surge = h.surge.time;
     s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
   }
@@ -1064,14 +1076,14 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (s.drained >= 1) { s.drained -= 1; s.hostHealth = Math.max(0, s.hostHealth - 1); }
   }
   // Acid comes up over a little while, never all at once, and the host telegraphs a meal before it lands.
-  s.host.acid += (digesting(s.host.hour, s.host.snack) - s.host.acid) * Math.min(1, dt / CONFIG.stomach.rise);
-  const next = h.meals.find((m) => { const until = (m - s.host.hour + 24) % 24; return until > 0 && until <= CONFIG.stomach.warn; });
+  s.host.acid += (digesting(s.host.hour, s.host.snack, s.event) - s.host.acid) * Math.min(1, dt / CONFIG.stomach.rise);
+  const next = mealsOf(s.event).find((m) => { const until = (m - s.host.hour + 24) % 24; return until > 0 && until <= CONFIG.stomach.warn; });
   if (next !== undefined && s.host.soon !== next) {
     s.host.soon = next;
     if (s.place === 'stomach') say(s, 'The host is reaching for food. Acid will rise.');
     emit(s, 'mealsoon');
   }
-  const eating = digesting(s.host.hour, s.host.snack) > 0;
+  const eating = digesting(s.host.hour, s.host.snack, s.event) > 0;
   if (eating && !s.host.eating) {
     say(s, `${outside(s, s.host.hour < 10 ? ['Breakfast: toast, eaten standing up.', 'Breakfast, and the news.', 'Cereal, straight from the box.'] : s.host.hour < 16 ? ['Lunch at the desk again.', 'A sandwich in the car.', 'Lunch with someone who talks a lot.'] : ['Dinner. Seconds.', 'Takeaway on the sofa.', 'Dinner, late, and too much of it.'])} ${s.place === 'stomach' ? 'The stomach floods with acid.' : 'Sugar will be pouring into the blood for a while.'}`);
     emit(s, 'meal');
@@ -1085,7 +1097,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.host.habit = habit;
   }
   // Sleep is when the host mends.
-  if (was === 'asleep' && s.hostHealth < h.maxHealth && (s.host.mend += dt * hard(s).healing) >= h.sleepHeals) { s.host.mend = 0; s.hostHealth++; }
+  if (was === 'asleep' && s.hostHealth < h.maxHealth && (s.host.mend += dt * hard(s).healing * (s.event === 'ibuprofen' ? EVENTS.ibuprofen.sleep : 1)) >= h.sleepHeals) { s.host.mend = 0; s.hostHealth++; }
   if (fever(s) !== s.host.fever) {
     say(s, fever(s) > s.host.fever ? `The host's temperature is climbing: ${h.fever.degrees[fever(s)]}\u00b0. Immune cells quicken.` : fever(s) ? 'The fever eases a little.' : 'The fever breaks.');
     if (fever(s) > s.host.fever) emit(s, 'fever');
@@ -1138,7 +1150,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     p.hp -= lost; s.sizzle += lost; s.sinceHurt = 0; s.acidTime += dt;
     if (s.sizzle >= 1) { float(s, p, `-${Math.floor(s.sizzle)}`, '#c8f05a'); s.sizzle -= Math.floor(s.sizzle); p.hurt = 0.2; emit(s, 'burn'); }
     if (hard(s).autoPatch && p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
-    if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, digesting(s.host.hour, s.host.snack) > 0.4 ? `${s.host.hour < 10 ? 'Breakfast' : s.host.hour < 16 ? 'Lunch' : 'Dinner'}. The acid rose while you were in it.` : 'The acid eats through the hull.'); return; }
+    if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, digesting(s.host.hour, s.host.snack, s.event) > 0.4 ? `${s.host.hour < 10 ? 'Breakfast' : s.host.hour < 16 ? 'Lunch' : 'Dinner'}. The acid rose while you were in it.` : 'The acid eats through the hull.'); return; }
   }
 
   for (const item of [...s.pickups]) {
@@ -1240,10 +1252,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (s.alert <= 0) s.search = null;
   }
   if (inSearch(s)) s.zoneTime += dt;
-  else if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
+  else if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * (s.event === 'ibuprofen' ? EVENTS.ibuprofen.calm : 1) * dt);
 
   const en = CONFIG.energy;
-  s.regen += dt * CONFIG.host.glucose[hostState(s)] * (1 + CONFIG.host.fedGlucose * digesting(s.host.hour, s.host.snack));
+  s.regen += dt * sugar(s) * CONFIG.host.glucose[hostState(s)] * (1 + CONFIG.host.fedGlucose * digesting(s.host.hour, s.host.snack, s.event));
   if (s.regen >= en.patchRegen) {
     s.regen = 0;
     for (const [k, v] of s.glucose) if (v < en.patchMax) s.glucose.set(k, v + 1);

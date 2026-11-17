@@ -6,6 +6,30 @@ export const DIFFICULTY = {
   vigilant: { name: 'Vigilant', what: 'Her immune system is quick, thorough and unforgiving. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false },
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;
+/** Something ordinary that happens to the host and lasts a whole trip. Real physiology only; the words are the creative director's (docs/host-events.md). */
+export const EVENTS = {
+  cold: { name: 'A cold', icon: '\u2744\uFE0E', neutrophils: -3, antibodies: 1.5, fever: 1,
+    brief: 'Fewer neutrophils in the liver, more antibodies, and a mild fever all trip.',
+    world: 'A cold has been going round the office, and now she has it. Her immune system is busy in her nose and throat. Antibodies are up, and so is her temperature.',
+    lines: ['Tissues, tea, and a sore throat. Her neutrophils have been pulled toward her airways.', 'She is running warm. Every immune cell here is a little faster for it.', 'A sneeze shakes the whole vessel. Antibodies drift thicker in the current.'] },
+  ibuprofen: { name: 'Ibuprofen', icon: '\u2695\uFE0E', feverCap: 1, calm: 1.5, sleep: 0.8,
+    brief: 'Fever stays low and the alarm fades faster, but sleep mends her less.',
+    world: 'She took two ibuprofen with breakfast. Prostaglandins are blocked: less fever and less inflammation, and the alarm fades faster. Her sleep will mend a little less tonight.',
+    lines: ['The ibuprofen is working. The inflammatory signals are faint and slow to spread.', 'Whatever ache she took it for has dulled. The immune alarm dulls with it.'] },
+  run: { name: 'A run', icon: '\u2661\uFE0E', glucose: 0.6, frights: 0.5,
+    brief: 'Arteries run fast all trip, sugar comes back slowly, and frights are rare.',
+    world: 'She has laced up her trainers for the first time in weeks. Blood is pouring toward her muscles, the arteries run fast, and her muscles are burning the sugar in her blood.',
+    lines: ['Her feet are hitting the pavement. You can feel each stride in the current.', 'Her muscles are taking the sugar. There is less of it left for you.', 'She has found a rhythm. Her heart is fast but steady. Nothing frightens her much at this pace.'] },
+  lunch: { name: 'Skipped lunch', icon: '\u2205\uFE0E', meal: 12.5, glucose: 0.7,
+    brief: 'No lunch: stomach acid stays low and sugar is thin until dinner.',
+    world: 'A meeting ran over, and lunch is not happening today. The stomach will stay quiet and the blood sugar will stay low until dinner.',
+    lines: ['It is past one. No lunch is coming. Glucose is thin in the blood.', 'Her stomach growls, empty. The acid stays low.', 'She is getting by on coffee and willpower. The liver is releasing its own stores to keep her going.'] },
+  night: { name: 'A bad night', icon: '\u263D\uFE0E', awake: 3, frights: 1.5,
+    brief: 'She sleeps three hours less, and frights come more often.',
+    world: 'She barely slept. The dog was restless, then she was. Her cortisol is up, she will sleep less tonight, and small things will startle her.',
+    lines: ['She is tired in the way that makes everything too loud. Her heart jumps at little things.', 'It is three in the morning and she is staring at the ceiling. The night\'s repair work will be short.', 'She is yawning at her desk. Stress hormones are holding her together.'] },
+} as const;
+export type HostEvent = keyof typeof EVENTS;
 export const CONFIG = {
   map: { size: 84, channels: 56, pull: 0.57, pools: 0.07, portalRing: 34, glucosePatches: 12, kupffer: 5, neutrophils: 8 },
   player: {
@@ -137,7 +161,7 @@ export const CONFIG = {
     first: { quiet: 3, times: 3 }, // a strike on a cell that has had no trace of you for this long
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
-  tumor: { cells: 9, goal: 20, gain: 1, heal: 0, alert: 2, time: 1.4, drain: 2 }, // drain: host health lost per host hour with the whole tumor in; it falls in step with what is left
+  tumor: { cells: 10, goal: 20, gain: 1, heal: 0, alert: 2, time: 1.4, drain: 2 }, // drain: host health lost per host hour with the whole tumor in; it falls in step with what is left
   // The gut lumen: glucose released here is fermented by the flora, and the unit collects the products. Costs are in energy.
   lung: { macrophages: 2 },
   // Boarding: climb inside a wounded neutrophil and wear it.

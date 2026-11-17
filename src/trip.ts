@@ -3,7 +3,7 @@
 // road back. No DOM here: main.ts draws this and plays the local maps it asks for.
 import { Carry } from './game';
 import { mulberry32 } from './map';
-import { CONFIG } from './config';
+import { CONFIG, EVENTS, HostEvent } from './config';
 
 const TUMOR_GOAL = CONFIG.tumor.goal;
 
@@ -26,7 +26,7 @@ export const NODES: Record<NodeId, Node> = {
 };
 
 /** One vessel between two places. `risk` is the chance a patrol is working it. */
-export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number } // after: only once this many tumor cells are out
+export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number; via?: NodeId } // via: passes through this place without stopping // after: only once this many tumor cells are out
 export const LEGS: Leg[] = [
   { from: 'heart', to: 'hepatic', risk: 0.8 },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
@@ -38,6 +38,7 @@ export const LEGS: Leg[] = [
   { from: 'hepatic', to: 'liver', risk: 0 },
   { from: 'portal', to: 'liver', risk: 0 },
   { from: 'liver', to: 'hvein', risk: 0 }, // travelled by playing the liver and leaving by its central vein
+  { from: 'hvein', to: 'heart', risk: 0.3, via: 'cava' }, // straight home: one roll, at the worse of the two risks
   { from: 'hvein', to: 'cava', risk: 0.3 },
   { from: 'cava', to: 'heart', risk: 0.2 },
   { from: 'heart', to: 'lungs', risk: 0, after: TUMOR_GOAL }, // travelled by playing the lung and being breathed out
@@ -50,10 +51,12 @@ export interface Trip {
   heat: number; // 0 to 1: how stirred up you left the immune system; it follows you down the veins
   carry: Carry | null; // null until the first local map has been played
   tripsDone: number;
+  event: HostEvent | null; // what is happening to the host on this trip
+  used: HostEvent[]; // no event comes round twice in a game
   rng: () => number;
 }
 
-export const newTrip = (seed = Date.now()): Trip => ({ at: 'heart', trip: 1, fed: false, heat: 0, carry: null, tripsDone: 0, rng: mulberry32(seed) });
+export const newTrip = (seed = Date.now()): Trip => ({ at: 'heart', trip: 1, fed: false, heat: 0, carry: null, tripsDone: 0, event: null, used: [], rng: mulberry32(seed) });
 
 /** The chance of a patrol on a leg right now. An alarm you raised in the liver makes the way home worse. */
 export const riskOf = (t: Trip, leg: Leg) => (leg.risk === 0 ? 0 : Math.min(0.95, leg.risk + t.heat * 0.5));
@@ -86,6 +89,14 @@ export function arrive(t: Trip, to: NodeId, carry: Carry | null, alert = 0): boo
   if (carry) t.carry = carry;
   if (from === 'liver') { t.fed = true; t.heat = Math.max(0, Math.min(1, alert / 100)); }
   else t.heat *= 0.5; // the fuss dies down with distance
-  if (to === 'heart' && t.fed) { t.fed = false; t.heat = 0; t.tripsDone++; t.trip++; return true; }
+  if (to === 'heart' && t.fed) {
+    t.fed = false; t.heat = 0; t.tripsDone++; t.trip++;
+    // The first trip is plain, to learn the rules. Every one after it finds the host having a different sort of day.
+    const left = (Object.keys(EVENTS) as HostEvent[]).filter((e) => !(t.used ??= []).includes(e));
+    t.event = left.length ? left[Math.floor(t.rng() * left.length)] : null;
+    if (t.event) t.used.push(t.event);
+    if (t.carry) t.carry.event = t.event;
+    return true;
+  }
   return false;
 }

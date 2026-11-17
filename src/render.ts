@@ -237,7 +237,7 @@ function sway(s: State, v: View, x: number, y: number): Sway {
   sx += amp * k; sy += amp * k * 0.8;
   if (s.place === 'stomach') {
     // Peristalsis: rings of muscle tightening one after another, harder when there is a meal to work on.
-    const fed = digesting(s.host.hour, s.host.snack), g = 0.3 + 0.7 * fed;
+    const fed = digesting(s.host.hour, s.host.snack, s.event), g = 0.3 + 0.7 * fed;
     const w = Math.max(0, Math.sin(x * 0.5 + y * 0.35 - t * (0.8 + 0.6 * fed))), squeeze = w * w * g;
     const mid = s.size / 2, to = project(mid - x, mid - y), len = Math.hypot(to.x, to.y) || 1;
     dx += (to.x / len) * 5 * squeeze; dy += (to.y / len) * 5 * squeeze;
@@ -257,7 +257,7 @@ let lakeFor: unknown = null, lake: Point[] = [];
 export function food(s: State): Lump[] {
   if (s.place !== 'stomach' || !s.acid) return [];
   if (lakeFor !== s.acid) { lakeFor = s.acid; lake = []; for (let i = 0; i < s.acid.length; i++) if (s.acid[i] === 2) lake.push({ x: i % s.size, y: Math.floor(i / s.size) }); }
-  const fed = digesting(s.host.hour, s.host.snack), out: Lump[] = [];
+  const fed = digesting(s.host.hour, s.host.snack, s.event), out: Lump[] = [];
   if (!lake.length || fed <= 0) return out;
   for (let k = 0; k < Math.ceil(fed * 26); k++) {
     const life = 15 + (k % 5) * 2.5, at = s.time + k * 4.3, round = Math.floor(at / life), ph = (at % life) / life;

@@ -12,9 +12,9 @@ const DT = 1 / 20, CAP = 420; // seconds a bot may spend in one map before it co
 const RUNS = Number(process.argv[2] ?? 60), TRIPS = Number(process.argv[3] ?? 1), ONLY = process.argv[4] as Bot | undefined;
 
 const ROUTES: Record<string, T.NodeId[]> = {
-  hepatic: ['hepatic', 'liver', 'hvein', 'cava', 'heart'],
-  mesenteric: ['mesenteric', 'gut', 'portal', 'liver', 'hvein', 'cava', 'heart'],
-  gastric: ['gastric', 'stomach', 'portal', 'liver', 'hvein', 'cava', 'heart'],
+  hepatic: ['hepatic', 'liver', 'hvein', 'heart'],
+  mesenteric: ['mesenteric', 'gut', 'portal', 'liver', 'hvein', 'heart'],
+  gastric: ['gastric', 'stomach', 'portal', 'liver', 'hvein', 'heart'],
 };
 
 const freshCarry = (): G.Carry => ({ hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: 0, kin: 0 });

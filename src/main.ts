@@ -1,5 +1,5 @@
 // Input, the game loop and the heads-up display. All rules live in game.ts.
-import { CONFIG, DIFFICULTY, Difficulty, UPGRADES, UpgradeId } from './config';
+import { CONFIG, DIFFICULTY, Difficulty, EVENTS, HostEvent, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
 import { breath, draw, nearestBloodCell, project, setSpin, TH, TW, unturn, View } from './render';
 import * as Tips from './tips';
@@ -240,8 +240,8 @@ $('tips-reset').hidden = Tips.mutedCount() === 0;
 const SAVE = 'insiderim.trip';
 function saveTrip() {
   try {
-    const { at, trip: n, fed, heat, carry, tripsDone } = trip;
-    if (carry) localStorage.setItem(SAVE, JSON.stringify({ at, trip: n, fed, heat, carry, tripsDone }));
+    const { at, trip: n, fed, heat, carry, tripsDone, event, used } = trip;
+    if (carry) localStorage.setItem(SAVE, JSON.stringify({ at, trip: n, fed, heat, carry, tripsDone, event, used }));
   } catch { /* private window: nothing is kept */ }
 }
 function forgetTrip() { try { localStorage.removeItem(SAVE); } catch { /* nothing stored */ } }
@@ -249,7 +249,7 @@ function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}) }, difficulty: d.carry.difficulty ?? 'typical' } };
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}) }, difficulty: d.carry.difficulty ?? 'typical', event: d.event && d.event in EVENTS ? d.event : null }, event: d.event && d.event in EVENTS ? d.event : null, used: Array.isArray(d.used) ? d.used : [] };
   } catch { return null; }
 }
 const kept = savedTrip();
@@ -274,7 +274,9 @@ function openWorld(title: string, text: string) {
   $('world-goal').textContent = out >= CONFIG.tumor.goal
     ? `The tumor is out. To finish, go to the Heart and take the new road to the Lungs${Story.stageOf(c?.aware ?? 0) >= 3 ? ', or refuse the recall there and stay' : ''}.`
     : `Mission: cut out the tumor in the liver. ${out} of ${CONFIG.tumor.goal} cells are out, so about ${visits} more liver visit${visits === 1 ? '' : 's'}. When it is all out, a road opens from the Heart to the Lungs and you can leave. The mission fails if the ship is destroyed or the host's health reaches zero.`;
-  $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1);
+  $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1, trip.event);
+  $('world-event').hidden = !trip.event;
+  $('world-event').textContent = trip.event ? `Today: ${EVENTS[trip.event].name.toLowerCase()}. ${EVENTS[trip.event].world}` : '';
   $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised${c.excised < CONFIG.tumor.goal ? `, costing the host ${Math.round(G.tumorDrain(c.excised) * 10) / 10}% an hour` : ''}` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
@@ -286,7 +288,7 @@ function openWorld(title: string, text: string) {
   map.replaceChildren();
   for (const leg of T.LEGS) {
     const a = T.NODES[leg.from], b = T.NODES[leg.to], locked = leg.after !== undefined && (c?.excised ?? 0) < leg.after, open = leg.from === trip.at && !locked;
-    if (locked) continue; // the road to the lungs is not on the map until the tumor is out
+    if (locked || leg.via) continue; // the road to the lungs is not on the map until the tumor is out; a straight-through road is drawn by the legs it follows
     // Stop short of each place so the arrowhead shows which way the blood runs.
     const d = Math.hypot(b.x - a.x, b.y - a.y), ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
     const x1 = a.x + ux * 30, y1 = a.y + uy * 30, x2 = b.x - ux * 40, y2 = b.y - uy * 40;
@@ -295,9 +297,9 @@ function openWorld(title: string, text: string) {
     map.append(el('path', { class: `tip${open ? ' open' : ''}`, d: `M${x2 + ux * 12} ${y2 + uy * 12} L${x2 - uy * 8} ${y2 + ux * 8} L${x2 + uy * 8} ${y2 - ux * 8} Z` }));
   }
   for (const [id, n] of Object.entries(T.NODES) as [T.NodeId, T.Node][]) {
-    const way = ways.find((l) => l.to === id), isHere = id === trip.at, enter = isHere && n.kind === 'organ';
+    const way = ways.find((l) => l.to === id && !l.via) ?? ways.find((l) => l.to === id), isHere = id === trip.at, enter = isHere && n.kind === 'organ';
     const g = el('g', { class: `place${isHere ? ' here' : ''}${way || enter ? ' go' : ''}` });
-    if (way || enter) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.dataset.to = enter ? ways[0].to : id; }
+    if (way || enter) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.dataset.to = enter ? ways.find((l) => !l.via)!.to : id; }
     const big = n.kind !== 'artery' && n.kind !== 'vein';
     g.classList.add(`is-${id}`);
     g.append(el('circle', { cx: n.x, cy: n.y, r: big ? 26 : 20 }));
@@ -308,7 +310,7 @@ function openWorld(title: string, text: string) {
   $('world-ways').replaceChildren(...ways.map((leg) => {
     const b = document.createElement('button'), word = T.riskWord(T.riskOf(trip, leg));
     b.type = 'button'; b.dataset.to = leg.to;
-    b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
+    b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : leg.via ? `Straight home to the ${T.NODES[leg.to].name.toLowerCase()}${word ? ` (${word})` : ''}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
     return b;
   }));
   // Time is yours to spend: sit tight and let the host's day move on.
@@ -318,10 +320,10 @@ function openWorld(title: string, text: string) {
   wait.disabled = (c?.energy ?? CONFIG.player.startEnergy) < CONFIG.wait.energy;
   wait.addEventListener('click', () => {
     const k = (trip.carry ??= freshCarry()), h = CONFIG.host;
-    const slept = k.nap > 0 || k.hour >= h.asleepFrom || k.hour < h.asleepUntil;
+    const slept = k.nap > 0 || k.hour >= h.asleepFrom || k.hour < G.wakes(trip.event);
     k.energy -= CONFIG.wait.energy;
     k.hour = (k.hour + 1) % 24; k.nap = Math.max(0, k.nap - 1);
-    if (slept) k.hostHealth = Math.min(h.maxHealth, k.hostHealth + Math.round(h.secondsPerHour / h.sleepHeals));
+    if (slept) k.hostHealth = Math.min(h.maxHealth, k.hostHealth + Math.round((h.secondsPerHour / h.sleepHeals) * (trip.event === 'ibuprofen' ? EVENTS.ibuprofen.sleep : 1)));
     G.tumorToll(k, 1); // the tumor does not wait with you
     openWorld(here.name, slept ? 'You drift for an hour while the host sleeps and mends.' : 'You drift for an hour.');
   });
@@ -380,13 +382,13 @@ function market() {
 }
 
 /** What the host is up to and what is coming, so a trip can be timed. */
-function forecast(hour: number, nap = 0, snack = -1): string {
-  const h = CONFIG.host, asleep = hour >= h.asleepFrom || hour < h.asleepUntil, fed = G.digesting(hour, snack);
+function forecast(hour: number, nap = 0, snack = -1, event: HostEvent | null = null): string {
+  const h = CONFIG.host, asleep = hour >= h.asleepFrom || hour < G.wakes(event), fed = G.digesting(hour, snack, event);
   if (nap > 0 && !asleep) return `${clock(hour)}. The host is napping for another ${nap <= 1 ? 'hour' : `${Math.ceil(nap)} hours`}: slow blood, sharp noses, and she is mending.`;
   const habit = G.alcohol(hour) > 0 ? ' She has had a drink: sluggish immune cells, a swaying ship, a busy liver.' : G.caffeine(hour) > 0 ? ' She is full of coffee: fast blood and frequent frights.' : '';
   const until = (meal: number) => ((meal - hour + 24) % 24) || 24;
-  const next = [...h.meals].sort((a, b) => until(a) - until(b))[0];
-  const state = asleep ? `The host is asleep until ${clock(h.asleepUntil)}: slow blood, sharp noses, and she is mending.` : `The host is awake until ${clock(h.asleepFrom)}.`;
+  const next = [...G.mealsOf(event)].sort((a, b) => until(a) - until(b))[0];
+  const state = asleep ? `The host is asleep until ${clock(G.wakes(event))}: slow blood, sharp noses, and she is mending.` : `The host is awake until ${clock(h.asleepFrom)}.`;
   const gut = fed > 0.5 ? 'She has just eaten: sugar is plentiful and stomach acid is at its worst.' : fed > 0 ? 'She is still digesting: extra sugar, strong acid.' : 'Her stomach is empty: acid is weak, sugar is ordinary.';
   return `${clock(hour)}. ${state} ${gut}${habit} Next meal ${clock(next)}. Coffee at 08:00 and 15:00, a drink at 20:30.`;
 }
@@ -394,9 +396,10 @@ function forecast(hour: number, nap = 0, snack = -1): string {
 /** Sets out for a place: straight there, or by way of whatever is in between. */
 function go(to: T.NodeId) {
   if (to === 'lungs' && Scenes.sceneFor('lungs') && !seenScenes().includes('lungs')) { playScene('lungs', () => go(to)); return; }
+  const straight = !!T.ways(trip).find((l) => l.to === to)?.via;
   const out = T.depart(trip, to);
   if (!out) return;
-  if (out.kind === 'arrive') { if (trip.carry) { trip.carry.hour = (trip.carry.hour + CONFIG.wait.legHours) % 24; G.tumorToll(trip.carry, CONFIG.wait.legHours); } land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. The immune system is quiet here.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
+  if (out.kind === 'arrive') { if (trip.carry) { const hours = CONFIG.wait.legHours * (straight ? 2 : 1); trip.carry.hour = (trip.carry.hour + hours) % 24; G.tumorToll(trip.carry, hours); } land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. The immune system is quiet here.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour, trip.carry?.snack ?? -1, trip.event) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
   dest = to;
   const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
   s = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'patrol' ? 'vessel' : out.kind, out.kind === 'patrol' ? out.size : 0, vessel);
@@ -523,7 +526,7 @@ function hud() {
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
   const mood = G.hostState(s);
-  set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${s.host.habit ? ` \u00b7 ${s.host.habit === 'drink' ? 'tipsy' : 'caffeinated'}` : ''}${s.place === 'lung' ? (G.breathingOut(s) ? ' \u00b7 breathing out' : ' \u00b7 breathing in') : G.digesting(s.host.hour, s.host.snack) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
+  set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${s.host.habit ? ` \u00b7 ${s.host.habit === 'drink' ? 'tipsy' : 'caffeinated'}` : ''}${s.place === 'lung' ? (G.breathingOut(s) ? ' \u00b7 breathing out' : ' \u00b7 breathing in') : G.digesting(s.host.hour, s.host.snack, s.event) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
@@ -626,23 +629,26 @@ function hud() {
 
 // ---------- the host's next two hours ----------
 // A strip under the gauges: what the host is about to do slides in from the right toward "now" on the left.
-interface Ahead { id: string; at: number; icon: string; what: string }
+interface Ahead { id: string; at: number; icon: string; what: string; held?: boolean }
 const RIBBON_HOURS = 2;
-function ahead(hour: number, nap: number): Ahead[] {
+function ahead(hour: number, nap: number, event: HostEvent | null = null): Ahead[] {
   const h = CONFIG.host, name = (m: number) => (m < 10 ? 'Breakfast' : m < 16 ? 'Lunch' : 'Dinner');
   const all: Ahead[] = [
-    ...h.meals.map((m) => ({ id: `meal${m}`, at: m, icon: '\u{1F374}\uFE0E', what: `${name(m)} at ${clock(m)}: sugar refills faster, and stomach acid rises over ${CONFIG.stomach.rise} seconds.` })),
+    ...G.mealsOf(event).map((m) => ({ id: `meal${m}`, at: m, icon: '\u{1F374}\uFE0E', what: `${name(m)} at ${clock(m)}: sugar refills faster, and stomach acid rises over ${CONFIG.stomach.rise} seconds.` })),
     ...h.coffee.at.map((m) => ({ id: `coffee${m}`, at: m, icon: '\u2615\uFE0E', what: `Coffee at ${clock(m)}: faster blood everywhere, and frights come more often.` })),
     ...h.drink.at.map((m) => ({ id: `drink${m}`, at: m, icon: '\u{1F377}\uFE0E', what: `A drink at ${clock(m)}: sluggish immune cells, a swaying ship, and liver cells cost the host double.` })),
     { id: 'sleep', at: h.asleepFrom, icon: '\u263E', what: `Asleep at ${clock(h.asleepFrom)}: slow blood, sharp noses, less sugar, and the host mends.` },
-    { id: 'wake', at: h.asleepUntil, icon: '\u2600\uFE0E', what: `Awake at ${clock(h.asleepUntil)}: the blood picks up and noses dull.` },
+    { id: 'wake', at: G.wakes(event), icon: '\u2600\uFE0E', what: `Awake at ${clock(G.wakes(event))}: the blood picks up and noses dull.` },
   ];
   if (nap > 0 && nap < RIBBON_HOURS) all.push({ id: 'napend', at: (hour + nap) % 24, icon: '\u2600\uFE0E', what: 'The nap ends: back to waking blood.' });
-  return all.map((e) => ({ ...e, at: (e.at - hour + 24) % 24 })).filter((e) => e.at > 0 && e.at <= RIBBON_HOURS);
+  const soon = all.map((e) => ({ ...e, at: (e.at - hour + 24) % 24 })).filter((e) => e.at > 0 && e.at <= RIBBON_HOURS);
+  // Today's event is not coming, it is here: it sits at the far end of the strip for the whole trip.
+  if (event) soon.push({ id: `event-${event}`, at: RIBBON_HOURS, icon: EVENTS[event].icon, what: `${EVENTS[event].name}, all trip. ${EVENTS[event].brief}`, held: true });
+  return soon;
 }
 let ribbonNote = 0;
 function ribbon() {
-  const box = $('ribbon'), list = ahead(s.host.hour, s.host.nap), have = new Map([...box.querySelectorAll('button')].map((b) => [b.dataset.id!, b]));
+  const box = $('ribbon'), list = ahead(s.host.hour, s.host.nap, s.event), have = new Map([...box.querySelectorAll('button')].map((b) => [b.dataset.id!, b]));
   for (const e of list) {
     let b = have.get(e.id);
     if (!b) {
@@ -652,9 +658,9 @@ function ribbon() {
       requestAnimationFrame(() => { b!.style.opacity = '1'; });
     }
     const secs = Math.round(e.at * CONFIG.host.secondsPerHour);
-    b.title = `${e.what} In about ${secs} seconds.`; b.setAttribute('aria-label', b.title);
+    b.title = e.held ? e.what : `${e.what} In about ${secs} seconds.`; b.setAttribute('aria-label', b.title);
     b.style.left = `${(e.at / RIBBON_HOURS) * 100}%`;
-    b.classList.toggle('near', e.at < 0.34);
+    b.classList.toggle('near', e.at < 0.34); b.classList.toggle('held', !!e.held);
     have.delete(e.id);
   }
   for (const b of have.values()) b.remove();
@@ -706,7 +712,7 @@ function frame(now: number) {
   Sound.pulse(started && s.status === 'playing' && !tip && !paused ? bpm : 0, s.player.hp / G.maxHp(s), heat);
   aimPointer();
   const live = started && s.status === 'playing' && !tip && !paused;
-  Sound.scene(s.place === 'vessel' ? (s.vessel ?? 'artery') : s.place, breath(s), G.digesting(s.host.hour, s.host.snack), live);
+  Sound.scene(s.place === 'vessel' ? (s.vessel ?? 'artery') : s.place, breath(s), G.digesting(s.host.hour, s.host.snack, s.event), live);
   view.heat = live ? Sound.intensity() : 0;
   // The picture keeps the host's pulse even where the sound cannot start.
   const heard = live ? Sound.thump() : 0;
