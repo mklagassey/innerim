@@ -19,6 +19,12 @@ export interface Kit {
   hands?: (st: Stage) => void;
   /** Leash sway (the dog nudging it). */
   sway?: number;
+  /** A note added to the fridge (the echo variants): her GP's handwriting, or a line printed from the trial portal. */
+  note?: 'lfts' | 'reserve';
+  /** The fridge door open (0..1): its cold light falls on her. */
+  open?: number;
+  /** A tub of antacids on the counter. */
+  tub?: boolean;
 }
 
 const PAL = {
@@ -101,6 +107,18 @@ export function kitchen(st: Stage, k: Kit) {
     c.fillStyle = rgba('#000', 0.35); c.fillRect(690, 150, 140, 2); c.fillRect(816, 90, 4, 40); c.fillRect(816, 170, 4, 60);
     // what is on the fridge
     fridgeFront(c, k, night ? 0.7 : 0.55, P.key, false);
+    if ((k.open ?? 0) > 0) {
+      // open: the inside lit cold white, shelves and jars; the door swung toward us on its right hinge
+      const o = k.open!;
+      const ig = c.createLinearGradient(0, 68, 0, 330); ig.addColorStop(0, '#f2f8ff'); ig.addColorStop(1, '#a8b8c8');
+      c.globalAlpha = o; c.fillStyle = ig; c.fillRect(696, 70, 128, 258);
+      c.fillStyle = rgba('#5a6a7a', 0.6); for (const y of [130, 190, 250]) c.fillRect(696, y, 128, 3);
+      for (let i = 0; i < 9; i++) { c.fillStyle = mixHex('#c87a4a', '#4a7a5a', hash(i)); c.fillRect(704 + (i % 3) * 40 + hash(i + 2) * 10, [108, 168, 228][Math.floor(i / 3)] - hash(i + 4) * 10, 16 + hash(i) * 8, 22 + hash(i + 1) * 10); }
+      c.globalAlpha = 1;
+      const dx = 64 * o;
+      c.fillStyle = mixHex('#c8c0b4', P.dark, night ? 0.8 : 0.5); c.beginPath(); c.moveTo(830, 64); c.lineTo(830 + dx, 52); c.lineTo(830 + dx, 346); c.lineTo(830, 334); c.closePath(); c.fill();
+      c.fillStyle = rgba('#e8f0f8', 0.35 * o); c.beginPath(); c.moveTo(832, 70); c.lineTo(830 + dx * 0.9, 62); c.lineTo(830 + dx * 0.9, 336); c.lineTo(832, 328); c.closePath(); c.fill();
+    }
     // the door to the hall and the leash hook beside it
     c.fillStyle = mixHex(P.wall, '#000', 0.45); c.fillRect(880, 40, 110, 300);
     c.fillStyle = mixHex(P.wall, '#000', 0.25); c.fillRect(872, 34, 8, 306); c.fillRect(990, 34, 8, 306);
@@ -142,6 +160,12 @@ export function kitchen(st: Stage, k: Kit) {
       c.strokeStyle = mixHex('#8a8a8a', '#000', 0.4); c.lineWidth = 1.5;
       for (let i = 0; i < 6; i++) { c.beginPath(); c.moveTo(600 + i * 8, 204); c.lineTo(600 + i * 8, 186); c.stroke(); }
       c.beginPath(); c.moveTo(596, 204); c.lineTo(650, 204); c.stroke();
+    }
+    if (k.tub) {
+      // a white plastic tub of chewable antacids, its lid beside it
+      c.fillStyle = mixHex('#f0f0ec', P.dark, night ? 0.55 : 0.2); c.beginPath(); c.roundRect(160, 186, 22, 22, 3); c.fill();
+      c.fillStyle = mixHex('#3a7ac8', P.dark, night ? 0.5 : 0.15); c.fillRect(160, 194, 22, 6);
+      c.fillStyle = mixHex('#e8e8e4', P.dark, night ? 0.55 : 0.2); c.beginPath(); c.ellipse(196, 206, 12, 3, 0, 0, Math.PI * 2); c.fill();
     }
     if (k.pills) for (let i = 0; i < 4; i++) {
       c.fillStyle = mixHex(['#c87a2a', '#e8e0d0', '#c87a2a', '#d8d0c0'][i], '#000', 0.3);
@@ -185,9 +209,13 @@ export function kitchen(st: Stage, k: Kit) {
     st.layer(dp.y > 360 ? 1.05 : 0.9, (c) => { if (muzzle) { c.fillStyle = rgba('#8a8580', night ? 0.12 : 0.18); muzzle(c); } });
   }
   // ---- her ----
+  if ((k.open ?? 0) > 0) st.layer(1, (c) => {
+    const g = c.createRadialGradient(760, 220, 20, 720, 300, 420); g.addColorStop(0, rgba('#dfeeff', 0.32 * k.open!)); g.addColorStop(1, rgba('#dfeeff', 0));
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = g; c.fillRect(300, 0, 700, 460); c.globalCompositeOperation = 'source-over';
+  });
   if (k.her) {
-    const hp = k.her;
-    st.lit(1, (c) => woman(c, hp), { body: k.herDark ?? P.dark, rim: 1, width: 2.2, fill: 0.35, cool: P.fill, at: [hp.x, hp.y - hp.s * 0.55, hp.s] });
+    const hp = k.her, fl = (k.open ?? 0) > 0.5 ? { x: 760, y: 200, color: '#e8f4ff' } : undefined; // the fridge's light, when it is open, is the one on her
+    st.lit(1, (c) => woman(c, hp), { body: k.herDark ?? P.dark, rim: 1, width: 2.2, fill: fl ? 0.6 : 0.35, cool: P.fill, light: fl, at: [hp.x, hp.y - hp.s * 0.55, hp.s] });
   }
   if (k.hands) k.hands(st);
 }
@@ -197,6 +225,17 @@ export function fridgeFront(c: C, k: Kit, dark: number, key: string, readable: b
   if (k.letter !== false) { paper(c, 726, 120, 34, 46, -0.05, { light: key, dark, lines: readable ? 0 : 6, fold: true }); magnet(c, 726, 100, 4, '#a8382c', dark); }
   if (k.brochure !== false) { brochure(c, 776, 122, 32, 44, 0.03, { light: key, dark, words: readable }); magnet(c, 776, 102, 3.5, '#3a6a8a', dark); }
   if (k.gen4) { brochure(c, 760, 196, 30, 42, -0.04, { light: key, dark, gen: 4, words: readable }); magnet(c, 760, 177, 3.5, '#e0e0e0', dark); }
+  if (k.note) {
+    // a small sheet held by a magnet, low on the door
+    c.save(); c.translate(726, 178); c.rotate(k.note === 'lfts' ? -0.06 : 0.04);
+    c.fillStyle = mixHex(k.note === 'lfts' ? '#f6f0dc' : '#f4f4f2', '#000', dark); c.fillRect(-15, -11, 30, 22);
+    if (readable) {
+      c.fillStyle = mixHex(k.note === 'lfts' ? '#1e2a5a' : '#202020', '#000', dark * 0.5);
+      if (k.note === 'lfts') { c.font = 'italic 3.1px "Caveat", "Segoe Script", "Bradley Hand", cursive'; c.fillText('LFTs fine.', -12, -4); c.fillText('See you in 3 months.', -12, 0.5); c.fillText('- Dr A.', -12, 6); }
+      else { c.font = '500 2.4px "IBM Plex Mono", monospace'; c.fillText('TITHONUS PORTAL', -12, -6); c.fillText('Hepatic reserve: 82%', -12, -1); c.fillStyle = mixHex('#3c7d92', '#000', dark); c.fillRect(-12, 3, 18, 1.2); }
+    } else { c.fillStyle = rgba('#000', 0.3); c.fillRect(-11, -5, 20, 1.5); c.fillRect(-11, -1, 16, 1.5); }
+    c.restore(); magnet(c, 726, 167, 3, k.note === 'lfts' ? '#3a8a4a' : '#c0c0c0', dark);
+  }
   if (k.card) {
     c.save(); c.translate(722, 192); c.rotate(0.06);
     c.fillStyle = mixHex('#f4f4f0', '#000', dark); c.fillRect(-14, -9, 28, 18);

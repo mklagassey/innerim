@@ -304,7 +304,7 @@ export function dog(c: C, o: DogPose) {
         blob(g, [[-0.04, -0.1], [-0.2, -0.13], [-0.16, -0.06]], true, 0.4); g.fill();
       } else {
         // one ear up and soft at the tip, one folded over
-        blob(g, [[-0.07, -0.08], [-0.06, -0.24], [-0.02, -0.25], [0.03, -0.1]], true, 0.35); g.fill();
+        blob(g, [[-0.08, -0.08], [-0.075, -0.17], [-0.04, -0.205], [0.0, -0.19], [0.03, -0.15], [0.03, -0.09]], true, 0.5); g.fill(); // an old dog's ear: half up, the tip tipping over
         blob(g, [[0.0, -0.11], [0.07, -0.18], [0.12, -0.13], [0.1, -0.07]], true, 0.4); g.fill();
       }
     } else {

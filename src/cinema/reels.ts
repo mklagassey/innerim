@@ -112,6 +112,31 @@ export const REELS: Record<string, Reel> = {
     { shot: 'arm-healed', hold: 4 },
     { shot: 'after-wide', hold: 5 },
   ] },
+  // Echoes (decisions-text.md 6): short, wordless, no score. Each shows a choice landing in her day.
+  'echo:lfts': { title: 'Results', once: 'mission', tone: 'kitchen', cuts: [
+    { shot: 'echo-fridge-lfts', hold: 4 },
+    { shot: 'echo-read-lfts', hold: 4, sound: 'paper' },
+  ] },
+  'echo:reserve': { title: 'Reserve', once: 'mission', tone: 'kitchen', cuts: [
+    { shot: 'echo-fridge-reserve', hold: 4 },
+    { shot: 'echo-read-reserve', hold: 4, sound: 'paper' },
+  ] },
+  'echo:antacids': { title: 'Heartburn', once: 'mission', tone: 'kitchen', cuts: [
+    { shot: 'antacid-mid', hold: 5 },
+    { shot: 'antacid-tub', hold: 3 },
+  ] },
+  'echo:nap': { title: 'An afternoon', once: 'mission', tone: 'tv', cuts: [
+    { shot: 'nap-wide', hold: 5, sound: 'sigh' },
+    { shot: 'nap-mug', hold: 3 },
+  ] },
+  'echo:groggy': { title: 'A late morning', once: 'mission', tone: 'kitchen', cuts: [
+    { shot: 'groggy-clock', hold: 3 },
+    { shot: 'groggy-up', hold: 4 },
+  ] },
+  'echo:fridge3': { title: 'The fridge, again', once: 'mission', tone: 'night', cuts: [
+    { shot: 'fridge3-mid', hold: 5 },
+    { shot: 'fridge3-close', hold: 4 },
+  ] },
   after: { title: 'The kitchen, after', once: 'mission', tone: 'kitchen', cuts: [
     { shot: 'after-wide', hold: 5 },
     { shot: 'after-fridge', hold: 4 },
