@@ -26,6 +26,7 @@ export interface Enemy extends Point { sated?: number; face?: Point;
   net: number; // seconds until it can throw another net
   onto?: number; // 0 to 1: how sure it is that it has found you; at 1 it commits to the chase
   nosed?: number; // seconds since it last had any trace of you
+  spent?: number; // seconds before a macrophage that has let go can engulf again
 }
 export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
@@ -62,6 +63,7 @@ export interface State {
   nicheTime: number; // seconds spent tucked in; past the limit the hull starts to foul
   silent: boolean; // running silent: slow, no footprints, half the plume
   held: { id: number; t: number; hits: number } | null; // engulfed by a macrophage
+  slipped: number; // seconds after getting out of one during which nothing can engulf you
   tally: { silent: number; firstStrikes: number; grabs: number; niches: number }; // for the run report
   starved: boolean; // the ship died of an empty tank, not of anything that caught it
   drained: number; // fractions of host health the tumor has taken, not yet a whole point
@@ -212,7 +214,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     peak: 0,
     antibodies: [],
     event: carry?.event ?? null,
-    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, slipped: 0, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
@@ -875,7 +877,7 @@ function finishChannel(s: State, ch: Channel) {
 
 function hurtEnemy(s: State, e: Enemy, dmg: number) {
   e.hp -= dmg;
-  if (dmg && s.held?.id === e.id && ++s.held.hits >= CONFIG.fight.hold.breaks) { s.held = null; e.cooldown = Math.max(e.cooldown, 1.5); float(s, s.player, 'free', '#7be08a'); }
+  if (dmg && s.held?.id === e.id && ++s.held.hits >= CONFIG.fight.hold.breaks) { released(s, e); e.cooldown = Math.max(e.cooldown, 1.5); float(s, s.player, 'free', '#7be08a'); }
   e.flash = 0.15;
   const machine = e.kind === 'warden';
   // Hurt badly enough, a warden drops its link to Shepherd and goes dark: a sibling you can salvage, or wake.
@@ -904,7 +906,7 @@ function hurtEnemy(s: State, e: Enemy, dmg: number) {
     if (e.kind === 'kupffer') s.pickups.push({ x: e.x, y: e.y, kind: 'cache' });
     else if (s.rng() < CONFIG.items.patchDrop) s.pickups.push({ x: e.x, y: e.y, kind: 'patch' });
     if (s.player.attackId === e.id) s.player.attackId = null;
-    if (s.held?.id === e.id) s.held = null;
+    if (s.held?.id === e.id) released(s, e);
     raiseAlert(s, CONFIG.alert.perKill);
     // A dying immune cell spills signals that draw the others in, and hurry the next ones along.
     const site = tileOf(e);
@@ -978,6 +980,8 @@ function arrive(s: State, count: number) {
 
 // ---------- one tick of the world ----------
 
+/** Out of a macrophage's grip, by force or because it let go: a moment to get clear, and that cell needs longer before it can try again. */
+function released(s: State, by?: Enemy) { s.held = null; s.slipped = CONFIG.fight.hold.clear; if (by) by.spent = CONFIG.fight.hold.again; }
 /** Advance the game by dt seconds. `dir` is a walking direction held on the keyboard, if any. */
 export function update(s: State, dt: number, dir: Point | null = null) {
   if (s.status !== 'playing' || s.offer || s.ask) return;
@@ -1001,11 +1005,12 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       if (p.hp <= 0) { hurtPlayer(s, 0, 'hunger'); return; }
     }
   } else { s.hiding = false; s.nicheTime = Math.max(0, s.nicheTime - dt); }
+  s.slipped = Math.max(0, s.slipped - dt);
   if (s.held) {
     // Engulfed: the macrophage has you, and is digesting. Strike it to break free.
     const by = s.enemies.find((e) => e.id === s.held!.id);
     s.held.t -= dt;
-    if (!by || s.held.t <= 0) s.held = null;
+    if (!by || s.held.t <= 0) released(s, by);
     else { dir = null; p.path = []; p.hp -= CONFIG.fight.hold.burn * hard(s).damage * dt; s.sinceHurt = 0; p.hurt = 0.25; if (p.hp <= 0) { hurtPlayer(s, 0, 'kupffer'); return; } }
   }
   s.ledger.hostLowest = Math.min(s.ledger.hostLowest, s.hostHealth);
@@ -1285,7 +1290,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   // In open vessels they ride the same current you do, and they are better at it.
   const hot = (1 + CONFIG.host.fever.speed * fever(s)) * (s.suppressed > 0 ? CONFIG.cortisol.slow : 1) * (1 - CONFIG.host.drink.immune * alcohol(s.host.hour));
   const c = s.place === 'vessel' ? { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * CONFIG.vessel.chaseBoost * hot, cooldown: base.cooldown * CONFIG.vessel.cooldown } : { ...base, speed: base.speed * hot, chaseSpeed: base.chaseSpeed * hot };
-  e.cooldown -= dt; e.repath -= dt; e.flash -= dt;
+  e.cooldown -= dt; e.repath -= dt; e.flash -= dt; if (e.spent) e.spent = Math.max(0, e.spent - dt);
   if (acidAt(s, e) === 2) { // acid is no kinder to them
     e.hp -= CONFIG.stomach.enemyBurn * acidLevel(s) * dt; e.flash = 0.1;
     if (e.hp <= 0) { hurtEnemy(s, e, 0); return false; }
@@ -1376,7 +1381,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
       if (d <= c.reach + 0.35 && !tucked) {
         hurtPlayer(s, Math.max(1, Math.round(roll(s, c.min, c.max) * hard(s).damage * (primed ? CONFIG.fight.primed.damage : 1))), e.kind);
         // A macrophage that lands a blow starts to engulf you.
-        if (e.kind === 'kupffer' && s.status === 'playing' && !s.held && !riding(s)) { s.held = { id: e.id, t: CONFIG.fight.hold.time, hits: 0 }; s.tally.grabs++; float(s, p, 'Engulfed', '#ff9a5a'); say(s, 'The macrophage closes around you. Strike it to break free.'); emit(s, 'net'); }
+        if (e.kind === 'kupffer' && s.status === 'playing' && !s.held && s.slipped <= 0 && !e.spent && !riding(s)) { s.held = { id: e.id, t: CONFIG.fight.hold.time, hits: 0 }; s.tally.grabs++; float(s, p, 'Engulfed', '#ff9a5a'); say(s, 'The macrophage closes around you. Strike it to break free.'); emit(s, 'net'); }
       }
     }
     return saw;

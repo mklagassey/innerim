@@ -1086,7 +1086,11 @@ test('unit-8 fights: a macrophage that lands a blow holds you until you strike i
   assert.ok(G.dist(at, s.player) < 0.05, 'cannot move');
   assert.ok(s.player.hp < hp, 'and it is digesting you');
   G.strike(s, k); s.player.swingCd = 0; G.strike(s, k);
-  assert.equal(s.held, null, 'two strikes break free');
+  assert.equal(s.held, null, 'two strikes break free');  assert.equal(s.slipped, CONFIG.fight.hold.clear, 'a moment in which nothing can take you');
+  assert.equal(k.spent, CONFIG.fight.hold.again, 'and that cell needs longer before it can try again');
+  const t0 = s.time; let regrab = -1;
+  for (let n = 0; n < 60 * 8 && regrab < 0; n++) { G.update(s, 1 / 60, null); if (s.held) regrab = s.time - t0; }
+  assert.ok(regrab < 0 || regrab >= CONFIG.fight.hold.again - 0.1, `grabbed again after ${regrab} s`);
 });
 
 test('unit-8 fights: a kill draws the neighbours and difficulty scales the enemy', () => {

@@ -155,9 +155,9 @@ export const CONFIG = {
   // The space of Disse: the gap between a liver cell and the sinusoid wall. Small enough for you, too small for a phagocyte.
   niche: { count: 10, apart: 6, holds: 20, foul: 1 },
   fight: {
-    swarm: 8, sooner: 5, // a kill draws innate cells within this many tiles, and brings the next arrivals this many seconds sooner
-    primed: { from: 50, damage: 1.5, windup: 0.8 }, // neutrophils at Alarmed and above
-    hold: { time: 2, burn: 2, breaks: 2 }, // a macrophage that lands a blow holds you; this many strikes break free
+    swarm: 6, sooner: 5, // a kill draws innate cells within this many tiles, and brings the next arrivals this many seconds sooner
+    primed: { from: 50, damage: 1.25, windup: 0.8 }, // neutrophils at Alarmed and above
+    hold: { time: 2, burn: 2, breaks: 2, again: 4, clear: 1 }, // a macrophage that lands a blow holds you; this many strikes break free. Once out, that cell cannot take you again for `again` seconds, and nothing can for `clear`
     first: { quiet: 3, times: 3 }, // a strike on a cell that has had no trace of you for this long
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
