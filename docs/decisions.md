@@ -724,3 +724,5 @@ Targets:
 - **All-obey host health:** lowest median 47, end median 54. That is within noise of the target.
 - **Waiting:** the gap is within noise.
 - **Awareness:** the all-obey floor of 12 came from a lane bug (an assigned hepatic leg logged as unassigned). QA has sent it to the engineer as P1. Once it is fixed, all-obey awareness should be 0 if the Slip reading matches, or about 12 if it misses.
+
+**Version 86: obey path closed.** No lane deviations; host end median 62, lowest 53. All-obey awareness ends at 0 in 16 of 40 runs, 12 in 23 (13 of those from a Slip miss, the rest from honest choices such as margins, contacts or a bystander), and 19 in 1. One fix requested: first-fright-transit counts as a deviation only if the unit enters a side-branch or niche tile during the surge. Holding still in the lane no longer counts as sheltering.
