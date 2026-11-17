@@ -8,6 +8,7 @@ import * as Stats from './stats';
 import * as T from './trip';
 import * as Story from './story';
 import * as Scenes from './scenes';
+import * as Art from './scene-art';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -167,8 +168,8 @@ function playScene(when: string, then: () => void, again = false) {
     line.classList.remove('on');
     timer = window.setTimeout(() => {
       box.dataset.light = beat.light ?? sc.light;
-      $('scene-art').innerHTML = beat.art ?? ''; // our own markup from scenes.ts, never anything typed or fetched
-      $('scene-seen').textContent = beat.art ? '' : beat.seen;
+      $('scene-art').innerHTML = beat.pic ? Art.frame(beat.pic, Story.stageOf(trip.carry?.aware ?? 0)) : ''; // our own markup from scene-art.ts, never anything typed or fetched
+      $('scene-seen').textContent = beat.pic ? '' : beat.seen;
       $('scene-print').textContent = beat.print ?? '';
       line.classList.add('on');
       if (beat.sound) Sound.room[beat.sound]();
@@ -685,7 +686,7 @@ function frame(now: number) {
     tipRest -= dt;
     if (!tip && !s.offer && !s.ask && tipRest <= 0) {
       const road = s.place === 'vessel' || s.place === 'lung';
-      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, coffee: s.host.habit === 'coffee' ? s.player : null, drink: s.host.habit === 'drink' ? s.player : null, fever: G.fever(s) ? s.player : null };
+      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, coffee: s.host.habit === 'coffee' ? s.player : null, drink: s.host.habit === 'drink' ? s.player : null, fever: G.fever(s) && s.hostHealth < CONFIG.host.fever.below[0] ? s.player : null };
       if (s.place === 'lung') Object.assign(host, { road: null, kupffer: null, lung: s.time > 0.6 ? s.player : null, dust: s.enemies.filter((e) => e.kind === 'kupffer' && s.visible[G.idx(s, Math.floor(e.x), Math.floor(e.y))]).sort((a, b) => G.dist(a, s.player) - G.dist(b, s.player))[0] ?? null });
       if (s.place === 'stomach') Object.assign(host, { portal: null, vein: null, cell: null, stomach: s.time > 0.8 ? s.player : null, mucus: G.acidAt(s, s.player) === 1 ? s.player : null, parietal: Tips.nearestRich(s) });
       const next = Tips.nextTip(s, road ? { portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null, ...host } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
