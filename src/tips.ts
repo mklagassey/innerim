@@ -54,6 +54,8 @@ export const TIPS: Tip[] = [
     body: 'The last stretch. These capillaries are wrapped round air sacs, and every breath squeezes them. While the host breathes out the blood surges toward the far end and takes you with it. While she breathes in it drags you back. Ride the breath out and hold what you can on the breath in: side branches are a good place to wait. The clock at the top says which way the breath is going. A frightened host breathes fast, a sleeping one slow.' },
   { id: 'dust', kind: 'Immune cell', title: 'Alveolar macrophage',
     body: 'A dust cell: the lung\'s own macrophage, which spends its life eating whatever is breathed in. It is the same kind of slow, heavy hitter as a Kupffer cell in the liver, and it leaves an upgrade behind if you kill it.' },
+  { id: 'drain', kind: 'The host', title: 'The tumor is a clock',
+    body: `For as long as any of the tumor is left, the host loses ${CONFIG.tumor.drain}% health every hour of their day, wherever you are. Each cell you cut out gives ${CONFIG.tumor.heal}% back. So time is a price too: sipping sugar slowly costs the host by the hour, and stripping their cells costs them all at once but gets you out sooner. A sleeping host mends faster than the tumor takes.` },
   { id: 'search', kind: 'Danger', title: 'The search',
     body: `They have lost you, but they know where they last had you. The pink ring is the area they are combing, and it spreads for a while. Inside it the immune alert will not come down, and reinforcements head into it. Get outside the ring and stay off their noses, and after ${CONFIG.alert.loseAfter} seconds the alert drains fast. Acid and mucus hide you even inside it, cortisol halves how far it spreads, and an Interleukin-10 droplet still calms things anywhere.` },
   { id: 'warden', kind: 'The swarm', title: 'Warden unit',
@@ -131,6 +133,7 @@ export function nextTip(s: State, extra: Record<string, Point | null> = {}): { t
     antibody: nearest(s.antibodies),
     tumor: nearest([...s.tumor].map((k) => ({ x: (k % s.size) + 0.5, y: Math.floor(k / s.size) + 0.5 }))),
     vein: nearest([mid(s.vein)]),
+    drain: s.time > 25 && s.excised < CONFIG.tumor.goal && !s.offer ? { x: s.player.x, y: s.player.y } : null,
     ...extra,
   };
   for (const tip of TIPS) {

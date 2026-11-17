@@ -592,7 +592,7 @@ test('an antibody that sticks makes you reek, blocks the cloak, and wears off', 
 test('hurt the host and they run a fever; sleep mends them', () => {
   const s = quiet(6); s.host.nextSurge = 999;
   assert.equal(G.fever(s), 0);
-  s.hostHealth = 55;
+  s.hostHealth = 55; s.excised = CONFIG.tumor.goal; // tumor out, so nothing but the fever is in play
   assert.equal(G.fever(s), 2);
   const cool = quiet(6); cool.host.nextSurge = 999;
   cool.player.energy = 10; s.player.energy = 10;
@@ -939,4 +939,35 @@ test('unit-4: the hunt is an area; inside it the alert holds, outside it drains,
   run(s, 30);
   assert.equal(s.alert, 0); assert.equal(s.search, null, 'and in the end they stop looking');
   void e;
+});
+
+test('the tumor costs the host by the hour until it is all out', () => {
+  const s = quiet(6); s.host.nextSurge = 999; s.host.hour = 12; s.player.energy = 30;
+  const h0 = s.hostHealth;
+  run(s, CONFIG.host.secondsPerHour * 2 + 0.5);
+  assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain);
+  s.excised = CONFIG.tumor.goal;
+  run(s, CONFIG.host.secondsPerHour + 0.5);
+  assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain, 'and stops once it is gone');
+});
+
+test('clotting waits a moment after a hit before it mends', () => {
+  const s = quiet(6); s.host.nextSurge = 999; s.player.energy = 30;
+  s.upgrades.clotting = 1; s.player.hp = 10; s.sinceHurt = 0;
+  run(s, CONFIG.energy.clotPause - 0.5);
+  assert.equal(s.player.hp, 10, 'nothing yet');
+  run(s, 5.5);
+  assert.ok(Math.abs(s.player.hp - 11) < 0.05, 'then 0.2 a second');
+});
+
+test('the first liver cache always offers the cloak, once', () => {
+  for (const seed of [11, 12, 13, 14, 15]) {
+    const s = quiet(seed);
+    s.pickups.push({ x: s.player.x, y: s.player.y, kind: 'cache' });
+    run(s, 0.1);
+    assert.ok(s.offer?.includes('cd47'), 'seed ' + seed);
+    assert.equal(new Set(s.offer).size, 3);
+    assert.equal(G.carryOf(s).cloakOffered, true);
+    assert.equal(G.createGame(seed + 1, G.carryOf(s)).cloakOffered, true, 'and the next map remembers');
+  }
 });

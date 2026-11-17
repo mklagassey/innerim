@@ -19,6 +19,7 @@ export const CONFIG = {
     patchRegen: 22,
     metabolism: 14, // seconds per unit burned
     starveDamage: 1,
+    clotPause: 3, // seconds after any damage before clotting starts to seal again
     quotaKeep: 4, // what the vein insists you keep for the road, on top of the fare
   },
   // The host is a person getting on with their day. Their body changes around you.
@@ -116,7 +117,7 @@ export const CONFIG = {
     tcellSight: 1.3, // how close one must be to know you through the cloak: contact, not sight
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
-  tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
+  tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4, drain: 1 }, // drain: host health lost per host hour while any of it is left
   // The gut flora trade for sugar. Prices are in energy.
   lung: { macrophages: 2 },
   // Boarding: climb inside a wounded neutrophil and wear it.
@@ -147,7 +148,7 @@ export interface Upgrade { name: string; track: Track; max: number; per: number;
 export const UPGRADES = {
   glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 12, what: '+12 maximum hull, and repairs that much now.',
     real: 'The sugar coat that shields the lining of every blood vessel.' },
-  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.35, what: 'Slowly seals breaches in the hull over time.',
+  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.2, what: 'Slowly seals breaches in the hull, once you have gone 3 seconds without taking damage.',
     real: 'The liver makes most of the proteins that clot blood.' },
   elastase: { name: 'Elastase edge', track: 'Warrior', max: 3, per: 2, what: '+2 strike damage.',
     real: 'The enzyme neutrophils use to cut through tissue.' },
