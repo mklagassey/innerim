@@ -595,13 +595,15 @@ export const SHOTS2: Record<string, ShotDef> = {
     label: 'A freezer drawer. A sealed bag with a printed label. The drawer closes.',
     look: 'clinic', a: { x: 500, y: 220, z: 1.3 }, b: { x: 500, y: 220, z: 1.36 },
     draw: (st) => {
-      const k = smooth((st.p - 0.45) / 0.4);
+      // The drawer closes slowly, across most of the hold: a bright slab moving fast past the camera's fixed
+      // sensor lines read as a flicker (QA measured swings near the flash limit), so it eases over three seconds.
+      const k = smooth((st.p - 0.25) / 0.65);
       st.light = { x: 500, y: -120, color: '#c8e8f0' };
       st.layer(0.7, (c) => { c.fillStyle = '#1a2224'; c.fillRect(-300, -100, 1600, 600); for (let i = 0; i < 4; i++) { c.fillStyle = '#2a3436'; c.fillRect(160, 40 + i * 90, 680, 80); } });
       st.layer(1, (c) => {
         const y = lerp(220, 140, k);
-        c.fillStyle = '#c8d4d6'; c.fillRect(200, y, 600, 160); c.fillStyle = '#e8eef0'; c.fillRect(200, y, 600, 14);
-        c.fillStyle = rgba('#e8f4f8', 0.7); for (let i = 0; i < 9; i++) c.fillRect(230 + i * 64, y + 20, 50, 60);
+        c.fillStyle = '#a8b4b6'; c.fillRect(200, y, 600, 160); c.fillStyle = '#c4ccce'; c.fillRect(200, y, 600, 14);
+        c.fillStyle = rgba('#d8e4e8', 0.45); for (let i = 0; i < 9; i++) c.fillRect(230 + i * 64, y + 20, 50, 60);
         c.fillStyle = rgba('#f0f0e8', 0.9); c.fillRect(440, y + 30, 120, 80); c.fillStyle = '#1a1a1a'; c.font = '500 9px "IBM Plex Mono", monospace'; c.fillText('BIOHAZARD · HOLD', 448, y + 50); c.fillText('TITHONUS 0001', 448, y + 64); c.fillText('FILTRATE 3/3', 448, y + 78);
         const g = c.createLinearGradient(0, y - 60, 0, y); g.addColorStop(0, rgba('#e0f4ff', 0)); g.addColorStop(1, rgba('#e0f4ff', 0.18)); c.fillStyle = g; c.fillRect(200, y - 60, 600, 60); // cold mist
       });

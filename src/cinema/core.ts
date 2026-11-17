@@ -283,7 +283,7 @@ export function finish(ctx: CanvasRenderingContext2D, w: number, h: number, look
     ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#c8d4d0'; ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'rgba(30,38,38,0.5)'; ctx.fillRect(0, 0, w, h);
     // fixed lines of a cheap sensor: drawn once, never moving, so they read as a camera, not a flicker
-    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(0,0,0,0.08)'; // light: a bright edge moving across them must not beat against them
     const step = Math.max(2, Math.round(h / 180));
     for (let y = 0; y < h; y += step * 2) ctx.fillRect(0, y, w, step);
   }
