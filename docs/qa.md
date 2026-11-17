@@ -190,3 +190,16 @@ Most wording issues were already fixed by the creative director by Version 40 (g
 
 - `scripts/qa-bot.cjs`: plays the built page in headless Chromium at desktop and phone sizes, clicks the real UI, records errors, stuck states, layout problems (sideways scroll, off-screen buttons, small tap targets, HUD overlaps), frame times and screenshots. `npm run build && node scripts/qa-bot.cjs --runs 2 --speed 6`. Output in `scratch/qa/` (git-ignored).
 - `scripts/qa-accept.ts`: rules-level checks for the systems-design "Done when" lines. `npx tsx scripts/qa-accept.ts`, about 2 minutes.
+
+## v84 (unit-17.4) recheck, 2026-11-17
+
+20 seeds per arm, 0 errors, 20/20 Decommissioned.
+
+| Arm | End median (mean) | Lowest median | Aware median | Host at 3 trips | Host at 4 trips |
+|---|---|---|---|---|---|
+| obey-base | 53 (52.6) | 46 | 15.5 | 71 (n5) | 47 (n15) |
+| obey-wait | 60 (56.6) | 50 | 15.5 | 67 (n8) | 50 (n12) |
+
+- Lowest host ≥40 passes. End median of 53 is 2 points under the 55–70 band.
+- The equal-trip gaps between waiting and base are -4 and +3, so waiting no longer pays (sleepHeals 45 fix holds).
+- Awareness is 15.5 in every all-obey seed, against a target of 0. It looks like a fixed scripted gain; flagged to systems.
