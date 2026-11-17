@@ -53,6 +53,7 @@ export const CONFIG = {
   alert: {
     max: 100,
     decay: 0.6, // per second while nothing has your scent
+    search: { start: 4, grow: 0.8, most: 14, cortisol: 0.5 }, // the hunt: tiles of radius at lost contact, growth per second, and the limit
     loseAfter: 4, // seconds off their noses before the search starts to give up
     shake: 5, // per second once it does
     seenByNeutrophil: 1.2, // per second

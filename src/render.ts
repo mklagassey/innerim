@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, inSearch, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -637,6 +637,15 @@ export function draw(ctx: Ctx, s: State, v: View) {
     }
     ctx.globalAlpha = 1;
   } });
+  if (s.search && s.alert > 0) {
+    // The search area: a soft ring on the floor that breathes slowly. Inside it they are still looking.
+    const z = s.search, slow = v.still ? 0.5 : 0.5 + 0.5 * Math.sin(v.time * 1.1), inside = inSearch(s);
+    ctx.beginPath();
+    for (let k = 0; k <= 56; k++) { const a = (k / 56) * Math.PI * 2, q = project(z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r); if (k) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }
+    ctx.fillStyle = `rgba(190,60,130,${inside ? 0.05 + 0.02 * slow : 0.025})`; ctx.fill();
+    ctx.strokeStyle = `rgba(214,92,160,${0.3 + 0.22 * slow})`; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.lineDashOffset = v.still ? 0 : -v.time * 6; ctx.stroke();
+    ctx.setLineDash([]);
+  }
   things.sort((a, b) => a.depth - b.depth);
   for (const t of things) t.draw();
 
@@ -1040,6 +1049,13 @@ function automap(ctx: Ctx, s: State, v: View) {
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   for (const a of s.antibodies) if (s.visible[idx(s, Math.floor(a.x), Math.floor(a.y))]) dot(a.x, a.y, u * 0.35, '#b8c8ff');
+  if (s.search && s.alert > 0) {
+    const z = s.search;
+    ctx.beginPath();
+    for (let k = 0; k <= 40; k++) { const a = (k / 40) * Math.PI * 2, q = at(z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r); if (k) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }
+    ctx.fillStyle = 'rgba(190,60,130,0.12)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(214,92,160,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
   dot(p.x, p.y, u * 0.8, '#ffffff');
 }
 

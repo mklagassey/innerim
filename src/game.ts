@@ -51,6 +51,8 @@ export interface State {
   memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
+  search: (Point & { r: number }) | null; // where they last had you, and how far the hunt has spread from there
+  zoneTime: number; // seconds spent inside it
   verdict: '' | 'obeyed' | 'defied'; // what Shepherd made of your harvest when you left the liver
   defied: number; // standing orders ignored so far
   aware: number; // 0..100: how far this unit has woken up
@@ -166,6 +168,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
+    search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
@@ -846,7 +849,9 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
 }
 
 /** True once the immune cells have lost you for long enough that the alert is draining fast. */
-export const losingThem = (s: State) => s.alert > 0 && s.unseen >= CONFIG.alert.loseAfter;
+/** Inside the area the immune system is combing. Acid and mucus hide you even there: nothing can taste you in them. */
+export const inSearch = (s: State) => !!s.search && dist(s.player, s.search) <= s.search.r && !acidAt(s, s.player);
+export const losingThem = (s: State) => s.alert > 0 && s.unseen >= CONFIG.alert.loseAfter && !inSearch(s);
 
 export function alertTier(s: State) {
   const tiers = CONFIG.alert.tiers;
@@ -871,7 +876,14 @@ function arrive(s: State, count: number) {
     // Mostly from the nearer vessels, so a response shows up while it still matters.
     const e = spawn(s, 'neutrophil', hidden[Math.floor(s.rng() * Math.min(3, hidden.length))]);
     // They come to where the damage was. With none to go to, they have nothing to steer by and simply start to search.
-    if (s.lastDamageSite) { e.mood = 'investigate'; e.goal = { ...s.lastDamageSite }; }
+    if (s.search) {
+      // Into the search area, somewhere. Never to you: they do not know where you are.
+      const z = s.search, here = tileOf(s.player);
+      for (let tries = 0; tries < 60; tries++) {
+        const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * z.r, t = { x: Math.floor(z.x + Math.cos(a) * d), y: Math.floor(z.y + Math.sin(a) * d) };
+        if (open(s, t.x, t.y) && (t.x !== here.x || t.y !== here.y)) { e.mood = 'investigate'; e.goal = t; break; }
+      }
+    } else if (s.lastDamageSite) { e.mood = 'investigate'; e.goal = { ...s.lastDamageSite }; }
     e.idle = 0;
   }
 }
@@ -1093,7 +1105,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   let seen = false;
   for (const e of [...s.enemies]) {
     if (s.status !== 'playing') break;
-    if (enemyActs(s, e, dt)) seen = true;
+    if (enemyActs(s, e, dt) && e.kind !== 'warden') seen = true; // a machine on your tail is no business of the immune system's
   }
   // Keep bodies from stacking on one spot.
   for (let i = 0; i < s.enemies.length; i++)
@@ -1112,7 +1124,15 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (s.status !== 'playing') return;
   // Stay out of sight long enough and the search loses heart, like any manhunt.
   s.unseen = seen ? 0 : s.unseen + dt;
-  if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
+  // The hunt: it starts where they last had you and spreads out from there. Get outside it and they lose heart.
+  const z = CONFIG.alert.search;
+  if (seen) s.search = { x: p.x, y: p.y, r: z.start };
+  else if (s.search) {
+    s.search.r = Math.min(z.most * (s.suppressed > 0 ? z.cortisol : 1), s.search.r + z.grow * dt);
+    if (s.alert <= 0) s.search = null;
+  }
+  if (inSearch(s)) s.zoneTime += dt;
+  else if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
 
   const en = CONFIG.energy;
   s.regen += dt * CONFIG.host.glucose[hostState(s)] * (1 + CONFIG.host.fedGlucose * digesting(s.host.hour, s.host.snack));

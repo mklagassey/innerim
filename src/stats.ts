@@ -3,7 +3,7 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'unit-3'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'unit-4'; // bump when rules change so reports can be compared fairly
 
 const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn', 'tag', 'excise', 'slam', 'board'];
 
@@ -74,7 +74,7 @@ export function report(s: G.State, extra: Record<string, unknown> = {}) {
     energy: s.player.energy, quota: CONFIG.energy.quota,
     hostHealth: Math.round(s.hostHealth), fever: G.fever(s),
     cellsStripped: s.cellsKilled, tumorExcised: s.excised, tumorLeftHere: s.tumor.size, skims: t.events.skim ?? 0,
-    immuneKills: s.kills, awareness: Math.round(s.aware), awarenessStage: G.stage(s), unitsWoken: s.kin, harvestVerdict: s.verdict,
+    immuneKills: s.kills, awareness: Math.round(s.aware), awarenessStage: G.stage(s), unitsWoken: s.kin, harvestVerdict: s.verdict, secondsInSearchZone: Math.round(s.zoneTime), searchZone: s.search ? { x: Math.round(s.search.x), y: Math.round(s.search.y), r: Math.round(s.search.r * 10) / 10 } : null,
     hostFrights: t.events.surge ?? 0, hostHourAtEnd: Math.round(s.host.hour * 10) / 10,
     timesSnared: t.events.net ?? 0, hullLostToAcid: t.events.burn ?? 0, wallSlams: t.events.slam ?? 0, neutrophilsBoarded: t.events.board ?? 0,
     timesSniffed: t.events.sniff ?? 0, timesTagged: t.events.tag ?? 0, immuneMemoryBefore: round(s.memory * 100), immuneMemoryAfter: round(G.memoryAfter(s) * 100),

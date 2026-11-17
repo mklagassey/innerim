@@ -920,3 +920,23 @@ test('unit-3: reinforcements never head for the player tile, slams are capped pe
   l.player.energy++;
   assert.ok(G.canLeave(l));
 });
+
+test('unit-4: the hunt is an area; inside it the alert holds, outside it drains, and arrivals go into it but never to you', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.alert = 40; s.scent.fill(999);
+  const e = foe(s, 1, 0); run(s, 0.1);
+  assert.ok(s.search, 'contact marks the spot');
+  s.enemies = []; s.trail = [];
+  const held = s.alert;
+  run(s, 3);
+  assert.ok(s.search!.r > CONFIG.alert.search.start + 1.5, 'the hunt spreads');
+  assert.ok(G.inSearch(s));
+  assert.equal(s.alert, held, 'and the alert holds while you sit in it');
+  assert.ok(s.zoneTime > 2.5);
+  s.search!.x += 40; // as good as far away
+  assert.equal(G.inSearch(s), false);
+  run(s, CONFIG.alert.loseAfter + 2);
+  assert.ok(s.alert < held - 5, 'outside, they lose heart');
+  run(s, 30);
+  assert.equal(s.alert, 0); assert.equal(s.search, null, 'and in the end they stop looking');
+  void e;
+});

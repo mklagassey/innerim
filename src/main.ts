@@ -451,7 +451,7 @@ function hud() {
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
-  set('alert-val', 'text', s.suppressed > 0 ? `${tier.name} \u00b7 cortisol ${Math.ceil(s.suppressed)}s` : s.tagged > 0 ? `${tier.name} \u00b7 tagged ${Math.ceil(s.tagged)}s` : losing ? `${tier.name} \u00b7 losing them` : tier.name);
+  set('alert-val', 'text', s.suppressed > 0 ? `${tier.name} \u00b7 cortisol ${Math.ceil(s.suppressed)}s` : s.tagged > 0 ? `${tier.name} \u00b7 tagged ${Math.ceil(s.tagged)}s` : losing ? `${tier.name} \u00b7 losing them` : G.inSearch(s) && s.unseen > 1 && s.alert > 0 ? `${tier.name} \u00b7 searching here` : tier.name);
   $('alert').classList.toggle('losing', losing);
   set('alert', 'tier', String(CONFIG.alert.tiers.findIndex((t) => t.name === tier.name)));
 
