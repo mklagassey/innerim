@@ -574,6 +574,7 @@ function go(to: T.NodeId, forked = false) {
   const way = T.ways(trip).find((l) => l.to === to), straight = !!way?.via, from = trip.at;
   if (trip.carry) (trip.carry.flags ??= {}).escorted = !!way && T.escorted(trip, way); // an escort is company, and a leash
   let out = T.depart(trip, to);
+  if (trip.carry?.flags) delete trip.carry.flags.noEscort; // declined for this leg only
   if (!out) { junction(); return; } // no such road from here: back to the chamber, never a dead end
   // The garbled order needs somewhere to arrive: with one pending, the road home from the first liver is always played.
   const sl = trip.carry?.slip;
@@ -914,6 +915,11 @@ function hud() {
         $('ask-text').textContent = `One of the units you woke is being recalled, two vessels from here. Shepherd: do not interfere.`;
         opts.splice(0, opts.length, ['accept', 'Do not interfere', 'Shepherd’s order. The unit is taken.', true], ['refuse', 'Get there first', 'Not Shepherd’s order. A Warden is already on its way to it.', true]);
       }
+      if (s.ask.kind === 'escort') {
+        $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Escort assigned';
+        $('ask-text').textContent = 'Escort assigned for this vessel. Remain in sight of your escort.';
+        opts.splice(0, opts.length, ['accept', 'Accept the escort', 'Shepherd\u2019s order. A smaller patrol on the way, and the escort keeps you in sight.', true], ['refuse', 'Decline', 'Not Shepherd\u2019s order. You go alone.', true]);
+      }
       if (s.ask.kind === 'handover') {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Handover';
         $('ask-text').textContent = 'Upload route map for successor units. Your experience will help the next unit.';
@@ -1084,7 +1090,7 @@ const qa = {
     if (cardEnd) return { id: `card:${trip.carded}`, kind: 'card', options: [{ id: 'continue', label: $('card-title').textContent ?? '', enabled: true }] };
     if (!$('over').hidden) return { id: 'over', kind: 'ending', options: [{ id: 'again', label: $('over-title').textContent ?? '', enabled: true }] };
     if (!started || s.status !== 'playing') return null;
-    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : s.ask.kind === 'review' ? 'telemetry-review' : s.ask.kind === 'recall' ? 'recall' : s.ask.kind === 'kinrecall' ? 'kin-recall' : s.ask.kind === 'handover' ? 'handover' : s.ask.kind === 'nighthold' ? 'night-hold' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
+    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : s.ask.kind === 'review' ? 'telemetry-review' : s.ask.kind === 'recall' ? 'recall' : s.ask.kind === 'kinrecall' ? 'kin-recall' : s.ask.kind === 'escort' ? 'escort-refuse' : s.ask.kind === 'handover' ? 'handover' : s.ask.kind === 'nighthold' ? 'night-hold' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
     if (s.offer) return { id: 'offer', kind: 'upgrade', options: s.offer.map((id) => ({ id, label: UPGRADES[id].name, enabled: true })) };
     if (s.junction) return { id: `fork:${trip.at}`, kind: 'fork', options: s.junction.exits.map((e) => ({ id: e.to, label: `${e.label}${e.assigned ? ' (assigned)' : ''}`, enabled: true })) };
     return null;

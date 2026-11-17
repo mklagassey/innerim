@@ -1760,3 +1760,16 @@ test('unit-17: a planted dock is a foreign body, and the liver knows it', () => 
   assert.equal(s.alert, CONFIG.marks.dockAlert);
   assert.equal(G.createGame(4, carried({ chapter: 5, excised: CONFIG.tumor.goal - 2, took: { beacon: 'broken' } })).alert, 0);
 });
+
+test('unit-17.2: two places to hold in a chapter 3 liver, a fever order wherever there is ground, and the escort is asked, not assumed', () => {
+  const s = G.createGame(4, carried({ chapter: 3, flags: { drank: true } }));
+  const holds = s.marks.filter((m) => m.kind === 'hold');
+  assert.deepEqual(holds.map((m) => m.id), ['ethanol-correction', 'pain-damp']); assert.ok(G.dist(holds[0].at, holds[1].at) >= CONFIG.marks.apart);
+  const road = G.createGame(4, carried({ chapter: 3, event: 'cold' }), 'vessel');
+  assert.deepEqual(road.marks.map((m) => m.id), ['fever-damp']);
+  const h = G.createGame(6, carried({ chapter: 2, trust: 70 }), 'vessel', 0, 'artery', false, { kind: 'heart', exits: [{ to: 'hepatic', label: 'x', note: '', assigned: true, known: true, tint: '1,1,1' }] });
+  const ex = h.junction!.exits[0]; h.player.x = ex.at.x + 0.5; h.player.y = ex.at.y + 0.5; h.player.path = []; run(h, 0.2);
+  assert.equal(h.ask?.kind, 'escort'); assert.equal(h.status, 'playing');
+  assert.ok(G.answer(h, 'refuse' as 'salvage')); assert.equal(h.took['escort-refuse'], 'deviate'); assert.equal(h.flags.noEscort, true);
+  run(h, 0.2); assert.equal(h.status, 'won');
+});
