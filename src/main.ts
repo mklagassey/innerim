@@ -7,6 +7,7 @@ import * as Sound from './audio';
 import * as Stats from './stats';
 import * as T from './trip';
 import * as Story from './story';
+import * as Scenes from './scenes';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -89,11 +90,12 @@ canvas.addEventListener('pointerleave', () => { if (!held) { pointer = null; vie
 canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
 const useE = () => { if (!G.leave(s)) G.startSkim(s); };
-const toggleMap = () => { view.showMap = !view.showMap; $('map').setAttribute('aria-pressed', String(view.showMap)); };
+const toggleMap = () => { view.showMap = !view.showMap; $('map').setAttribute('aria-pressed', String(view.showMap)); document.body.classList.toggle('map-open', view.showMap); };
 
 window.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const k = ev.key.toLowerCase();
+  if (!$('scene').hidden) { ev.preventDefault(); if (k === 'escape') sceneEnd?.(); else if ((k === ' ' || k === 'enter') && !ev.repeat) $('scene').click(); return; }
   if (k === 'tab' || k === 'm') { ev.preventDefault(); if (!ev.repeat) toggleMap(); return; }
   if (tip) { if (k === 'enter' || k === ' ' || k === 'escape') { ev.preventDefault(); closeTip(); } return; }
   if (!started || s.status !== 'playing') return;
@@ -119,6 +121,52 @@ window.addEventListener('blur', () => { keys.clear(); release(); });
 $('act-e').addEventListener('click', useE);
 $('act-f').addEventListener('click', () => G.startStrip(s));
 $('map').addEventListener('click', toggleMap);
+// ---------- cut scenes: a step outside the game loop ----------
+const SEEN = 'insiderim.scenes', EVER = 'insiderim.scenes.ever';
+const seenScenes = (): string[] => { try { return JSON.parse(localStorage.getItem(SEEN) ?? '[]'); } catch { return []; } };
+let sceneEnd: (() => void) | null = null;
+/** Plays the scene for this moment once per mission, then carries on. With no scene to play it carries on at once. */
+function playScene(when: string, then: () => void, again = false) {
+  const sc = Scenes.sceneFor(when);
+  const everSeen = (): string[] => { try { return JSON.parse(localStorage.getItem(EVER) ?? '[]'); } catch { return []; } };
+  if (!sc || (!again && (sc.once === 'ever' ? everSeen() : seenScenes()).includes(when))) { then(); return; }
+  try { localStorage.setItem(sc.once === 'ever' ? EVER : SEEN, JSON.stringify([...new Set([...(sc.once === 'ever' ? everSeen() : seenScenes()), when])])); } catch { /* it will play again; no harm */ }
+  $('prologue').hidden = false;
+  const box = $('scene'), line = $('scene-line');
+  let k = -1, timer = 0, over = false;
+  const end = () => {
+    if (over) return;
+    over = true; sceneEnd = null; clearTimeout(timer);
+    box.classList.remove('on');
+    timer = window.setTimeout(() => { box.hidden = true; then(); }, view.still ? 0 : 1200);
+  };
+  const next = () => {
+    clearTimeout(timer);
+    if (over) return;
+    if (++k >= sc.beats.length) { end(); return; }
+    const beat = sc.beats[k];
+    line.classList.remove('on');
+    timer = window.setTimeout(() => {
+      box.dataset.light = beat.light ?? sc.light;
+      $('scene-art').innerHTML = beat.art ?? ''; // our own markup from scenes.ts, never anything typed or fetched
+      $('scene-seen').textContent = beat.art ? '' : beat.seen;
+      $('scene-print').textContent = beat.print ?? '';
+      line.classList.add('on');
+      timer = window.setTimeout(next, beat.hold * 1000);
+    }, k === 0 || view.still ? 300 : 1100);
+  };
+  box.dataset.light = sc.light;
+  line.classList.remove('on');
+  box.hidden = false;
+  void box.offsetWidth; // let the fade start from black
+  box.classList.add('on');
+  sceneEnd = end;
+  const began = performance.now();
+  box.onclick = (e) => { if ((e.target as HTMLElement).id === 'scene-skip') end(); else if (performance.now() - began > 2000) next(); };
+  timer = window.setTimeout(next, view.still ? 200 : 1300);
+}
+$('prologue').addEventListener('click', () => { Sound.start(); $('intro').hidden = true; playScene('begin', () => { $('intro').hidden = false; }, true); });
+try { $('prologue').hidden = !JSON.parse(localStorage.getItem(EVER) ?? '[]').includes('begin'); } catch { /* stays hidden */ }
 function setPaused(on: boolean) {
   if (on && (!started || s.status !== 'playing' || s.offer || s.ask || tip)) return; // those already hold the world still
   paused = on;
@@ -186,8 +234,8 @@ function savedTrip(): T.Trip | null {
 const kept = savedTrip();
 if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip ${kept.trip} from the ${T.NODES[kept.at].name.toLowerCase()}`; $('begin').textContent = 'Begin a new mission'; }
 $('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; $('intro').hidden = true; openWorld('Resuming', 'Unit restored from the last checkpoint.'); });
-$('begin').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.'); });
-$('again').addEventListener('click', () => { forgetTrip(); route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.'); });
+$('begin').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; playScene('begin', () => openWorld('The bloodstream', 'You are in the heart, and it is about to throw you out. Pick a vessel. Blood only runs one way, so choose knowing you cannot turn back.')); });
+$('again').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; openWorld('The bloodstream', echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.'); });
 
 // ---------- the world map ----------
 
@@ -324,6 +372,7 @@ function forecast(hour: number, nap = 0, snack = -1): string {
 
 /** Sets out for a place: straight there, or by way of whatever is in between. */
 function go(to: T.NodeId) {
+  if (to === 'lungs' && Scenes.sceneFor('lungs') && !seenScenes().includes('lungs')) { playScene('lungs', () => go(to)); return; }
   const out = T.depart(trip, to);
   if (!out) return;
   if (out.kind === 'arrive') { if (trip.carry) { trip.carry.hour = (trip.carry.hour + CONFIG.wait.legHours) % 24; G.tumorToll(trip.carry, CONFIG.wait.legHours); } land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. The immune system is quiet here.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
@@ -385,6 +434,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
     return;
   }
   if (to === 'lungs' && trip.carry) { finish('breath'); return; }
+  if (home) playScene(`home:${trip.tripsDone}`, () => {});
   if (home) openWorld(`Trip ${trip.tripsDone} complete`, `You are back in the heart, fed.${trip.carry ? ` The host is at ${trip.carry.hostHealth}%.` : ''} What you carry and what you did to the host both come with you. The patrols will be larger this time.`);
   else if (fromLiver) openWorld('Out of the liver', `${how}${trip.heat >= 0.25 ? ' The alarm you raised is following you down the veins: expect company on the way home.' : ' You left quietly, and the way home should be calm.'}`);
   else openWorld(T.NODES[to].name, how);

@@ -1080,7 +1080,9 @@ function automap(ctx: Ctx, s: State, v: View) {
   const u = Math.max(4, Math.min(8, Math.min(v.w, v.h) / 95)), p = s.player;
   const at = (x: number, y: number) => ({ x: v.w / 2 + (x - y - (p.x - p.y)) * u, y: v.h / 2 + (x + y - (p.x + p.y)) * u * 0.5 });
   const dot = (x: number, y: number, r: number, color: string) => { const c = at(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fill(); };
-  ctx.fillStyle = 'rgba(10,4,7,0.35)'; ctx.fillRect(0, 0, v.w, v.h);
+  // The map is a small-scale drawing laid over the view, so its marks do not sit on the things themselves:
+  // dim the world well down while it is open so the two are not read as one picture.
+  ctx.fillStyle = 'rgba(10,4,7,0.74)'; ctx.fillRect(0, 0, v.w, v.h);
   for (let y = 0; y < s.size; y++)
     for (let x = 0; x < s.size; x++) {
       const i = idx(s, x, y);
@@ -1112,6 +1114,14 @@ function automap(ctx: Ctx, s: State, v: View) {
     ctx.strokeStyle = 'rgba(214,92,160,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
   }
   dot(p.x, p.y, u * 0.8, '#ffffff');
+  // What the dots mean.
+  const key: [string, string][] = [['#ffffff', 'You'], ['#5680ff', 'Vein out'], ['#ecb42e', 'Glucose'], ['#ff5a4d', 'Immune cell'], ...(s.place === 'liver' ? [['#8a5cf0', 'Tumor cell'], ['#e23a30', 'Portal inflow']] as [string, string][] : []), ...(s.search && s.alert > 0 ? [['#d65ca0', 'Being searched']] as [string, string][] : [])];
+  ctx.font = '500 11px ui-monospace, monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const kx = 16, ky = v.h - 110 - key.length * 16;
+  key.forEach(([color, name], k) => {
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(kx + 4, ky + k * 16, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(240,230,220,0.85)'; ctx.fillText(name, kx + 14, ky + k * 16);
+  });
 }
 
 /** The nearest red blood cell the player can see, for the info box about them. */
