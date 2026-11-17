@@ -218,3 +218,20 @@ Most wording issues were already fixed by the creative director by Version 40 (g
   - In 24 runs the trip went off route on the vessel leg straight after the bot picked the heart exit labelled "(assigned)" (hepatic) in chapter 4, on trip 2 or 3.
   - In 5 more, the heart fork offered no assigned exit at all.
   - `qa-endings.cjs` now records each off-route leg in `offRoute` and marks disabled fork options with "-".
+
+## v86 (unit-17.6, lane fix) recheck, 2026-11-17
+
+40 all-obey runs, 0 errors, 40/40 Decommissioned, 0 lane deviations (the fix holds).
+
+| Arm | End median | Lowest median | Awareness 0 / 12 / 19 |
+|---|---|---|---|
+| obey-base | 62 | 53 | 5 / 15 / 0 |
+| obey-wait | 58 | 49 | 11 / 8 / 1 |
+
+- Where the 12s come from:
+  - Slip miss: 13 runs.
+  - first-fright-transit judged sheltered when the unit held still and wasn't hit: 4 runs (P2, sent to the engineer).
+  - Margins not taken: 3 runs.
+  - Contacts not neutralised: 2 runs.
+  - Bystander saved: 2 runs.
+- The second heart fork shows no "(assigned)" exit in 20 of 40 runs (trip 2). It no longer logs a defiance, but the obedient player gets no route or escort on that leg. Sent to the engineer.
