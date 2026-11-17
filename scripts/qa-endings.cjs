@@ -62,10 +62,11 @@ const URL = `http://localhost:${server.address().port}/`;
 // Runs in the page: the policy's in-map actions, then leave.
 function playMap(pol) {
   const I = window.insiderim, s = I.state, G = I.G, C = I.CONFIG, p = s.player, q = I.qa;
-  const run = (secs) => { for (let i = 0; i < secs * 20 && s.status === 'playing'; i++) { if (pol.deviateOnly && !['route-2', 'beacon'].includes(pol.deviateOnly) && s.met.includes(pol.deviateOnly) && !s.took[pol.deviateOnly]) q.take(pol.deviateOnly, 'deviate'); if (s.offer) G.choose(s, s.offer[0]); if (s.ask) return; p.hp = G.maxHp(s); p.energy = Math.max(p.energy, 30); G.update(s, 0.05); } };
+  const run = (secs) => { for (let i = 0; i < secs * 20 && s.status === 'playing'; i++) { if (pol.deviateOnly && !['route-2', 'beacon'].includes(pol.deviateOnly) && s.met.includes(pol.deviateOnly) && !s.took[pol.deviateOnly]) q.take(pol.deviateOnly, 'deviate'); if (s.offer) G.choose(s, s.offer[0]); if (s.ask) return; if (p.hp < G.maxHp(s)) { const k = s.place === 'vessel' ? 'vessel' : 'other'; (window.__hull ??= { vessel: 0, other: 0, vesselMaps: 0 })[k] += G.maxHp(s) - p.hp; } p.hp = G.maxHp(s); p.energy = Math.max(p.energy, 30); G.update(s, 0.05); } };
   const beside = (k) => { const x = k % s.size, y = Math.floor(k / s.size); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (G.open(s, x + dx, y + dy)) return { x: x + dx + 0.5, y: y + dy + 0.5 }; return null; };
   const strip = (k) => { const at = beside(k); if (!at) return false; p.x = at.x; p.y = at.y; p.path = []; p.channel = null; if (!G.startStrip(s)) return false; run(2.5); return true; };
   const did = { excised: 0, stripped: 0, killed: 0, marks: [], levers: 0 };
+  if (s.place === 'vessel') (window.__hull ??= { vessel: 0, other: 0, vesselMaps: 0 }).vesselMaps++;
   if (pol.assist === 'trust' && s.chapter >= 3 && s.trust >= 20) { s.trust = 10; did.marks.push('ASSIST trust=10'); }
   if (pol.assist === 'dry' && s.place === 'liver' && s.chapter >= 3 && !s.took['ethanol-correction']) { did.marks.push('ASSIST ethanol-correction:' + q.take('ethanol-correction', 'obey')); }
   if (s.place === 'tube' || s.draw) { // the microscope: reach the light, then hold still in it or drift off it
@@ -180,6 +181,7 @@ async function mission(browser, job) {
   }
   if (!log.title && !log.stuck) log.stuck = `not finished in ${WALL / 60e3} min: ${JSON.stringify(await pg.evaluate(() => window.insiderim.qa.state()))}`;
   log.decisions = await pg.evaluate(() => { try { return window.insiderim.qa.decisions(); } catch { return null; } });
+  log.hull = await pg.evaluate(() => window.__hull ?? null);
   log.carry = await pg.evaluate(() => { const c = window.insiderim.trip.carry; return c && { met: c.met, aware: c.aware, kin: c.kin, trust: c.trust, flags: c.flags, took: c.took, hostLowest: c.ledger?.hostLowest, leversForMe: c.ledger?.leversForMe }; });
   await pg.screenshot({ path: path.join(OUT, `${job.want}-${job.seed}.png`) });
   log.minutes = +((Date.now() - t0) / 60e3).toFixed(1);
