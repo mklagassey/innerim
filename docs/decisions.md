@@ -482,3 +482,118 @@ The Recurrence soft-lock is fixed.
 - **Host target:** judged on medians. Outlier seeds below target are accepted.
 
 **QA on Version 74 (all-obey, 20 seeds): targets met.** 20/20 Decommissioned, 0 deaths, host lowest median 42, end median 57, awareness median 15.5 (12-22). Remaining awareness is wrong-reading Slips, as designed.
+
+## 11. Round 2: payoff audit, rebalance, chapter 5 decisions, difficulty identity (2026-11-17, 07:45Z)
+
+### 11.1 Method
+
+Bots follow fixed policies, so they cannot show what a player *prefers*. Instead I audited the payoffs in `src/decisions.ts` and `CONFIG.marks` / `CONFIG.trust` (Version 74).
+
+For each decision I listed what each side gains or loses in play:
+- energy, hull and host health;
+- map difficulty, time and Shepherd's trust (which pays out in scans, escorts and drops).
+
+A decision is **dominant** if one side wins on play and loses only story or awareness. Players who play to win will then always take it, and the choice stops being a choice.
+
+The rule I applied: **every order the player meets must cost something in play on both sides.** Story-only costs are fine for the lever and kin decisions, which have no order. They are not fine for ordered decisions, because "obey" already pays trust.
+
+### 11.2 The audit
+
+| Decision | Obey wins | Deviate wins | Verdict |
+|---|---|---|---|
+| t-harvest | +8 energy | nothing | fine (tutorial: obedience should pay) |
+| slip | coin | coin | fine |
+| lamp / sibling | +6 energy, +5 hull, trust +5 | kin (marks tumour, draw, colony) | fine |
+| **first-fright-transit** | trust +4 | **no wall slams (about 6 hull), a nook sibling** | **deviate dominant**: fix A |
+| **route-2** | trust +2 per cell | **new places, page 12, no extra work** | **deviate dominant**: fix B |
+| marked-cell | +10 yield | no bile leak | fine |
+| neutralise-map | caches from kills | half the antibodies next map | fine |
+| gastric-cross | speed | no acid etching | fine |
+| gut-butyrate | glucose kept | no T cell next liver | fine |
+| ethanol-correction | trust +8, lower drink multiplier | warmer evenings (immune dulling) | fine, grey |
+| **pain-damp** | **trust +4** | page 7 only | **obey dominant**: fix C |
+| **fever-damp** | **immune ×0.85 (easier)** | cold ends a day early (story) | **obey dominant**: fix D |
+| bystander | hull kept, trust +4 | a kin chance | fine |
+| **escort-refuse** | **escort, trust +2** | an epilogue prop | **obey dominant**: fix E |
+| telemetry-review | full repair, +2 patches | keep the self | fine (the central choice) |
+| **suppress** | **quiet map, trust +6** | an epilogue prop (shingles) | **obey dominant on play**: fix F |
+| tumour-order | no recurrence risk | host +12 (4 cells kept) | fine |
+| **beacon** | **+10 energy, trust +10** | page 34 (also unlocked by obeying) | **obey dominant**: fix G |
+| kin-recall | trust +2 | kin kept (race) | fine |
+
+That is 7 of 19 ordered decisions dominant: two lean towards deviating and five towards obeying. The leaning-obey ones are worse, because they teach the player that deviating is a tax paid for story. The design goal is that it should be a *trade*.
+
+### 11.3 Fixes (all real physiology)
+
+- **A. first-fright-transit.**
+  - **Obeying:** holding the lane in a surge means the surge carries you. The leg arrives 0.5 host hours sooner, so there is less tumour drain on that leg.
+  - **Ducking into a side branch:** the leg takes 0.5 host hours longer.
+  - (Real: adrenaline raises cardiac output; flow in the main vessel speeds up.)
+  - `CONFIG.marks.surgeHours 0.5`.
+- **B. route-2.**
+  - **Ignoring the arterial nodule:** it does not go away. One tumour cell is added to the next liver ("seeded from the arterial wall"), and the drain counts it. Shepherd found a real lesion, and leaving it is a real cost.
+  - **Obeying:** keeps the current extra work and trust.
+- **C. pain-damp.**
+  - **Deviating:** she feels it, phones the nurse, and is told to rest. The next night home mends +5 host health on top of the usual (the "rest" variant), even past the 90 cap, to a maximum of 95.
+  - **Obeying:** no change from now.
+  - (Real: pain makes people rest; rest helps the liver recover.)
+- **D. fever-damp.**
+  - **Obeying:** the longer cold costs her 4 host health over the extra day, applied at the next night home.
+  - **Deviating:** the cold breaks early, which ends the cold event's antibody ×1.5 on the next map.
+  - The trade becomes: an easier trip now, against her health and a harder antibody field later.
+- **E. escort-refuse.**
+  - **With an escort:** the leg is locked to its route, so forks and branch travel are skipped. Hiding in a niche while escorted counts as a telemetry gap at once ("Unit not visible to escort").
+  - **Without one:** forks are open.
+  - The escort is a leash, which the unit's stage 2 line already says. This makes it mechanical.
+- **F. suppress.**
+  - **Obeying:** shingles now happens in play, not only in the epilogue. At the start of chapter 5 she has the prodrome: host −6, and a chapter 5 map has an inflamed nerve root along the T6 dermatome as a lane of extra immune cells (varicella-specific T cells are now busy). If **pain-damp** was also obeyed, the epilogue uses the late, worse variant, as now.
+  - **Deviating:** keeps the ambush.
+- **G. beacon.**
+  - **Obeying:** the docking site is a resident site. In chapter 5 the Stay endings must contest it: a resident unit (Generation 4 advance) holds lobe 4. Breaking the dock afterwards stays possible (trust −15, as built). Leaving it means Stay becomes Tithonus if its other conditions hold.
+  - **Not installing it:** nothing changes in play, but Shepherd sends one supply drop fewer in chapter 4.
+  - The point: planting is the easy path now and a harder path at the end, if you stay.
+
+### 11.4 New minor decisions for chapter 5 (it was thin)
+
+Chapter 5 had only `final`, `draw`, `recall`, `kin-recall` and `kin-volunteer`. That is all endgame and no texture. Chapter 1 stays thin on purpose (it is the obedience tutorial), and chapters 2 to 4 have 15 or more each. These three fill the last trip and feed the endings:
+
+| Id | Where | Order | Obey | Deviate | Weight | Echo |
+|---|---|---|---|---|---|---|
+| m14 `last-harvest` | First liver or vessel of chapter 5 | "Disposal transit requires reserves. Harvest 3 hepatocytes." | +24 energy, host −9 (3 ordered strips) | Go on what you have | S | **Obeyed:** the epilogue scan has "three new small scars". **Deviated:** the lungs leg starts low on energy (harder dispose); the Stay endings are unaffected |
+| m15 `handover` | Heart, chapter 5 | "Upload route map for successor units. Your experience will not be wasted." | Next game: the previous unit's map is pre-filled (fog lifted on the first liver), and the new unit's first log line is the old unit's serial | Keep it | S | **Obeyed:** in the next game the old serial shows as `ACK.` in the log once, the old unit's map is drawn in amber, and its niches are marked. **Deviated:** in the next game, a dark sibling in the first liver carries your last fragment |
+| m16 `night-hold` | Any chapter 5 map in her night hours | "Host must not wake during final transit. Release melatonin, pineal pathway." | No frights tonight | Let her be | L | **Obeyed:** an easier night, and the morning interlude is "Slept through". **Deviated:** she wakes at 03:10 and sits in the kitchen with the dog. That gives one fright, and the 'kitchen at night' interlude unlocks page 27 if it is not already open |
+
+Real notes:
+- m14: the energy is real hepatocyte metabolism.
+- m15: the swarm sharing maps is the company's whole pitch.
+- m16: melatonin is a real sleep signal, though the pineal is not reachable from a liver. The order is a systemic hormone release from the unit's reserves, like the levers.
+
+m15 is the replay hook Mick asked for. Obeying makes the *next* game easier and reveals that the previous unit existed. Refusing makes the next game harder but leaves you a message from yourself.
+
+### 11.5 Difficulty identity
+
+Right now the three levels are multipliers only (damage, hp, spawns, healing, energy, detection). Multipliers make one level feel like the same game with bigger numbers. Each level now gets a rule of its own, still realistic, while the story and decisions stay identical across levels.
+
+| | Suppressed | Typical | Vigilant |
+|---|---|---|---|
+| Who she is | Chemo-recovering, low white count | Healthy 58-year-old | Recently vaccinated, primed immune system |
+| Multipliers | as now | as now | as now |
+| **Scent** | Footprints fade ×1.5 faster; the search ring shrinks ×1.5 faster | — | Footprints last ×1.3 longer |
+| **Memory** | Immune memory decays between maps (×0.5 carried) | Memory carries | Memory carries **and** antibodies tagged to the hull: after a cell touches you, every antibody on the map drifts towards you for 20 s |
+| **Cloak** | Always works | as now | Each cloak use on the same map is 25% shorter (T cells learn the signature) |
+| **Shepherd** | Scans show the nearest hunter's heading | as now | Supply drops only above trust 80; no drop ahead |
+| **Clock** | Tumour drain ×0.8 | — | Tumour drain ×1.2; night mend ×0.7 |
+
+The Suppressed and Vigilant blurbs on the start screen should name the reason ("She is recovering from chemotherapy" / "She had her flu jab last week"). This is the creative director's text to write, and I'll send the request.
+
+Engineering: `DIFFICULTY.<level>.rules = { footFade, ringShrink, memoryCarry, tagOnTouch, cloakDecay, scanHeading, dropTrust, drain, mend }`. Defaults equal Typical.
+
+### 11.6 Targets for QA (unit-17)
+
+- **All-obey, Typical:** unchanged (lowest median ≥ 40, end 55 to 70).
+- **Payoff:** for each fixed decision, a bot that always deviates on it, and on nothing else, ends within ±8 host and ±1 host hour of always obeying it. Neither side is free.
+- **Difficulty**, measured with a policy that never defies:
+  - Suppressed: 0 deaths in 20 seeds, alert peaks 30% lower than Typical.
+  - Vigilant: 10 to 25% deaths in 20 seeds for an attack bot and under 10% for a stealth bot. Vigilant should reward stealth, not armour, which answers Mick's "go in swinging".
+- **New minors:** m14 to m16 are met in at least 80% of runs that reach chapter 5.
+- **Tally:** please add a per-decision table of met / obeyed / deviated / lapsed counts to `qa-branches.cjs`, so the next audit can use real counts.
