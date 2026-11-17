@@ -133,7 +133,7 @@ export const REELS: Record<string, Reel> = {
     { shot: 'groggy-clock', hold: 3 },
     { shot: 'groggy-up', hold: 4 },
   ] },
-  'echo:fridge3': { title: 'The fridge, again', once: 'mission', tone: 'night', cuts: [
+  'echo:fridge3': { title: 'The fridge, again', once: 'mission', tone: 'kitchen', cuts: [
     { shot: 'fridge3-mid', hold: 5 },
     { shot: 'fridge3-close', hold: 4 },
   ] },
