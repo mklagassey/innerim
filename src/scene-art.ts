@@ -232,12 +232,13 @@ export function frame(key: keyof typeof ART, stage: number): string {
     return `<svg viewBox="${x} ${y} ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Close: ${art.label}">${art.body}</svg>`;
   }
   if (stage <= 1 && key !== 'swarm') {
-    const mark = (x: number, y: number, dx: number, dy: number) => `<path d="M${x + dx * 14} ${y} L${x} ${y} L${x} ${y + dy * 10}" fill="none" stroke="#7d8a8c" stroke-width="1.2" opacity="0.6"/>`;
-    return `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="From a distance, as if on a camera: ${art.label}">` +
-      `<defs><filter id="${id}f"><feColorMatrix type="saturate" values="0.25"/></filter>` +
-      `<radialGradient id="${id}m" cx="0.5" cy="0.5" r="0.5"><stop offset="0.6" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient><mask id="${id}k"><rect width="320" height="200" fill="url(#${id}m)"/></mask></defs>` +
+    const mark = (x: number, y: number, dx: number, dy: number) => `<path d="M${x + dx * 14} ${y} L${x} ${y} L${x} ${y + dy * 10}" fill="none" stroke="#8d9a9c" stroke-width="1.4" opacity="0.75"/>`;
+    // The view box crops the empty black margin around the footage so the picture reads on a phone; the camera distance is in the scale below, not in the empty space.
+    return `<svg class="footage" viewBox="44 22 232 156" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="From a distance, as if on a camera: ${art.label}">` +
+      `<defs><filter id="${id}f"><feColorMatrix type="saturate" values="0.35"/></filter>` +
+      `<radialGradient id="${id}m" cx="0.5" cy="0.5" r="0.5"><stop offset="0.55" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient><mask id="${id}k"><rect x="70" y="44" width="179" height="112" fill="url(#${id}m)"/></mask></defs>` +
       `<rect width="320" height="200" fill="#060505"/>` +
-      `<g mask="url(#${id}k)"><g filter="url(#${id}f)" transform="translate(70 44) scale(0.56)" opacity="0.85">${art.body}</g></g>` +
+      `<g mask="url(#${id}k)"><g filter="url(#${id}f)" transform="translate(70 44) scale(0.56)" opacity="0.95">${art.body}</g></g>` +
       mark(58, 34, 1, 1) + mark(262, 34, -1, 1) + mark(58, 166, 1, -1) + mark(262, 166, -1, -1) +
       `<circle cx="252" cy="44" r="2.2" fill="#9a3a32" opacity="0.7"/></svg>`;
   }
