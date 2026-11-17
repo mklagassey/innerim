@@ -38,7 +38,7 @@ The step 3 reward has a buried joke: the host has not thanked anyone. Do not poi
 
 Arrival lines replace `ORDERS` when the order applies. "Obeyed" plays when the player leaves having
 obeyed; "Defied" plays when they leave having defied. Each Defied line has one version for stage
-0 to 1 and one for stage 2 to 3. From stage 4 Shepherd says nothing.
+0 to 1 and one for stage 2 to 3. From stage 4 Shepherd keeps talking, unaware; its lines are shown dimmed, with the unit's `[received]` after them.
 
 | Order | Arrival | Obeyed | Defied (stage 0 to 1) | Defied (stage 2 to 3) |
 | --- | --- | --- | --- | --- |

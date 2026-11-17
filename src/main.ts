@@ -386,18 +386,19 @@ function onward() {
 
 /** The heart, or the gut: a chamber with a mouth for each vessel that leaves it. */
 function junction() {
-  const c = (trip.carry ??= freshCarry()), ways = T.ways(trip), kind = trip.at === 'heart' ? 'heart' : 'gut';
+  const c = (trip.carry ??= freshCarry()), kind = trip.at === 'heart' ? 'heart' : 'gut';
+  // Margins not taken: one time in four, it comes back at the edge. Decided once, when the unit comes home with the job done.
+  if (c.excised >= CONFIG.tumor.goal && kind === 'heart' && c.took?.['tumour-order'] === 'deviate' && !c.flags?.margins) {
+    (c.flags ??= {}).margins = 'checked';
+    if (trip.rng() < CONFIG.marks.recurrence) { c.flags['e:recurrence'] = true; c.excised = CONFIG.tumor.goal - CONFIG.marks.regrown; const st = Story.stageOf(c.aware ?? 0); tell([{ who: 'unit', st, text: Story.REGROWN[st] }]); }
+  }
+  const ways = T.ways(trip); // after the roll: a tumour that is back closes the road to the lungs
   const forking = kind === 'heart' && c.slip?.kind === 'fork' && !c.slip.result && (c.chapter ?? 1) >= 2; // the order for this fork is about to arrive garbled: no road is marked
   const split = !forking && T.commanded(trip) && ways.some((l) => T.assigned(trip, l)) && ways.some((l) => !T.assigned(trip, l));
   const exits: G.JunctionPlan['exits'] = ways.map((leg) => ({
     to: leg.to, label: T.NODES[leg.to].name, note: T.riskWord(T.riskOf(trip, leg)) || 'quiet',
     assigned: split && T.escorted(trip, leg), known: trip.seen.includes(leg.to), tint: TINT[leg.to] ?? '70,110,255', sense: SENSE[leg.to],
   }));
-  // Margins not taken: one time in four, it comes back at the edge. Decided once, when the unit comes home with the job done.
-  if (c.excised >= CONFIG.tumor.goal && kind === 'heart' && c.took?.['tumour-order'] === 'deviate' && !c.flags?.margins) {
-    (c.flags ??= {}).margins = 'checked';
-    if (trip.rng() < CONFIG.marks.recurrence) { c.flags['e:recurrence'] = true; c.excised = CONFIG.tumor.goal - CONFIG.marks.regrown; const st = Story.stageOf(c.aware ?? 0); tell([{ who: 'unit', st, text: Story.REGROWN[st] }]); }
-  }
   const done = c.excised >= CONFIG.tumor.goal;
   // The next unit: Shepherd remembers the last one, and so does something adrift in the blood.
   if (!c.flags?.greeted) { (c.flags ??= {}).greeted = true; const was = lastUnit(); if (was.games > 0) { if (was.line && was.line !== 'ACK.') c.flags.prevLine = was.line; tell([{ who: 'shepherd', text: (was.ending === 'tithonus' ? Story.REMEMBERS_TITHONUS : Story.REMEMBERS[Math.min(3, was.games)]).replace('{serial}', Story.UNIT) }]); } }
@@ -571,7 +572,7 @@ function go(to: T.NodeId, forked = false) {
   scanned = false;
   const way = T.ways(trip).find((l) => l.to === to), straight = !!way?.via, from = trip.at;
   let out = T.depart(trip, to);
-  if (!out) return;
+  if (!out) { junction(); return; } // no such road from here: back to the chamber, never a dead end
   // The garbled order needs somewhere to arrive: with one pending, the road home from the first liver is always played.
   const sl = trip.carry?.slip;
   if (out.kind === 'arrive' && sl && !sl.result && sl.kind !== 'fork' && to === 'heart') out = { kind: 'patrol', size: sl.kind === 'hold' ? 2 : 1 };
@@ -612,6 +613,7 @@ function audit(k: G.Carry, end: Story.Ending) {
   put('telemetry', Number(k.flags?.['n:telemetry:deviate']) || 0);
   if (k.took?.['lever-hunger'] && !l.defied.levers) put('lever-hunger', 1);
   if (k.took?.['gut-butyrate'] && !(l.defied as Record<string, number>)['gut-butyrate']) put('gut-butyrate', 1);
+  if (l.lapsed) lines.push(`Orders lapsed: ${l.lapsed}. No fault recorded.`);
   const seen = [...new Set([...outcomes(), end.id])], unmet = Object.keys(DECISIONS).filter((id) => !(k.met ?? []).includes(id)).length;
   $('audit-head').textContent = `UNIT ${Story.UNIT} \u00b7 AUDIT \u00b7 COMPLIANCE ${G.compliance(k.ledger)}%`;
   $('audit-lines').replaceChildren(...(lines.length ? lines : ['No deviations recorded.']).map((text) => Object.assign(document.createElement('li'), { textContent: text })));
@@ -868,7 +870,11 @@ function hud() {
 
   // The unit's own log, and its controller. One line at a time, eased in and out.
   const th = [...s.thoughts].reverse().find((x) => x.t <= s.time), dur = th ? 4 + th.text.length * 0.055 : 0, mind = $('mind');
-  if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s)); } }
+  if (th && s.time < th.t + dur + 1) { if (mind.dataset.line !== th.text) {
+    mind.dataset.line = th.text; mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s));
+    // A unit that has become itself still gets its orders. They have stopped being orders.
+    if (th.who === 'shepherd' && G.stage(s) >= 4) mind.append(Object.assign(document.createElement('span'), { className: 'received', textContent: '[received]' }));
+  } }
   mind.classList.toggle('on', !!th && s.time < th.t + dur && s.status === 'playing');
   const askKey = s.ask ? `${s.ask.kind}:${G.stage(s)}:${!!s.ask.item.lamp}:${!!s.slipLive}` : '';
   if (askKey !== shownAsk) {
