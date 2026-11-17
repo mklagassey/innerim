@@ -571,6 +571,7 @@ function go(to: T.NodeId, forked = false) {
   if (to === 'lungs' && !scanned) { scanned = true; playScene(scan, () => go(to, forked)); return; }
   scanned = false;
   const way = T.ways(trip).find((l) => l.to === to), straight = !!way?.via, from = trip.at;
+  if (trip.carry) (trip.carry.flags ??= {}).escorted = !!way && T.escorted(trip, way); // an escort is company, and a leash
   let out = T.depart(trip, to);
   if (!out) { junction(); return; } // no such road from here: back to the chamber, never a dead end
   // The garbled order needs somewhere to arrive: with one pending, the road home from the first liver is always played.
@@ -682,6 +683,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   if (ch === 1 && fromLiver) { c.chapter = 2; c.slip ??= { kind: (['hold', 'lamp', 'fork'] as const)[Math.floor(trip.rng() * 3)], meant: trip.rng() < 0.5 ? 'A' : 'B' }; } // the road home is where the first order goes wrong
   else if (ch === 2 && trip.trip >= 2 && (to === 'liver' || to === 'stomach' || to === 'gut')) c.chapter = 3;
   if (home && c.excised >= CONFIG.tumor.goal) c.chapter = 5;
+  if (c.chapter === 5 && c.took?.suppress === 'obey' && !c.flags?.prodrome) { (c.flags ??= {}).prodrome = true; c.hostHealth = Math.max(1, c.hostHealth - CONFIG.mend.prodrome); news.push('The host has a band of burning skin along her left ribs this morning, and is tired in a way she cannot place.'); } // suppression has a price, and it is hers
   if (home && c.excised >= CONFIG.tumor.goal && c.flags?.['e:recurrence']) { delete c.flags['e:recurrence']; c.flags.recurrence = 'cleared'; } // it went back and cut it out, unasked
   if (home && kept && T.commanded(trip)) c.trust = Math.min(100, (c.trust ?? CONFIG.trust.start) + CONFIG.trust.escort);
   if (home && c.flags) delete c.flags.immune; // a fever damped or left alone lasts the trip

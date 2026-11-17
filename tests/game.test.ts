@@ -1696,3 +1696,23 @@ test('unit-15.4: lapsed is not defied', () => {
   cell2.met = true; cell2.other = true; d.player.energy = 99; put(d, d.vein); assert.ok(G.leave(d)); assert.equal(d.took['marked-cell'], 'deviate');
   assert.equal(DECISIONS['kupffer-spare'].weight, null, 'getting out of a macrophage alive is not a choice');
 });
+
+test('unit-17: neither side of an order is free', () => {
+  // Pain left alone: she rests, and mends a little more that night. A fever switched off: the cold drags on.
+  const rest: G.Carry = { ...G.carryOf(quiet(4)), hostHealth: 88, flags: { rest: true } }; G.night(rest);
+  assert.equal(rest.hostHealth, 93); assert.equal(rest.flags!.rest, undefined);
+  const cold: G.Carry = { ...G.carryOf(quiet(4)), hostHealth: 70, flags: { longCold: true } }; G.night(cold);
+  assert.equal(cold.hostHealth, 70 - CONFIG.mend.cold);
+  // The arterial nodule ignored: the next liver has one more cell to cut.
+  const base = { ...G.carryOf(quiet(4)), chapter: 3, excised: 5 };
+  const plain = G.createGame(9, { ...base });
+  const seeded = G.createGame(9, { ...base, echoes: [{ id: 'route-2', choice: 'deviate', i: 1 }] });
+  assert.equal(seeded.tumor.size, plain.tumor.size + 1); assert.equal(seeded.excised, 4); assert.equal(seeded.echoes.length, 0);
+  // Holding the lane in a surge gets there sooner; ducking out of it, later.
+  const a = quiet(4), b = quiet(4); G.take(a, 'first-fright-transit', 'obey'); G.take(b, 'first-fright-transit', 'deviate');
+  assert.ok(a.drained < 0 && b.drained > 0);
+  const c: G.Carry = { ...G.carryOf(a), hostHealth: 80 }; G.tumorToll(c, 0.1); assert.equal(c.hostHealth, 80, 'a credit is never a gift');
+  // Suppression obeyed: in chapter 5 her T cells are busy along a nerve, on a map with ground to cover.
+  const lane = G.createGame(9, { ...base, chapter: 5, echoes: [{ id: 'suppress', choice: 'obey', i: 2 }] }, 'vessel');
+  assert.ok(lane.enemies.filter((e) => e.kind === 'tcell').length >= G.createGame(9, { ...base, chapter: 5 }, 'vessel').enemies.filter((e) => e.kind === 'tcell').length + 1);
+});

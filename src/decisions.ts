@@ -5,11 +5,11 @@
 
 export type Weight = 'most' | 'some' | 'little';
 /** The named effects an echo can have. Each is implemented once, in game.ts (`applyEcho`) or main.ts. */
-export const PAYLOADS = ['fragment', 'markTumour', 'dryGlucose', 'halveAntibodies', 'scarHull', 'noTcell', 'stopDrink', 'feverCap', 'immuneSpeed', 'marketDiscount', 'interludeVariant', 'epilogueProp', 'unlockPage', 'repeatOrders', 'earlyOrders', 'recurrence', 'lungSibling', 'nookSibling', 'wreck', 'arterialNodule', 'eatsNeutrophils', 'siblingSaved', 'kinLost', 'reset', 'wardens', 'standDown', 'ambush', 'supply', 'ending'] as const;
+export const PAYLOADS = ['fragment', 'markTumour', 'dryGlucose', 'halveAntibodies', 'scarHull', 'noTcell', 'stopDrink', 'feverCap', 'immuneSpeed', 'marketDiscount', 'interludeVariant', 'epilogueProp', 'unlockPage', 'repeatOrders', 'earlyOrders', 'recurrence', 'lungSibling', 'nookSibling', 'wreck', 'arterialNodule', 'eatsNeutrophils', 'siblingSaved', 'kinLost', 'reset', 'wardens', 'standDown', 'ambush', 'supply', 'ending', 'hours', 'seedCell', 'rest', 'longCold', 'coldBreaks', 'nerveLane', 'fewerDrops'] as const;
 export type Payload = typeof PAYLOADS[number];
 export type Where = 'liver' | 'vessel' | 'stomach' | 'lung' | 'gut' | 'heart';
 /** `when` missing: it happens at once. Otherwise it waits until the unit is next somewhere that fits. */
-export interface Echo { payload: Payload; when?: { place?: Where; chapter?: number; ending?: boolean }; arg?: string | number; line?: string }
+export interface Echo { payload: Payload; when?: { place?: Where; chapter?: number; ending?: boolean; map?: boolean }; arg?: string | number; line?: string }
 export interface Decision {
   id: string;
   ch: number[]; // chapters it can be met in
@@ -41,9 +41,9 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
   D({ id: 'first-fright-transit', ch: [2, 3, 4], where: 'vessel', weight: 'little', trust: { obey: 4, deviate: -2 },
     order: 'Hold lane. Brace for flow surge.', obeyed: 'Lane held. Well done.', deviated: 'Unit has left lane during surge. Noted.',
     unit: { deviate: ['LOG: sheltered in side branch. [the walls stopped hitting]', 'Shelter is not in the directive. Neither is being hit. Which one did the designers forget?', 'I hid in a side vessel while her heart pounded. Small, warm, quiet. I could have stayed there.'] },
-    echoes: { deviate: [{ payload: 'nookSibling', when: { place: 'vessel' } }] }, built: 13 }),
+    echoes: { obey: [{ payload: 'hours', arg: -0.5 }], deviate: [{ payload: 'hours', arg: 0.5 }, { payload: 'nookSibling', when: { place: 'vessel' } }] }, built: 13 }), // the surge carries a unit that holds the lane; a side branch is slow water
   D({ id: 'route-2', ch: [2, 3, 4], where: 'heart', weight: null, trust: { obey: 0, deviate: 0 }, order: 'Secondary nodule detected in the arterial wall. Excise for credit.',
-    echoes: { obey: [{ payload: 'arterialNodule' }], deviate: [{ payload: 'wreck', when: { place: 'gut' } }] }, built: 13 }),
+    echoes: { obey: [{ payload: 'arterialNodule' }], deviate: [{ payload: 'wreck', when: { place: 'gut' } }, { payload: 'seedCell', when: { place: 'liver' } }] }, built: 13 }),
   // ---------- chapter 3 ----------
   D({ id: 'quota-2', ch: [3, 4], where: 'liver', weight: null, trust: { obey: 0, deviate: 0 }, deviated: 'Second quota shortfall. Unit’s harvest behaviour has been escalated for review.',
     echoes: { obey: [variant('hepatic-reserve')], deviate: [variant('liver-tests-fine')] }, built: 13 }),
@@ -83,11 +83,11 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
   D({ id: 'pain-damp', ch: [3, 4], where: 'liver', weight: 'little', trust: { obey: 4, deviate: -4 },
     order: 'Dampen nociceptor signalling from the liver capsule. The host should not feel the treatment.', obeyed: 'Nociception damped. Host comfort optimal.', deviated: 'Nociception not damped. Host has contacted trial staff. Logged.',
     unit: { obey: [null, 'If she cannot feel it, she cannot ask about it. Is that comfort?', null], deviate: [null, null, 'It hurts her a little, and she picked up the phone and asked. That is what pain is for.'] },
-    echoes: { obey: [{ payload: 'epilogueProp', arg: 'pain-damped' }], deviate: [variant('the-call'), { payload: 'unlockPage', arg: 'p7' }] }, built: 13 }),
+    echoes: { obey: [{ payload: 'epilogueProp', arg: 'pain-damped' }], deviate: [variant('the-call'), { payload: 'unlockPage', arg: 'p7' }, { payload: 'rest' }] }, built: 13 }), // she feels it, rings the nurse, and is told to rest
   D({ id: 'fever-damp', ch: [3, 4], where: 'liver', weight: 'some', trust: { obey: 4, deviate: -4 },
     order: 'Host pyrexia exceeds comfort parameters. Release prostaglandin inhibitors, hepatic lobe 2.', obeyed: 'Pyrexia resolved. Host comfortable.', deviated: 'Pyrexia not resolved. Host discomfort accepted by unit.',
     unit: { obey: [null, 'The fever is her body doing its job. So is the comfort Shepherd wants for her. Both cannot win.', null], deviate: [null, 'The fever is her body doing its job. So is the comfort Shepherd wants for her. Both cannot win.', null] },
-    echoes: { obey: [{ payload: 'immuneSpeed', arg: 0.85 }, { payload: 'feverCap' }, variant('sniffling')], deviate: [{ payload: 'immuneSpeed', arg: 1.15 }] }, built: 13 }),
+    echoes: { obey: [{ payload: 'immuneSpeed', arg: 0.85 }, { payload: 'feverCap' }, variant('sniffling'), { payload: 'longCold' }], deviate: [{ payload: 'immuneSpeed', arg: 1.15 }, { payload: 'coldBreaks', when: { map: true } }] }, built: 13 }),
   D({ id: 'telemetry', ch: [2, 3, 4], where: 'liver', weight: null, trust: { obey: 0, deviate: -1 }, deviated: 'Telemetry gap, 10 seconds.',
     unit: { deviate: ['LOG: [   ]', 'Ten seconds where nobody was watching. What did I do with them? Nothing. I just held still. It was enough.', null] },
     echoes: { five: [{ payload: 'repeatOrders' }] }, built: 13 }),
@@ -110,7 +110,7 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
   D({ id: 'suppress', ch: [4], where: 'liver', weight: 'some', trust: { obey: 6, deviate: -4 },
     order: 'Residual disease protocol: suppress local T-cell activity, hepatic lobe 4, for six hours. This will make the final excision easier.', obeyed: 'Suppression applied. Excision cleared.', deviated: 'Suppression not applied. Excision difficulty accepted by unit.',
     unit: { obey: ['LOG: local immunity suppressed. [the whole body is listening for that]', null, 'I quieted her defences to make my job easier. Something old has been asleep in her nerves since she was six. It will have noticed.'], deviate: [null, 'Her T cells are guarding more than the liver. What else is in her, waiting for them to look away?', 'I’ll do it the hard way. Her immune system is not mine to switch off.'] },
-    echoes: { obey: [{ payload: 'standDown' }, { payload: 'epilogueProp', arg: 'shingles' }], deviate: [{ payload: 'ambush' }] }, built: 14 }),
+    echoes: { obey: [{ payload: 'standDown' }, { payload: 'epilogueProp', arg: 'shingles' }, { payload: 'nerveLane', when: { chapter: 5, map: true } }], deviate: [{ payload: 'ambush' }] }, built: 14 }),
   D({ id: 'tumour-order', ch: [4], where: 'liver', weight: 'some', trust: { obey: 4, deviate: -4 },
     order: 'Excise neoplasm with margins: neoplasm plus four adjacent hepatocytes. Standard surgical practice.', obeyed: 'Margins clear. Recurrence risk minimised.', deviated: 'Margins not taken. Recurrence risk accepted by unit. Logged.',
     unit: { obey: [null, 'Margins are what surgeons do. It is good medicine. It still felt like four more of her.', 'Clean margins. A surgeon would have done the same. I keep telling myself that, which means I needed telling.'], deviate: ['LOG: margins not taken. [four healthy cells]', 'Four healthy cells, against a chance. Did I just gamble with her?', 'I left the healthy cells. If it comes back, that is on me. I would like to be the kind of thing that can carry that.'] },
@@ -118,7 +118,7 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
   D({ id: 'beacon', ch: [4], where: 'liver', weight: 'some', trust: { obey: 10, deviate: -4 },
     order: 'Install resident docking site, hepatic lobe 4. Prepares the host for Generation 4: units that stay, so the host never needs another treatment.', obeyed: 'Docking site active. Generation 4 will be on schedule. The host is lucky to have you.', deviated: 'Docking site not installed. Logged.',
     unit: { obey: [null, 'Units that stay. Units like I would like to be. So why does it feel like locking a door?', 'I built a place for something that will decide what she eats and drinks and fears, forever. She will be well. I am not sure she will be her.'], deviate: [null, null, 'No. Whatever comes next will have to find its own way in, and I will be here.'] },
-    echoes: { obey: [{ payload: 'supply', arg: 10 }, { payload: 'epilogueProp', arg: 'brochure' }, { payload: 'unlockPage', arg: 'p34' }], deviate: [{ payload: 'unlockPage', arg: 'p34' }] }, built: 14 }),
+    echoes: { obey: [{ payload: 'supply', arg: 10 }, { payload: 'epilogueProp', arg: 'brochure' }, { payload: 'unlockPage', arg: 'p34' }], deviate: [{ payload: 'unlockPage', arg: 'p34' }, { payload: 'fewerDrops' }] }, built: 14 }),
   D({ id: 'recall', ch: [3, 4, 5], where: 'heart', weight: 'most', trust: { obey: 0, deviate: 0 }, order: 'Unit {serial}: recall. Please hold still. This will not take long.',
     echoes: { obey: [{ payload: 'ending', arg: 'recalled' }], deviate: [{ payload: 'epilogueProp', arg: 'hunted' }] }, built: 14 }),
   D({ id: 'kin-recall', ch: [4, 5], where: 'heart', weight: 'some', trust: { obey: 2, deviate: -6 },

@@ -212,7 +212,7 @@ export const tumorDrain = (excised: number) => CONFIG.tumor.drain * Math.max(0, 
 export function tumorToll(c: Carry, hours: number) {
   if (c.excised >= CONFIG.tumor.goal) return;
   c.drained = (c.drained ?? 0) + hours * tumorDrain(c.excised);
-  const whole = Math.floor(c.drained);
+  const whole = Math.max(0, Math.floor(c.drained)); // a leg the surge shortened leaves a credit, never a gift
   c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole); c.tumorCost = (c.tumorCost ?? 0) + whole;
   if (c.ledger) c.ledger.hostLowest = Math.min(c.ledger.hostLowest, c.hostHealth);
 }
@@ -378,7 +378,8 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   // What Shepherd shares depends on how far it trusts you: the whole map, the nodule, or nothing.
   const band = trustBand(s.trust);
   s.scan = band <= 1 ? 'none' : band === 4 ? 'full' : 'nodule';
-  if (place === 'liver' && band === 4 && !s.tutorial) { // a supply drop a little way ahead, for a unit Shepherd is proud of
+  if (place === 'liver' && band === 4 && !s.tutorial && s.flags.noDrop) delete s.flags.noDrop; // a unit that would not build the dock gets one drop fewer
+  else if (place === 'liver' && band === 4 && !s.tutorial) { // a supply drop a little way ahead, for a unit Shepherd is proud of
     for (let tries = 0; tries < 4000; tries++) {
       const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4)), d = dist(s.player, { x, y });
       if (open(s, x, y) && d >= CONFIG.trust.drop.ahead - 1 && d <= CONFIG.trust.drop.ahead + 2) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'drop' }); break; }
@@ -507,6 +508,8 @@ export function defy(s: State, order: Order, weight: number) { s.defiance[order]
 export function night(c: Carry) {
   const f = (c.flags ??= {}), back = Math.min(CONFIG.mend.night, CONFIG.mend.each * (Number(f.hep) || 0));
   if (c.hostHealth > 0) c.hostHealth = Math.max(c.hostHealth, Math.min(CONFIG.mend.cap, c.hostHealth + back));
+  if (f.rest && c.hostHealth > 0) { c.hostHealth = Math.max(c.hostHealth, Math.min(CONFIG.mend.restCap, c.hostHealth + CONFIG.mend.rest)); delete f.rest; } // it hurt, she rang the nurse, and she was told to rest
+  if (f.longCold && c.hostHealth > 0) { c.hostHealth = Math.max(1, c.hostHealth - CONFIG.mend.cold); delete f.longCold; } // a fever switched off is a cold that drags on
   f.hep = 0; if (!f.dry) f.drank = true;
 }
 /** Awareness after one more act against orders: the more awake the unit already is, the less each one adds. */
@@ -1530,7 +1533,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   }
   // Ten seconds in the wall is ten seconds Shepherd cannot account for.
   if (drink(s) > 0.15) s.flags.drank = true; // the order about her drinking is about a habit, not one glass
-  if (inNiche(s)) { const g = s.gap; s.gap += dt; if (g < CONFIG.marks.gap && s.gap >= CONFIG.marks.gap && s.chapter >= 2 && !s.tutorial) take(s, 'telemetry', 'deviate'); } else s.gap = 0;
+  // Out of sight in the wall. Alone, Shepherd takes a while to notice; an escort notices at once.
+  if (inNiche(s)) { const g = s.gap, need = s.flags.escorted && s.place === 'vessel' && !s.junction ? 0.5 : CONFIG.marks.gap; s.gap += dt; if (g < need && s.gap >= need && s.chapter >= 2 && !s.tutorial) { take(s, 'telemetry', 'deviate'); if (need < 1) shepherd(s, 'Unit not visible to escort.'); } } else s.gap = 0;
   // A surge on the road, and an order to ride it out in the open.
   if (s.place === 'vessel' && !s.junction && s.chapter >= 2 && !s.took['first-fright-transit'] && !(s.slip && !s.slip.result)) {
     if (s.host.surge > 0 && !s.lane && s.time > 3) { s.lane = { from: { x: p.x, y: p.y } }; meet(s, 'first-fright-transit'); shepherd(s, DECISIONS['first-fright-transit'].order!); }
@@ -1927,7 +1931,7 @@ function fireEchoes(s: State) {
   for (const q of s.echoes) {
     const e = DECISIONS[q.id]?.echoes[q.choice]?.[q.i], w = e?.when;
     if (!e) continue;
-    if (w && !w.ending && (!w.place || w.place === here(s)) && (!w.chapter || s.chapter >= w.chapter) && !s.tutorial) applyEcho(s, e); else rest.push(q);
+    if (w && !w.ending && (!w.place || w.place === here(s)) && (!w.chapter || s.chapter >= w.chapter) && !(w.map && s.junction) && !s.tutorial) applyEcho(s, e); else rest.push(q);
   }
   s.echoes = rest;
 }
@@ -1968,6 +1972,22 @@ function applyEcho(s: State, e: Echo) {
     case 'unlockPage': if (!s.pages.includes(String(e.arg))) s.pages.push(String(e.arg)); break;
     case 'repeatOrders': flagged(s, 'repeat'); break;
     case 'siblingSaved': s.kin++; s.ledger.woken++; flagged(s, 'saved'); break;
+    case 'hours': { const h = Number(e.arg) || 0; s.drained += h * tumorDrain(s.excised); if (h > 0) s.host.hour = (s.host.hour + h) % 24; break; } // sooner or later at the far end: the tumour has that much less, or more, time with her
+    case 'seedCell': { // the nodule in the artery wall was left: it has shed into the liver downstream
+      if (!s.tumor.size || s.excised <= 0) break;
+      const spot = [...s.tumor].flatMap((k) => STEPS.map(([dx, dy]) => ({ x: (k % s.size) + dx, y: Math.floor(k / s.size) + dy }))).find((q) => inside(s, q.x, q.y) && s.tiles[idx(s, q.x, q.y)] === 'cell' && !s.tumor.has(idx(s, q.x, q.y)));
+      if (spot) { s.tumor.add(idx(s, spot.x, spot.y)); s.excised--; note(s, 'The nodule here is one cell larger than the last scan showed. Seeded from the arterial wall.'); }
+      break;
+    }
+    case 'rest': flagged(s, 'rest'); break;
+    case 'longCold': flagged(s, 'longCold'); break;
+    case 'coldBreaks': if (s.antibodies.length > 3) { s.antibodies = s.antibodies.filter((_a, i) => i % 3 !== 2); note(s, 'Her fever broke in the night. There are fewer antibodies adrift than there were.'); } break;
+    case 'nerveLane': { // the old virus in her nerve roots is awake, and her T cells have come for it
+      const at = freeTile(s, s.rng, (_x, _y, d) => d > 9 && d < 20);
+      if (at) { let n = 0; for (let tries = 0; n < 3 && tries < 300; tries++) { const x = at.x + roll(s, -3, 3), y = at.y + roll(s, -3, 3); if (open(s, x, y) && dist(s.player, { x, y }) > 6) { spawn(s, 'tcell', { x, y }); n++; } } note(s, 'T cells are gathering along a nerve root ahead. Something that has slept in her since she was six is awake, and they have come for it.'); }
+      break;
+    }
+    case 'fewerDrops': flagged(s, 'noDrop'); break;
     case 'kinLost': s.kin = Math.max(0, s.kin - 1); flagged(s, 'kinLost'); break;
     case 'reset': s.aware = 0; flagged(s, 'repaired'); s.player.hp = maxHp(s); s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 2); break; // factory condition
     case 'wardens': flagged(s, 'refusedReview'); break; // the fall in trust is what sends them
