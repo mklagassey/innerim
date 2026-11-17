@@ -13,11 +13,12 @@ const canvas = $<HTMLCanvasElement>('board');
 const ctx = canvas.getContext('2d')!;
 
 let s = G.createGame();
+let paused = false; // the player asked the world to hold still
 let started = false; // true while a local map is being played; false on the world map
 let trip = T.newTrip();
 let dest: T.NodeId = 'hvein'; // where the map being played leads
 let settled = true; // the current map's ending has been dealt with
-const view: View = { w: 800, h: 600, zoom: 1, dpr: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null, heat: 0, kick: 0, still: matchMedia('(prefers-reduced-motion: reduce)').matches };
+const view: View = { w: 800, h: 600, zoom: 1, dpr: 1, time: 0, showMap: false, hover: null, hoverEnemy: null, mark: null, heat: 0, kick: 0, bpm: 60, still: matchMedia('(prefers-reduced-motion: reduce)').matches };
 const keys = new Set<string>();
 let held = false, pointer: { x: number; y: number } | null = null, retarget = 0;
 
@@ -98,6 +99,8 @@ window.addEventListener('keydown', (ev) => {
   if (!started || s.status !== 'playing') return;
   if (KEY_DIRS[k]) { ev.preventDefault(); keys.add(k); }
   else if (ev.repeat) return;
+  else if (k === 'p' || k === 'escape') setPaused(!paused);
+  else if (paused) return;
   else if (k === 'z') turnView(1);
   else if (k === 'x') turnView(-1);
   else if (k === 'e') useE();
@@ -116,6 +119,16 @@ window.addEventListener('blur', () => { keys.clear(); release(); });
 $('act-e').addEventListener('click', useE);
 $('act-f').addEventListener('click', () => G.startStrip(s));
 $('map').addEventListener('click', toggleMap);
+function setPaused(on: boolean) {
+  if (on && (!started || s.status !== 'playing' || s.offer || s.ask || tip)) return; // those already hold the world still
+  paused = on;
+  $('paused').hidden = !on; $('pause').setAttribute('aria-pressed', String(on));
+  keys.clear(); release();
+  if (on) $('unpause').focus({ preventScroll: true });
+}
+$('pause').addEventListener('click', () => setPaused(!paused));
+$('unpause').addEventListener('click', () => setPaused(false));
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); }); // a phone that locks should not cost you the hull
 $('turn-l').addEventListener('click', () => turnView(1));
 $('turn-r').addEventListener('click', () => turnView(-1));
 const showSound = () => { $('sound').textContent = Sound.isOn() ? 'Sound on' : 'Sound off'; $('sound').setAttribute('aria-pressed', String(Sound.isOn())); };
@@ -179,6 +192,7 @@ $('again').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); T
 const SVG = 'http://www.w3.org/2000/svg';
 function openWorld(title: string, text: string) {
   started = false;
+  paused = false; $('paused').hidden = true; $('pause').setAttribute('aria-pressed', 'false');
   saveTrip();
   closeTip(); // an info box from the map you just left has nothing to point at now
   keys.clear(); release();
@@ -209,6 +223,7 @@ function openWorld(title: string, text: string) {
     const g = el('g', { class: `place${isHere ? ' here' : ''}${way || enter ? ' go' : ''}` });
     if (way || enter) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.dataset.to = enter ? ways[0].to : id; }
     const big = n.kind !== 'artery' && n.kind !== 'vein';
+    g.classList.add(`is-${id}`);
     g.append(el('circle', { cx: n.x, cy: n.y, r: big ? 26 : 20 }));
     g.append(el('text', { x: n.x, y: n.y + (big ? 44 : 38) }, n.name));
     if (isHere) g.append(el('circle', { class: 'you', cx: n.x, cy: n.y, r: 6 }));
@@ -529,7 +544,7 @@ function hud() {
 
 // ---------- loop ----------
 
-let then = performance.now(), walked = 0;
+let then = performance.now(), walked = 0, heardBeat = false, beatClock = 0;
 function frame(now: number) {
   const raw = (now - then) / 1000;
   const dt = Math.min(0.05, raw);
@@ -540,7 +555,7 @@ function frame(now: number) {
   const aim = quarter * (Math.PI / 2);
   spin = Math.abs(aim - spin) < 0.002 ? aim : spin + (aim - spin) * (view.still ? 1 : 1 - Math.exp(-dt * 9));
   setSpin(spin);
-  if (started && s.status === 'playing') {
+  if (started && s.status === 'playing' && !paused) {
     if (held) { retarget -= dt; if (retarget <= 0) { retarget = 0.12; walkToPointer(); } }
     if ((s.place === 'vessel' || s.place === 'lung') && G.canLeave(s)) G.leave(s); // reaching the far end is getting away
     tipRest -= dt;
@@ -570,11 +585,16 @@ function frame(now: number) {
   const chasers = near.filter((e) => e.mood === 'chase').length;
   const heat = Math.max(tier / 3, chasers ? 0.5 + 0.17 * Math.min(3, chasers) : near.some((e) => e.mood === 'investigate') ? 0.3 : 0);
   const bpm = Math.max([58, 80, 108, 132][tier], chasers ? 100 : 0, CONFIG.host.bpm[G.hostState(s)]) - (G.hostState(s) === 'asleep' && !tier && !chasers ? 10 : 0);
-  Sound.pulse(started && s.status === 'playing' && !tip ? bpm : 0, s.player.hp / G.maxHp(s), heat);
+  Sound.pulse(started && s.status === 'playing' && !tip && !paused ? bpm : 0, s.player.hp / G.maxHp(s), heat);
   aimPointer();
-  const live = started && s.status === 'playing' && !tip;
+  const live = started && s.status === 'playing' && !tip && !paused;
   view.heat = live ? Sound.intensity() : 0;
-  view.kick = live ? Sound.thump() : 0;
+  // The picture keeps the host's pulse even where the sound cannot start.
+  const heard = live ? Sound.thump() : 0;
+  heardBeat ||= heard > 0;
+  beatClock += dt * bpm / 60;
+  view.kick = !live ? 0 : heardBeat ? heard : Math.exp(-((beatClock % 1) * 60 / bpm) / 0.14);
+  view.bpm = bpm;
   draw(ctx, s, view);
   hud();
   requestAnimationFrame(frame);

@@ -134,6 +134,7 @@
   .card dt { font: 500 0.78rem/1.7 var(--data); color: var(--amber); white-space: nowrap; }
   .card dd { margin: 0; color: var(--bone-dim); }
   .card button { font-size: 0.95rem; padding: 12px 22px; border-color: var(--amber); color: var(--amber); }
+  @media (min-width: 561px) and (max-width: 1180px) { .tools { gap: 5px; } .tools button { padding: 6px 8px; font-size: 11px; } }
   @media (max-width: 560px) {
     .gauges { top: 50px; left: 14px; transform: none; width: calc(100% - 28px); }
     .name { display: none; }
@@ -141,6 +142,14 @@
     .orb { width: 64px; height: 64px; } .belt { left: 12px; right: 12px; bottom: 88px; }
     #style, #build { display: none; }
   }
+  @keyframes organ-beat { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.09); } 30% { transform: scale(1); } 42% { transform: scale(1.05); } 60% { transform: scale(1); } }
+  @keyframes organ-breathe { 0%, 100% { transform: scale(0.95); } 50% { transform: scale(1.08); } }
+  @keyframes organ-churn { 0%, 100% { transform: scale(1.05, 0.96); } 50% { transform: scale(0.96, 1.05); } }
+  #world-map .place circle:first-child { transform-box: fill-box; transform-origin: center; }
+  #world-map .place.is-heart circle:first-child { animation: organ-beat 1s ease-in-out infinite; }
+  #world-map .place.is-lungs circle:first-child { animation: organ-breathe 5.5s ease-in-out infinite; }
+  #world-map .place.is-stomach circle:first-child, #world-map .place.is-gut circle:first-child { animation: organ-churn 6s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { #world-map .place circle:first-child { animation: none !important; } }
   @media (prefers-reduced-motion: reduce) { .gauge i u, .orb u { transition: none; } #alert.losing b, #alert.losing i { animation: none; } }
 </style>
 <div class="stage">
@@ -151,7 +160,7 @@
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
     <div id="goal"></div>
   </div>
-  <div class="hud tools"><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="turn-l" type="button" aria-label="Turn the view left (Z)" title="Turn the view left (Z)">&#10226; Z</button><button id="turn-r" type="button" aria-label="Turn the view right (X)" title="Turn the view right (X)">X &#10227;</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
+  <div class="hud tools"><button id="pause" type="button" aria-pressed="false" aria-label="Pause (P)" title="Pause (P)">&#10073;&#10073;</button><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="turn-l" type="button" aria-label="Turn the view left (Z)" title="Turn the view left (Z)">&#10226; Z</button><button id="turn-r" type="button" aria-label="Turn the view right (X)" title="Turn the view right (X)">X &#10227;</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
   <div class="hud orb" id="hp"><u id="hp-fill"></u><b><span id="hp-val"></span><small>Hull</small></b></div>
   <div class="hud orb" id="energy"><u id="energy-fill"></u><b><span id="energy-val"></span><small>Energy</small></b></div>
   <div class="hud belt">
@@ -198,6 +207,13 @@
       <svg id="world-map" viewBox="0 0 640 380" role="img" aria-label="Map of the vessels between the heart and the liver"></svg>
       <div id="world-market" hidden></div>
       <div class="acts" id="world-ways"></div>
+    </div>
+  </div>
+  <div class="veil" id="paused" hidden>
+    <div class="card">
+      <h2>Paused</h2>
+      <p>The host carries on without you for a moment.</p>
+      <button id="unpause" type="button">Resume</button>
     </div>
   </div>
   <div class="veil" id="ask" hidden>

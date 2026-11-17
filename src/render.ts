@@ -4,7 +4,7 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, acidLevel, cloaked, hostState, riding, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -14,6 +14,7 @@ export interface View {
   hover: Point | null; hoverEnemy: number | null; mark: Point | null;
   heat: number; // 0 to 1: how wound-up the music is
   kick: number; // 1 at each drum hit, fading to 0
+  bpm: number; // the host's heart rate right now
   still: boolean; // the player asked for reduced motion
 }
 
@@ -203,7 +204,64 @@ function paintFloor(c: Ctx, variant: number, dead: boolean) {
 // Purely for show, so they live here and not in the rules. They drift with the blood,
 // which in a liver always means toward the central vein.
 interface Rbc extends Point { z: number; spin: number; seed: number }
-let heroMoving = false, heroWas: Point = { x: 0, y: 0 };
+let heroMoving = false, heroWas: Point = { x: 0, y: 0 }, heroTurn = 0, heroSpin = 0, frameDt = 0;
+
+// ---------- a body that moves ----------
+// Nothing in here is rigid. Every wall takes the pulse a moment after the one upstream of it, the stomach
+// squeezes in slow waves, and the lung's air sacs swell and sink with each breath. All of it is for the eye:
+// the rules still see walls where they have always been.
+const pulses: { t: number; k: number }[] = [];
+function pulseAt(time: number, delay: number): number {
+  const at = time - delay;
+  for (let n = pulses.length - 1; n >= 0; n--) if (pulses[n].t <= at) return pulses[n].k;
+  return 0;
+}
+/** How full the lungs are, 0 to 1. The first half of each breath is in. */
+export const breath = (s: State) => { const len = CONFIG.host.breath[hostState(s)]; return 0.5 - 0.5 * Math.cos(((s.time % len) / len) * Math.PI * 2); };
+interface Sway { dx: number; dy: number; sx: number; sy: number }
+const REST: Sway = { dx: 0, dy: 0, sx: 1, sy: 1 };
+function sway(s: State, v: View, x: number, y: number): Sway {
+  if (v.still) return REST;
+  const t = v.time, stressed = hostState(s) === 'stressed' ? 1.6 : 1;
+  // Soft tissue never quite holds still.
+  let dx = Math.sin(t * 0.7 + x * 0.9 + y * 0.4) * 0.9, dy = Math.cos(t * 0.55 + x * 0.3 - y * 0.8) * 0.7, sx = 1, sy = 1;
+  // The pulse arrives as a wave running along the tissue.
+  const amp = (s.place === 'vessel' ? (s.vessel === 'artery' ? 0.05 : 0.018) : s.place === 'liver' ? 0.022 : 0.014) * stressed;
+  const k = pulseAt(t, (x + y) * 0.014);
+  sx += amp * k; sy += amp * k * 0.8;
+  if (s.place === 'stomach') {
+    // Peristalsis: rings of muscle tightening one after another, harder when there is a meal to work on.
+    const fed = digesting(s.host.hour, s.host.snack), g = 0.3 + 0.7 * fed;
+    const w = Math.max(0, Math.sin(x * 0.5 + y * 0.35 - t * (0.8 + 0.6 * fed))), squeeze = w * w * g;
+    const mid = s.size / 2, to = project(mid - x, mid - y), len = Math.hypot(to.x, to.y) || 1;
+    dx += (to.x / len) * 5 * squeeze; dy += (to.y / len) * 5 * squeeze;
+    sy *= 1 + 0.08 * squeeze; sx *= 1 - 0.05 * squeeze;
+  } else if (s.place === 'lung') {
+    // Air sacs fill and empty; each one a little out of step with its neighbour.
+    const b = breath(s), own = 0.9 + 0.2 * hash(x + 3, y + 7), full = 0.9 + 0.17 * b * own;
+    sx *= full; sy *= full;
+  }
+  return { dx, dy, sx, sy };
+}
+interface Lump { x: number; y: number; r: number; fall: number; alpha: number; hue: number; fizz: number }
+let lakeFor: unknown = null, lake: Point[] = [];
+/** Food in the stomach: it drops in at a meal, sits in the acid, and comes apart. */
+export function food(s: State): Lump[] {
+  if (s.place !== 'stomach' || !s.acid) return [];
+  if (lakeFor !== s.acid) { lakeFor = s.acid; lake = []; for (let i = 0; i < s.acid.length; i++) if (s.acid[i] === 2) lake.push({ x: i % s.size, y: Math.floor(i / s.size) }); }
+  const fed = digesting(s.host.hour, s.host.snack), out: Lump[] = [];
+  if (!lake.length || fed <= 0) return out;
+  for (let k = 0; k < Math.ceil(fed * 26); k++) {
+    const life = 15 + (k % 5) * 2.5, at = s.time + k * 4.3, round = Math.floor(at / life), ph = (at % life) / life;
+    const tile = lake[Math.floor(hash(k * 7 + 1, round * 13 + 5) * lake.length)];
+    out.push({
+      x: tile.x + 0.2 + hash(k, round) * 0.6, y: tile.y + 0.2 + hash(round, k + 9) * 0.6,
+      r: (10 + hash(k + 2, 3) * 10) * Math.pow(1 - ph, 0.6), fall: Math.max(0, 1 - ph / 0.07), alpha: Math.min(1, ph / 0.05) * Math.min(1, (1 - ph) / 0.15),
+      hue: k % 4, fizz: ph,
+    });
+  }
+  return out;
+}
 let rbcs: Rbc[] = [], flow: Int16Array | null = null, flowFor: State | null = null, flowKills = -1, lastTime = 0;
 
 function flowField(s: State): Int16Array {
@@ -273,6 +331,16 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const dt = Math.min(0.05, Math.max(0, v.time - lastTime)); lastTime = v.time;
   driftBlood(s, dt * (0.5 + currentStrength(s) * 3.5)); // the red cells show how hard the blood is running
   if (dt > 0) { heroMoving = Math.hypot(p.x - heroWas.x, p.y - heroWas.y) > dt * 0.5; heroWas = { x: p.x, y: p.y }; }
+  frameDt = dt;
+  {
+    // The hull swings round to a new heading instead of snapping to it, and rolls a little into the turn.
+    const f = project(p.face.x, p.face.y), want = Math.atan2(f.y, f.x);
+    let off = want - heroTurn; off = Math.atan2(Math.sin(off), Math.cos(off));
+    const step = v.still || dt <= 0 ? (v.still ? off : 0) : off * (1 - Math.exp(-dt * 9));
+    heroTurn += step;
+    heroSpin += ((dt > 0 ? step / dt : 0) - heroSpin) * Math.min(1, dt * 8);
+  }
+  pulses.push({ t: v.time, k: v.kick }); if (pulses.length > 150) pulses.shift();
 
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, v.w, v.h);
@@ -281,7 +349,9 @@ export function draw(ctx: Ctx, s: State, v: View) {
   ctx.translate(v.w / 2, v.h / 2);
   // The whole view jumps a hair with each kick once the music is loud.
   const hot = Math.max(0, (v.heat - 0.4) / 0.6), punch = v.still ? 0 : hot * v.kick;
-  ctx.scale(v.zoom * (1 + punch * 0.022), v.zoom * (1 + punch * 0.022));
+  // The host breathes, and everything inside them rides up and down a little with it. In the lung it is most of the view.
+  const air = v.still ? 0.5 : breath(s), heave = s.place === 'lung' ? 0.02 : 0.004;
+  ctx.scale(v.zoom * (1 + punch * 0.022) * (1 + (air - 0.5) * heave), v.zoom * (1 + punch * 0.022) * (1 + (air - 0.5) * heave));
   ctx.translate(-cam.x, -cam.y);
 
   const span = Math.ceil(v.w / v.zoom / TW + v.h / v.zoom / TH) + 2;
@@ -312,6 +382,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
         const dying = hit && p.channel?.kind === 'strip' ? p.channel.t / p.channel.total : 0;
         thin[i] = hides(c) ? Math.min(1, thin[i] + dt / 0.3) : Math.max(0, thin[i] - dt / 0.5);
         const glass = 1 - 0.72 * thin[i] * thin[i] * (3 - 2 * thin[i]);
+        const m = sway(s, v, x, y);
         things.push({ depth: depthOf(x + 0.5, y + 0.5), draw: () => {
           const squash = 1 - dying * 0.4, h = CELL_OY * squash;
           // The remembered look underneath, the lit look faded in over it.
@@ -331,7 +402,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
             ctx.globalAlpha = a * glass;
             // Squash toward the floor as the cell is torn open.
             if (dying) ctx.drawImage(img, 0, 0, img.width, (CELL_OY / CELL_H) * img.height, c.x - CELL_OX, c.y - h, CELL_W, h);
-            else ctx.drawImage(img, c.x - CELL_OX, c.y - CELL_OY, CELL_W, CELL_H);
+            else ctx.drawImage(img, c.x + m.dx - CELL_OX * m.sx, c.y + m.dy - CELL_OY * m.sy, CELL_W * m.sx, CELL_H * m.sy);
           }
           ctx.globalAlpha = 1;
           if (hit) {
@@ -466,7 +537,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
   for (const portal of s.portals) vessel(portal, false);
 
   // The lamp: a warm pool at your feet and a beam the way you are facing.
-  const f = project(p.face.x, p.face.y), fa = Math.atan2(f.y, f.x);
+  const fa = heroTurn;
   ctx.globalCompositeOperation = 'lighter';
   const pool = ctx.createRadialGradient(cam.x, cam.y, 0, cam.x, cam.y, 120);
   pool.addColorStop(0, 'rgba(255,214,170,0.16)'); pool.addColorStop(1, 'rgba(255,214,170,0)');
@@ -494,6 +565,25 @@ export function draw(ctx: Ctx, s: State, v: View) {
     const c = project(p.x, p.y), hold = Math.min(1, s.tagged / 1.5);
     for (let k = 0; k < 3; k++) { const a = v.time * 0.9 + k * 2.1; antibody(ctx, c.x + Math.cos(a) * 15, c.y - 20 + Math.sin(a) * 7, a, hold); }
   } });
+  for (const f of food(s)) {
+    if (!s.explored[idx(s, Math.floor(f.x), Math.floor(f.y))] || f.r < 0.6) continue;
+    things.push({ depth: depthOf(f.x, f.y) - 0.02, draw: () => {
+      // A piece of the host's meal: it lands, bobs, and fizzes away to nothing.
+      const c = project(f.x, f.y), y = c.y - 4 - f.fall * f.fall * 70 + Math.sin(v.time * 1.4 + f.x * 5) * 1.5;
+      const tone = ['#b98a4e', '#d8c79a', '#7f9a4a', '#a0552f'][f.hue];
+      ctx.globalAlpha = f.alpha * 0.92;
+      ctx.fillStyle = 'rgba(210,240,120,0.16)'; oval(ctx, c.x, y + 2, f.r * 1.7, f.r * 0.8); ctx.fill();
+      ctx.fillStyle = tone; ctx.beginPath(); lumpy(ctx, c.x, y, f.r, f.r * 0.72, f.hue * 11 + Math.floor(f.x * 7), 0.16); ctx.fill();
+      ctx.strokeStyle = 'rgba(40,30,10,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.22)'; oval(ctx, c.x - f.r * 0.3, y - f.r * 0.3, f.r * 0.35, f.r * 0.18); ctx.fill();
+      for (let b = 0; b < 4; b++) {
+        const up = (v.time * 0.6 + b * 0.25 + f.x) % 1;
+        ctx.fillStyle = `rgba(235,255,170,${(1 - up) * 0.5 * Math.min(1, f.fizz * 6)})`;
+        oval(ctx, c.x + Math.sin(b * 2.4 + f.y * 9) * f.r * 0.9, y - up * 22, 1.3 + b * 0.3, 1.3 + b * 0.3); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } });
+  }
   for (const b of s.decoys) things.push({ depth: depthOf(b.x, b.y) - 0.01, draw: () => {
     // A little knot of rod-shaped bacteria, tumbling, with a green haze that fades as it runs out.
     const c = project(b.x, b.y), fade = Math.min(1, b.t / 2) * Math.min(1, (CONFIG.flora.lasts - b.t) / 0.4);
@@ -821,7 +911,10 @@ function pickup(ctx: Ctx, x: number, y: number, kind: 'cache' | 'patch' | 'calm'
 function hero(ctx: Ctx, s: State, v: View) {
   const p = s.player, c = project(p.x, p.y);
   const f = project(p.face.x, p.face.y), fl = Math.hypot(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
-  const moving = heroMoving, bob = Math.sin(v.time * 2.2) * 1.6, lift = 15 + bob, a = Math.atan2(fy, fx);
+  const moving = heroMoving, bob = Math.sin(v.time * 2.2) * 1.6, lift = 15 + bob;
+  void fx; void fy;
+  const a = heroTurn, roll = Math.max(-1, Math.min(1, heroSpin / 6));
+  const worn = 1 - Math.max(0, Math.min(1, p.hp / maxHp(s))), st = stage(s);
   if (riding(s)) {
     // Wearing a neutrophil: its pale body all round the ship, lobed nucleus pushed to one side.
     const r = 21 + Math.sin(v.time * 3) * 1, cy = c.y - lift;
@@ -841,11 +934,16 @@ function hero(ctx: Ctx, s: State, v: View) {
     ctx.globalCompositeOperation = 'source-over';
   }
   const hurt = p.hurt > 0, hull = hurt ? '#ff9a8e' : '#e6efec', shade = hurt ? '#a8483f' : '#6f8582', dark = '#22303a';
-  ctx.save(); ctx.translate(c.x, c.y - lift); ctx.rotate(a); ctx.scale(1.25, 1.25);
-  // Engine wash behind the ship while it is under way.
+  if (s.suppressed > 0 && !riding(s)) {
+    // Cortisol in the water around you: a slow amber halo for as long as it lasts.
+    ctx.fillStyle = `rgba(255,200,120,${Math.min(1, s.suppressed / 2) * (0.1 + 0.05 * Math.sin(v.time * 1.8))})`;
+    oval(ctx, c.x, c.y - lift, 30, 19); ctx.fill();
+  }
+  ctx.save(); ctx.translate(c.x, c.y - lift); ctx.rotate(a); ctx.scale(1.25, 1.25 * (1 - Math.abs(roll) * 0.22));
+  // Engine wash behind the ship while it is under way. ATP upgrades burn longer and whiter.
   if (moving) {
     ctx.globalCompositeOperation = 'lighter';
-    const len = 15 + Math.sin(v.time * 31) * 3, wash = ctx.createLinearGradient(-12, 0, -12 - len, 0);
+    const len = (15 + Math.sin(v.time * 31) * 3) * (1 + 0.3 * s.upgrades.atp) * (worn > 0.7 ? 0.6 + 0.3 * Math.sin(v.time * 6) : 1), wash = ctx.createLinearGradient(-12, 0, -12 - len, 0);
     wash.addColorStop(0, 'rgba(140,230,255,0.75)'); wash.addColorStop(1, 'rgba(140,230,255,0)');
     ctx.fillStyle = wash;
     for (const side of [-3.4, 3.4]) { ctx.beginPath(); ctx.moveTo(-11, side - 1.8); ctx.lineTo(-12 - len, side); ctx.lineTo(-11, side + 1.8); ctx.fill(); }
@@ -865,15 +963,43 @@ function hero(ctx: Ctx, s: State, v: View) {
   ctx.beginPath(); ctx.moveTo(13, 0); ctx.bezierCurveTo(11, -7, -4, -7.5, -10.5, -3.6); ctx.lineTo(-10.5, 3.6); ctx.bezierCurveTo(-4, 7.5, 11, 7, 13, 0); ctx.fill();
   ctx.strokeStyle = 'rgba(30,45,55,0.5)'; ctx.lineWidth = 0.7;
   ctx.beginPath(); ctx.moveTo(-3.5, -6.6); ctx.lineTo(-3.5, 6.6); ctx.stroke(); // hull seam
-  ctx.fillStyle = '#e2b53c'; ctx.fillRect(-8.5, -5, 2, 10); // a band of hazard yellow, so the surgeons can find you
+  ctx.fillStyle = '#e2b53c'; ctx.fillRect(-8.5, -5, 2, 10); // a band of hazard yellow: every unit of the swarm wears one
+  // Extra plating shows as a pale shell over the hull, one line per level.
+  for (let k = 0; k < s.upgrades.glycocalyx; k++) {
+    ctx.strokeStyle = `rgba(215,240,255,${0.55 - k * 0.12})`; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(13.5 + k, 0); ctx.bezierCurveTo(11 + k, -7.8 - k * 0.9, -3, -8.3 - k * 0.9, -9.5, -4.6 - k * 0.7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13.5 + k, 0); ctx.bezierCurveTo(11 + k, 7.8 + k * 0.9, -3, 8.3 + k * 0.9, -9.5, 4.6 + k * 0.7); ctx.stroke();
+  }
+  // A cloak that is charged and ready runs a faint teal shimmer down the flanks.
+  if (s.upgrades.cd47 > 0 && s.cloakCd <= 0 && !cloaked(s)) {
+    ctx.strokeStyle = `rgba(120,240,225,${0.25 + 0.2 * Math.sin(v.time * 2.4)})`; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(9, -4.6); ctx.quadraticCurveTo(0, -7.6, -8, -4.4); ctx.moveTo(9, 4.6); ctx.quadraticCurveTo(0, 7.6, -8, 4.4); ctx.stroke();
+  }
+  // Damage stays on the hull: hairline cracks first, then scorched plating, then a breach venting behind you.
+  if (worn > 0.25) {
+    ctx.strokeStyle = `rgba(28,18,22,${Math.min(0.85, 0.35 + worn * 0.6)})`; ctx.lineWidth = 0.75; ctx.lineCap = 'round';
+    const cracks: number[][] = [[2, -6, 0.5, -3, 2.5, -1.5], [-6, 2, -3.5, 3.5, -4.5, 6], [8, 2.5, 6, 4, 6.8, 5.6], [-1, -1, 1.5, 1.5, 0, 4], [-8, -3, -5.5, -1.5, -6.5, 0.5]];
+    for (const [x1, y1, x2, y2, x3, y3] of cracks.slice(0, Math.ceil((worn - 0.25) / 0.75 * cracks.length))) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.stroke(); }
+  }
+  if (worn > 0.5) {
+    ctx.fillStyle = `rgba(35,20,18,${(worn - 0.5) * 0.9})`; oval(ctx, -2, 3, 4.5, 2.6, 0.4); ctx.fill(); oval(ctx, 7, -3, 2.6, 1.6, -0.3); ctx.fill();
+  }
+  if (worn > 0.65) for (let k = 0; k < 4; k++) {
+    const u = (v.time * 0.9 + k * 0.25) % 1;
+    ctx.fillStyle = `rgba(200,235,255,${(1 - u) * 0.55})`; oval(ctx, -4 - u * 16, 3 + Math.sin(k * 2.1 + v.time * 2) * 2.5 - u * 3, 0.9 + u * 1.4, 0.9 + u * 1.4); ctx.fill();
+  }
+  // Stowaways cling on aft.
+  for (let k = 0; k < Math.min(4, s.flora); k++) { ctx.fillStyle = k % 2 ? '#9be38a' : '#6cc46a'; oval(ctx, -9.5 + (k % 2) * 2.2, (k < 2 ? -1 : 1) * (5.6 + (k % 2)), 2.1, 0.9, k * 0.9 + Math.sin(v.time * 1.5 + k) * 0.3); ctx.fill(); }
   // The canopy.
   ctx.fillStyle = '#0f1c26'; oval(ctx, 4.6, 0, 4.6, 3.6); ctx.fill();
   ctx.fillStyle = 'rgba(160,220,255,0.6)'; oval(ctx, 5.6, -1.2, 2.1, 1); ctx.fill();
   // The lamp on the nose.
   ctx.globalCompositeOperation = 'lighter';
   const lamp = ctx.createRadialGradient(13, 0, 0, 13, 0, 7);
-  lamp.addColorStop(0, 'rgba(255,236,190,0.95)'); lamp.addColorStop(1, 'rgba(255,236,190,0)');
-  ctx.fillStyle = lamp; oval(ctx, 13, 0, 7, 7); ctx.fill();
+  // The lamp warms as the unit wakes, and gutters when the hull is nearly gone.
+  const glowing = (worn > 0.8 ? 0.6 + 0.3 * Math.sin(v.time * 4.5) : 0.95), tint = st >= 3 ? '255,214,140' : st >= 1 ? '245,236,205' : '215,236,255';
+  lamp.addColorStop(0, `rgba(${tint},${glowing})`); lamp.addColorStop(1, `rgba(${tint},0)`);
+  ctx.fillStyle = lamp; oval(ctx, 13, 0, 7 + st * 0.5, 7 + st * 0.5); ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
   if (p.channel) {
