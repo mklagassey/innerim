@@ -74,8 +74,7 @@ rewrite it.
 | 3 | Awake | Marian | First person. "I." Names, guilt, preference |
 | 4 | Self | Marian, sometimes "you" | Speaks *to* her, though she cannot hear. Makes promises |
 
-Pronoun rule: Marian is "she". The world voice currently says "they" in a few habit and
-fright lines; that should be made consistent (see handoff, section 11).
+Pronoun rule: Marian is "she", in every voice.
 
 ## 5. The backstory (what the player pieces together)
 
@@ -195,8 +194,7 @@ flavours), **Resident**, **The quiet colony**. Planned for later, once the brain
 Implementation needs the creative side has, in priority order. None of this is a code change
 made by this doc.
 
-1. **Pronouns.** World-voice lines in `game.ts` (meals, habits, frights, dreams, sleep) say
-   "they"; the story says "she". Make Marian "she" everywhere.
+1. **Pronouns.** Done (de3d772): all host narration now says "she".
 2. **Dead units' logs.** Give each dark sibling a short log fragment (pool to come from creative,
    in `story.ts`), shown in the salvage/wake prompt and filed to the unit log.
 3. **Consent form pages** as unlockable unit-log entries at awareness thresholds.
