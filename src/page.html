@@ -43,6 +43,10 @@
   #goal { font: 500 0.68rem/1.3 var(--data); color: var(--amber); text-align: center; text-shadow: 0 1px 3px #000; }
   .gauge i { grid-column: 1 / -1; height: 6px; background: var(--clot); border: 1px solid var(--seam); border-radius: 3px; overflow: hidden; display: block; }
   .gauge i u { display: block; height: 100%; width: 0; background: var(--fill); transition: width 0.2s; }
+  #host-drain { font: 500 0.62rem/1.3 var(--data); color: #c9768a; text-align: right; min-height: 1.3em; text-shadow: 0 1px 3px #000; }
+  @keyframes took { 0% { filter: none; } 35% { filter: brightness(1.5) saturate(1.3); } 100% { filter: none; } }
+  #host.took i { animation: took 1.6s ease-in-out; }
+  @media (prefers-reduced-motion: reduce) { #host.took i { animation: none; } }
   #host { --fill: #c9768a; } #alert { --fill: var(--bone-dim); }
   #alert[data-tier="1"] { --fill: var(--amber); } #alert[data-tier="2"], #alert[data-tier="3"] { --fill: var(--blood); }
   #alert[data-tier="3"] b { color: var(--blood); }
@@ -202,6 +206,7 @@
   <div class="hud name"><h1>Host</h1><span class="where" id="where">Liver lobule &middot; cell tier</span><span class="where" id="style"></span><span id="build"></span></div>
   <div class="hud gauges">
     <div class="gauge" id="host"><span>Host health &middot; <em id="host-state"></em></span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
+    <div id="host-drain"></div>
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
     <div id="order" hidden></div>
     <div id="goal"></div>

@@ -413,10 +413,10 @@ test('the circulation runs one way: out by an artery, home by the veins', () => 
 test('patrols turn up about as often as the map says, and grow with each trip', () => {
   let met = 0;
   for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); t.offRoute = true; if (T.depart(t, 'hepatic')!.kind === 'patrol') met++; }
-  assert.ok(met > 280 && met < 360, `hepatic artery patrols: ${met}/400`);
+  assert.ok(met > 200 && met < 280, `hepatic artery patrols: ${met}/400`);
   let escorted = 0;
   for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); if (T.depart(t, 'hepatic')!.kind === 'patrol') escorted++; }
-  assert.ok(escorted > 180 && escorted < 260, `with Shepherd's escort: ${escorted}/400`);
+  assert.ok(escorted > 100 && escorted < 180, `with Shepherd's escort: ${escorted}/400`);
   const t = T.newTrip(2); t.rng = () => 0;
   const first = T.depart(t, 'hepatic') as { size: number };
   t.trip = 3;
@@ -961,12 +961,13 @@ test('unit-4: the hunt is an area; inside it the alert holds, outside it drains,
 test('the tumor costs the host by the hour until it is all out', () => {
   const s = quiet(6); s.host.nextSurge = 999; s.host.hour = 12; s.player.energy = 30;
   const h0 = s.hostHealth;
-  run(s, CONFIG.host.secondsPerHour * 2 + 0.5);
-  assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain);
+  run(s, CONFIG.host.secondsPerHour * 4 + 0.5);
+  assert.equal(s.hostHealth, h0 - 4 * CONFIG.tumor.drain);
+  assert.equal(s.drainHere, 4 * CONFIG.tumor.drain); assert.equal(G.carryOf(s).tumorCost, s.drainHere);
   assert.equal(G.tumorDrain(CONFIG.tumor.goal / 2), CONFIG.tumor.drain / 2, 'half the tumor, half the cost');
   s.excised = CONFIG.tumor.goal;
   run(s, CONFIG.host.secondsPerHour + 0.5);
-  assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain, 'and stops once it is gone');
+  assert.equal(s.hostHealth, h0 - 4 * CONFIG.tumor.drain, 'and stops once it is gone');
 });
 
 test('clotting waits a moment after a hit before it mends', () => {
@@ -993,10 +994,11 @@ test('the first liver cache always offers the cloak, once', () => {
 test('the tumor takes its share on the road between maps too', () => {
   const c = G.carryOf(quiet(6));
   const h0 = c.hostHealth;
-  G.tumorToll(c, 0.25);
-  assert.equal(c.hostHealth, h0, 'a quarter hour is half a point, kept for later');
-  G.tumorToll(c, 0.25);
+  G.tumorToll(c, 0.5 / CONFIG.tumor.drain);
+  assert.equal(c.hostHealth, h0, 'half a point, kept for later');
+  G.tumorToll(c, 0.5 / CONFIG.tumor.drain);
   assert.equal(c.hostHealth, h0 - 1);
+  assert.equal(c.tumorCost, 1);
   assert.equal(G.createGame(7, { ...c, drained: 0.75 }).drained, 0.75, 'and the fraction follows you into the next map');
   c.excised = CONFIG.tumor.goal;
   G.tumorToll(c, 5);
@@ -1302,4 +1304,14 @@ test('S21: Shepherd\'s first liver advances on its triggers, repeats an ignored 
   assert.deepEqual(s.defiedNow, ['quota'], 'the planned stumble: one cell logged against a quota of two');
   assert.equal(s.aware, 12);
   assert.equal(G.tutorialOrder(s), '');
+});
+
+test('a vessel\'s side branches can always be entered, and once the tumor is out only the lungs are assigned', async () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const m = generateVessel(seed, 2), N = m.size, seen = new Uint8Array(N * N), q = [m.start.y * N + m.start.x]; seen[q[0]] = 1;
+    while (q.length) { const k = q.pop()!; for (const d of [1, -1, N, -N]) { const j = k + d; if (j >= 0 && j < N * N && !seen[j] && !m.wall[j]) { seen[j] = 1; q.push(j); } } }
+    for (const g of [...m.glucose, ...m.patches]) assert.ok(seen[g.y * N + g.x], `seed ${seed}: something is walled off at ${g.x},${g.y}`);
+  }
+  const t = T.newTrip(1); t.carry = { ...G.carryOf(G.createGame(3)), excised: CONFIG.tumor.goal };
+  assert.deepEqual(T.ways(t).filter((l) => T.assigned(t, l)).map((l) => l.to), ['lungs']);
 });

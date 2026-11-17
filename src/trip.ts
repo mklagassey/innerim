@@ -29,7 +29,7 @@ export const NODES: Record<NodeId, Node> = {
 /** One vessel between two places. `risk` is the chance a patrol is working it. */
 export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number; via?: NodeId; ordered?: boolean } // via: passes through this place without stopping. ordered: on the route Shepherd assigns // after: only once this many tumor cells are out
 export const LEGS: Leg[] = [
-  { from: 'heart', to: 'hepatic', risk: 0.8, ordered: true },
+  { from: 'heart', to: 'hepatic', risk: 0.6, ordered: true },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
   { from: 'mesenteric', to: 'gut', risk: 0.25 },
   { from: 'gut', to: 'portal', risk: 0 },
@@ -67,7 +67,9 @@ export const riskOf = (t: Trip, leg: Leg) => (leg.risk === 0 ? 0 : Math.max(0, M
 /** Shepherd is still giving this unit orders. Past the last stage it has lost the unit, and says nothing. */
 export const commanded = (t: Trip) => stageOf(t.carry?.aware ?? 0) < 4;
 /** Shepherd escorts units that keep to the route it assigned: the reward for doing as you are told. */
-export const escorted = (t: Trip, leg: Leg) => !!leg.ordered && !t.offRoute && commanded(t);
+export const escorted = (t: Trip, leg: Leg) => assigned(t, leg) && !t.offRoute && commanded(t);
+/** Is this leg on the route Shepherd has assigned right now? Once the tumor is out the only order is the lungs. */
+export const assigned = (t: Trip, leg: Leg) => !!leg.ordered && ((t.carry?.excised ?? 0) < TUMOR_GOAL || leg.to === 'lungs');
 export const riskWord = (r: number) => (r === 0 ? '' : r < 0.35 ? 'lightly patrolled' : r < 0.6 ? 'patrolled' : 'heavily patrolled');
 
 /** Vessels you could take from where you are. */
@@ -87,7 +89,7 @@ export function depart(t: Trip, to: NodeId): Outcome | null {
   if (leg.from === 'liver' || leg.from === 'stomach') return { kind: leg.from };
   if (leg.to === 'lungs') return { kind: 'lung' };
   if (t.tutorial && escorted(t, leg)) return { kind: 'arrive' }; // nothing reaches a unit on its way to its first lesson
-  if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) };
+  if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.max(2, Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) - (escorted(t, leg) ? 1 : 0)) }; // an escorted unit meets a smaller patrol
   return { kind: 'arrive' };
 }
 

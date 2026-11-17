@@ -250,7 +250,7 @@ function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}), defied: { ...(d.carry.ledger?.defied ?? {}) }, obeyed: { ...(d.carry.ledger?.obeyed ?? {}) } }, difficulty: d.carry.difficulty ?? 'typical', event: d.event && d.event in EVENTS ? d.event : null }, event: d.event && d.event in EVENTS ? d.event : null, used: Array.isArray(d.used) ? d.used : [] };
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, tumorCost: d.carry.tumorCost ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}), defied: { ...(d.carry.ledger?.defied ?? {}) }, obeyed: { ...(d.carry.ledger?.obeyed ?? {}) } }, difficulty: d.carry.difficulty ?? 'typical', event: d.event && d.event in EVENTS ? d.event : null }, event: d.event && d.event in EVENTS ? d.event : null, used: Array.isArray(d.used) ? d.used : [] };
   } catch { return null; }
 }
 const kept = savedTrip();
@@ -277,9 +277,10 @@ function openWorld(title: string, text: string) {
     ? `The tumor is out. To finish, go to the Heart and take the new road to the Lungs${Story.stageOf(c?.aware ?? 0) >= 3 ? ', or refuse the recall there and stay' : ''}.`
     : `Mission: cut out the tumor in the liver. ${out} of ${CONFIG.tumor.goal} cells are out, so about ${visits} more liver visit${visits === 1 ? '' : 's'}. When it is all out, a road opens from the Heart to the Lungs and you can leave. The mission fails if the ship is destroyed or the host's health reaches zero.`;
   // Shepherd's standing order for the road, for as long as it is still giving orders.
-  const ordered = T.commanded(trip) && ways.some((l) => l.ordered) && ways.some((l) => !l.ordered);
+  const ordered = T.commanded(trip) && ways.some((l) => T.assigned(trip, l)) && ways.some((l) => !T.assigned(trip, l));
   $('world-order').hidden = !ordered;
-  $('world-order').textContent = ordered ? `Shepherd: ${trip.offRoute ? Story.STANDING.lane.defied[0] : Story.STANDING.lane.arrival}` : '';
+  $('world-order').textContent = ordered ? `Shepherd: ${trip.offRoute ? Story.STANDING.lane.defied[0] : trip.trip === 1 ? 'Suggested route displayed. Escort provided.' : Story.STANDING.lane.arrival}` : '';
+  if (c?.tumorCost) $('world-goal').textContent += ` The tumor has cost her ${c.tumorCost}% since injection.`;
   $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1, trip.event);
   $('world-event').hidden = !trip.event;
   $('world-event').replaceChildren();
@@ -325,7 +326,7 @@ function openWorld(title: string, text: string) {
   $('world-ways').replaceChildren(...ways.map((leg) => {
     const b = document.createElement('button'), word = T.riskWord(T.riskOf(trip, leg));
     b.type = 'button'; b.dataset.to = leg.to;
-    if (T.escorted(trip, leg) && ways.some((l) => !l.ordered)) b.classList.add('ordered');
+    if (T.escorted(trip, leg) && ways.some((l) => !T.assigned(trip, l))) b.classList.add('ordered');
     b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : leg.via ? `Straight home to the ${T.NODES[leg.to].name.toLowerCase()}${word ? ` (${word})` : ''}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
     return b;
   }));
@@ -362,7 +363,7 @@ function openWorld(title: string, text: string) {
 
 // ---------- the gut lumen: glucose in, fermentation products out ----------
 
-let stock: UpgradeId[] = [], said = '';
+let stock: UpgradeId[] = [], said = '', drainSeen = 0;
 /** Shepherd's verdicts and the unit's own lines, as they read on the world map. */
 const told = (r: G.Ruling[]) => r.map((x) => (x.who === 'shepherd' ? `Shepherd: ${x.text}` : `\u201c${x.text}\u201d`)).join(' ');
 function keepRulings(r: G.Ruling[]) { if (r.length) keepJournal(r.map((x) => ({ who: x.who === 'shepherd' ? 'shepherd' : (x.st ?? 0) >= 3 ? 'awake' : 'unit', text: x.who === 'shepherd' ? `Shepherd: ${x.text}` : x.text }))); return r; }
@@ -429,7 +430,9 @@ function go(to: T.NodeId) {
   const out = T.depart(trip, to);
   if (!out) return;
   // Taking a road Shepherd did not assign: the escort goes, and the unit has done something it was not told to.
-  if (way && !way.ordered && !trip.offRoute && T.commanded(trip)) { trip.offRoute = true; keepRulings(G.defyCarry((trip.carry ??= freshCarry()), 'lane', CONFIG.story.orders.little)); }
+  // Before the first liver is done the route is only a suggestion: the escort still goes, but nothing is held against the unit.
+  if (way && !T.assigned(trip, way) && !trip.offRoute && T.commanded(trip) && trip.trip === 1) trip.offRoute = true;
+  if (way && !T.assigned(trip, way) && !trip.offRoute && T.commanded(trip)) { trip.offRoute = true; keepRulings(G.defyCarry((trip.carry ??= freshCarry()), 'lane', CONFIG.story.orders.little)); }
   if (out.kind === 'arrive') { if (trip.carry) { const hours = CONFIG.wait.legHours * (straight ? 2 : 1); trip.carry.hour = (trip.carry.hour + hours) % 24; G.tumorToll(trip.carry, hours); } land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. The immune system is quiet here.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour, trip.carry?.snack ?? -1, trip.event) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
   dest = to;
   const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
@@ -570,6 +573,8 @@ function hud() {
   const mood = G.hostState(s);
   set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${s.host.habit ? ` \u00b7 ${s.host.habit === 'drink' ? 'tipsy' : 'caffeinated'}` : ''}${s.place === 'lung' ? (G.breathingOut(s) ? ' \u00b7 breathing out' : ' \u00b7 breathing in') : G.digesting(s.host.hour, s.host.snack, s.event) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
+  set('host-drain', 'text', s.drainHere ? `Tumor: \u2212${s.drainHere}% on this map` : s.excised < CONFIG.tumor.goal ? 'Tumor: taking its share' : '');
+  if (s.drainHere !== drainSeen) { drainSeen = s.drainHere; if (s.drainHere) { const g = $('host'); g.classList.remove('took'); void g.offsetWidth; g.classList.add('took'); } }
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`

@@ -35,7 +35,7 @@ export const TIPS: Tip[] = [
   { id: 'sleep', kind: 'The host', title: 'The host is asleep',
     body: 'The host has a day of her own, and the clock next to Host health at the top keeps it. While she sleeps the blood runs slow and easy, but sugar is scarce because she is fasting, and the immune system does its best work at night: everything smells you from further off.' },
   { id: 'fever', kind: 'The host', title: 'Fever',
-    body: 'You have hurt the host enough that her body is turning up the heat. A fever makes every immune cell faster and makes your ship burn through its energy quicker, and it climbs again at 60% and 40% host health. The host only mends while asleep, about ten points an hour, so damage done by day stays with you until night.' },
+    body: 'The host is unwell enough that her body is turning up the heat. Two things wear her down: the tumor takes its share every hour it is still in, however careful you are, and each of her own cells you strip costs her more. A fever makes every immune cell faster and makes your ship burn through its energy quicker, and it climbs again at 60% and 40% host health. The host only mends while asleep, about ten points an hour, so damage done by day stays with you until night.' },
   { id: 'coffee', kind: 'The host', title: 'Coffee',
     body: 'The host drinks coffee at 8 and at 3. For a few hours after, caffeine pushes the blood round faster everywhere and makes her jumpy, so frights come about twice as often. Frights mean cortisol, so a jumpy host is not all bad news.' },
   { id: 'drink', kind: 'The host', title: 'A drink',

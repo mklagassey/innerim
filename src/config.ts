@@ -100,7 +100,7 @@ export const CONFIG = {
     maxEnemies: 16,
   },
   items: {
-    caches: 6, // upgrade choices scattered through the liver
+    caches: 4, // upgrade choices scattered through the liver
     patches: 4,
     calms: 3, // interleukin-10 droplets
     calmDrop: 30, // alert removed by one
@@ -161,7 +161,7 @@ export const CONFIG = {
     first: { quiet: 3, times: 3 }, // a strike on a cell that has had no trace of you for this long
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
-  tumor: { cells: 10, goal: 20, gain: 1, heal: 0, alert: 2, time: 1.4, drain: 2 }, // drain: host health lost per host hour with the whole tumor in; it falls in step with what is left
+  tumor: { cells: 10, goal: 20, gain: 1, heal: 0, alert: 2, time: 1.4, drain: 0.75 }, // drain: host health lost per host hour with the whole tumor in; it falls in step with what is left
   // The gut lumen: glucose released here is fermented by the flora, and the unit collects the products. Costs are in energy.
   lung: { macrophages: 2 },
   // Boarding: climb inside a wounded neutrophil and wear it.
