@@ -1788,4 +1788,5 @@ test('unit-17.7: holding the lane in a surge is obeying unless the ship goes off
   const a = mk(); assert.ok(a.lane, 'the order is given'); run(a, 8);
   assert.equal(a.took['first-fright-transit'], 'obey', 'holding still and not being hit is still holding the lane');
   const b = mk(); b.lane!.left = true; run(b, 8); assert.equal(b.took['first-fright-transit'], 'deviate');
+  const c = mk(); c.player.energy = 99; put(c, c.vein); assert.ok(G.leave(c)); assert.equal(c.took['first-fright-transit'], 'obey', 'riding the surge out of the vessel settles it');
 });
