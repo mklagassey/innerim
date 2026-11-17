@@ -20,6 +20,8 @@ Tests pass at every build (88 at v60, 109 at v69), `tsc` clean. There were 0 pag
 - All-obey, 20 seeds: 15 Decommissioned and 5 Breathed out, 0 deaths. Host lowest was 3 to 53 (median about 37; target 40+). Host at the end was 15 to 65% (target 55 to 70). Awareness was 15 to 50 (target 0). The bot refused the review in those runs (harness fixed since). Its other awareness came from orders it could not obey cleanly: kupffer-spare in 20 of 20 runs, suppress in 14, marked-cell in 7, and the Slip.
 - Defiant: host 89 to 94% and awareness 64 to 82, both on target. Mixed: awareness 49 to 66 (target 35 to 60). Switch to obey at 60: ends at 67 to 69 (target 70 or under).
 
+**Recheck on Versions 73 and 74.** The recurrence soft-lock is fixed: 16 margin-skipping runs had no hangs, and one reached the Recurrence ending. All-obey on v74, 20 seeds: 20 of 20 Decommissioned, 0 deaths, 0 page errors. Host lowest had a median of 42 (range 15 to 57). Host at the end had a median of 57 (range 31 to 72). Awareness had a median of 15.5 (range 12 to 22), almost all of it from wrong-reading Slips. These meet the systems targets: median lowest 40 or more, median end 55 to 70.
+
 **Branch explorer (v60 to v62):** 32 policies, 0 errors. At v60, Resident was unreachable: stay needed stage 3, which needed waking kin, and kin make it a colony. At v62 all 5 of the endings at that time were reached.
 
 **Cut scenes (v63, 15 reels):** sampled every animation frame on an 8x6 grid. 14 reels are flash-safe. `ending:stranger` shows 3 large luminance swings within 1 s around 24 s. That is at the WCAG limit, so it is borderline; it was passed to art.
