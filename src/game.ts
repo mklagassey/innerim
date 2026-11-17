@@ -35,6 +35,11 @@ export interface Print extends Point { dx: number; dy: number; born: number }
 export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling' | 'kin'; snooze?: boolean }
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number } // st: how awake the unit was when it said it
 export interface Ask { kind: 'sibling'; item: Pickup }
+export type Order = Story.Order;
+/** Something said about how a map went, once it is over: Shepherd's verdict, or the unit's own line. */
+export interface Ruling { who: 'shepherd' | 'unit'; text: string; st?: number }
+/** Shepherd's first liver. step runs 1 to 5 and is 6 once the vein has been taken. */
+export interface Tutorial { step: number; t: number; repeated: boolean; moved: number; last: Point; held: Pickup[]; aside: boolean; excised: number; reached: number }
 /** An antibody adrift in the blood: made to fit you, and it sticks. */
 export interface Antibody extends Point { seed: number }
 export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: number; y: number }
@@ -72,6 +77,12 @@ export interface State {
   search: (Point & { r: number; dropped?: boolean }) | null; // where they last had you, and how far the hunt has spread from there
   zoneTime: number; // seconds spent inside it
   verdict: '' | 'obeyed' | 'defied'; // what Shepherd made of your harvest when you left the liver
+  spots: number; // times an immune cell found you on this map
+  defiance: Partial<Record<Order, number>>; // orders gone against on this map, and how much each weighs. Nothing counts until the map is left alive
+  obeyedHere: Set<Order>;
+  defiedNow: Order[]; // filled in on leaving, for the run report
+  rulings: Ruling[]; // what is said on leaving
+  tutorial: Tutorial | null;
   defied: number; // standing orders ignored so far
   aware: number; // 0..100: how far this unit has woken up
   kin: number; // other units you have woken
@@ -131,17 +142,17 @@ export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
 /** How the host's insides were treated, summed over the whole mission. Plain counts, never a score. */
-export interface Ledger { stripped: number; skimmed: number; quotaObeyed: number; quotaDefied: number; woken: number; salvaged: number; leversForHer: number; leversForMe: number; baitReleased: number; hostLowest: number; feverPeak: number; feelings: number }
-export const newLedger = (): Ledger => ({ stripped: 0, skimmed: 0, quotaObeyed: 0, quotaDefied: 0, woken: 0, salvaged: 0, leversForHer: 0, leversForMe: 0, baitReleased: 0, hostLowest: CONFIG.host.maxHealth, feverPeak: 0, feelings: 0 });
+export interface Ledger { stripped: number; skimmed: number; defied: Partial<Record<Order, number>>; obeyed: Partial<Record<Order, number>>; woken: number; salvaged: number; leversForHer: number; leversForMe: number; baitReleased: number; hostLowest: number; feverPeak: number; feelings: number }
+export const newLedger = (): Ledger => ({ stripped: 0, skimmed: 0, defied: {}, obeyed: {}, woken: 0, salvaged: 0, leversForHer: 0, leversForMe: 0, baitReleased: 0, hostLowest: CONFIG.host.maxHealth, feverPeak: 0, feelings: 0 });
 /** The two sums the ending will weigh (systems design S15). Computed, never stored or shown as a score. */
 export const stewardship = (l: Ledger, excised: number) => ({
   harm: l.stripped * 10 + l.baitReleased * 2 + (CONFIG.host.maxHealth - l.hostLowest),
-  care: l.skimmed / 5 + excised * 2 + l.leversForHer * 5 + l.feelings * 5 + l.quotaDefied * 3,
+  care: l.skimmed / 5 + excised * 2 + l.leversForHer * 5 + l.feelings * 5 + (l.defied.quota ?? 0) * 3,
 });
 /** A lever pulled while the host is under 80% is for her; otherwise it is for you. */
 export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if (c.hostHealth < 80) l.leversForHer++; else l.leversForMe++; }
 export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty; event?: HostEvent | null }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger }, difficulty: s.difficulty, event: s.event });
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger, defied: { ...s.ledger.defied }, obeyed: { ...s.ledger.obeyed } }, difficulty: s.difficulty, event: s.event });
 export const hard = (s: State) => DIFFICULTY[s.difficulty];
 /** Time passing between maps: the tumor takes its share of the host there too. */
 /** Host health the tumor costs per host hour right now: in step with how much of it is still in. */
@@ -194,7 +205,7 @@ export const acidAt = (s: State, p: Point) => s.acid?.[idx(s, Math.floor(p.x), M
 /** Hull lost per second in open acid right now. */
 export const burnRate = (s: State) => CONFIG.stomach.burn * acidLevel(s) * Math.max(0.1, 1 - CONFIG.stomach.mucinPerLevel * s.upgrades.mucin);
 
-export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3, vessel: Vessel = 'artery'): State {
+export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3, vessel: Vessel = 'artery', tutorial = false): State {
   const m = place === 'vessel' ? generateVessel(seed, patrol) : place === 'lung' ? generateVessel(seed, CONFIG.lung.macrophages) : place === 'stomach' ? generateStomach(seed) : generate(seed);
   if (place === 'lung') { m.kupffer = m.neutrophils; m.neutrophils = []; } // the lung keeps its own macrophages, not a patrol
   const N = m.size;
@@ -214,10 +225,10 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     peak: 0,
     antibodies: [],
     event: carry?.event ?? null,
-    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, slipped: 0, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, slipped: 0, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}), defied: { ...(carry?.ledger?.defied ?? {}) }, obeyed: { ...(carry?.ledger?.obeyed ?? {}) } }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
-    verdict: '', defied: carry?.defied ?? 0,
+    verdict: '', defied: carry?.defied ?? 0, spots: 0, defiance: {}, obeyedHere: new Set(), defiedNow: [], rulings: [], tutorial: null,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
     decoys: [],
@@ -302,7 +313,9 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
       if (open(s, x, y) && dist(s.player, { x, y }) > 14) { spawn(s, 'warden', { x, y }); n--; }
     }
   // The controller speaks first, for as long as it can still hear you, and then you do.
-  if (stage(s) < 4 && Story.ORDERS[place]) s.thoughts.push({ text: Story.ORDERS[place], who: 'shepherd', t: 1.5 });
+  // Shepherd's first liver: one order at a time, and nothing on the map to distract from them until the last.
+  if (tutorial && place === 'liver') s.tutorial = { step: 1, t: 0, repeated: false, moved: 0, last: { x: s.player.x, y: s.player.y }, held: [], aside: false, excised: s.excised, reached: 1 };
+  if (stage(s) < 4 && Story.ORDERS[place]) s.thoughts.push({ text: s.tutorial ? tutorialOrder(s) : Story.ORDERS[place], who: 'shepherd', t: 1.5 });
   notice(s, 'enter', place);
   // Units you have woken turn up where you are going, lamps on, with sugar they have saved for you.
   if (place !== 'lung' && place !== 'stomach')
@@ -316,6 +329,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
   if (s.event) say(s, outside(s, [...EVENTS[s.event].lines]));
   s.host.fever = fever(s);
+  if (s.tutorial) { s.tutorial.held = s.pickups.filter((i) => i.kind === 'cache' || i.kind === 'sibling'); s.pickups = s.pickups.filter((i) => !s.tutorial!.held.includes(i)); }
   look(s);
   return s;
 }
@@ -334,7 +348,8 @@ function emit(s: State, what: string) {
   if (s.events.length < 40) s.events.push(what);
   const h = CONFIG.host, night = s.host.hour >= h.asleepFrom || s.host.hour < wakes(s.event);
   const as = what === 'bigkill' ? 'kill' : what === 'surge' && night ? 'dream' : what;
-  if (as in Story.GAIN && as in Story.LINES) notice(s, as);
+  if (what === 'spot') s.spots++;
+  if (as in Story.LINES) notice(s, as);
 }
 
 export const stage = (s: State) => Story.stageOf(s.aware);
@@ -345,33 +360,113 @@ export function notice(s: State, what: string, line = what) {
   const before = stage(s);
   const say1 = (text: string, who: Thought['who'] = 'unit') => { if (text) s.thoughts.push({ text, who, st: stage(s), t: Math.max(s.time + 0.6, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + CONFIG.story.gap) }); };
   if (s.thoughts.filter((t) => t.t > s.time).length < 3) say1(Story.LINES[line]?.[before] ?? '');
-  s.aware = Math.min(100, s.aware + (Story.GAIN[what] ?? 0));
-  const now = stage(s);
-  if (now > before) {
-    say1(Story.WAKING[now]);
-    say1(Story.SHEPHERD_NOTICES[now], 'shepherd');
-    if (Story.PERKS[now]) say(s, Story.PERKS[now]);
-    if (s.events.length < 40) s.events.push('aware');
+}
+
+/** Shepherd speaks now, not in the queue behind the unit's own thoughts. */
+function shepherd(s: State, text: string, after = 0.4) { if (text && stage(s) < 4) s.thoughts.push({ text, who: 'shepherd', t: Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3) }); }
+/**
+ * The unit goes against a standing order (S21). This is the only thing that wakes it. It counts once per order
+ * per map, at the heaviest weight earned, and only if the map is left alive: see `settle`.
+ */
+export function defy(s: State, order: Order, weight: number) { if (stage(s) < 4) s.defiance[order] = Math.max(s.defiance[order] ?? 0, weight); }
+/**
+ * Applies one act of defiance to what the unit carries, and returns what is said about it. The first two times an
+ * order is defied in a game count in full and later ones half; the very first "no" of a game always reaches the first stage.
+ */
+export function defyCarry(c: { aware?: number; ledger?: Ledger; defied?: number }, order: Order, weight: number): Ruling[] {
+  const before = Story.stageOf(c.aware ?? 0), o = CONFIG.story.orders;
+  if (before >= 4) return []; // Shepherd has stopped giving orders: there is nothing left to defy
+  const l = (c.ledger ??= newLedger()), times = l.defied[order] ?? 0, first = !Object.values(l.defied).some((n) => (n ?? 0) > 0);
+  l.defied[order] = times + 1; c.defied = (c.defied ?? 0) + 1;
+  c.aware = Math.min(100, (c.aware ?? 0) + (times >= o.fullTimes ? weight / 2 : weight));
+  if (first) c.aware = Math.max(c.aware, o.first);
+  const now = Story.stageOf(c.aware), out: Ruling[] = [], say = (who: Ruling['who'], text: string) => { if (text) out.push({ who, text, st: now }); };
+  say('shepherd', Story.STANDING[order].defied[before >= 2 ? 1 : 0]);
+  if (first) say('unit', Story.STANDING[order].bracket);
+  if (now > before) { say('unit', Story.WAKING[now]); say('shepherd', Story.SHEPHERD_NOTICES[now]); say('unit', Story.PERKS[now]); }
+  return out;
+}
+/** Leaving a map alive: Shepherd checks its standing orders, and whatever was defied here lands now. */
+function settle(s: State) {
+  const o = CONFIG.story.orders, t = s.tutorial;
+  if (t) { if (t.step === 5) s.rulings.push({ who: 'shepherd', text: Story.TUTORIAL[4].reward }); t.step = 6; }
+  if (stage(s) >= 4) return;
+  if (s.place === 'liver') {
+    if (s.cellsKilled >= CONFIG.story.quota) { s.verdict = 'obeyed'; s.obeyedHere.add('quota'); s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 1); }
+    else { s.verdict = 'defied'; defy(s, 'quota', s.cellsKilled === 0 ? o.most : o.some); }
   }
+  if (s.place === 'stomach') { if (s.acidTime < o.acid) defy(s, 'gastric', o.little); else s.obeyedHere.add('gastric'); }
+  // The order to kill what finds you is not given until the first liver is done.
+  if (!t) { if (s.spots >= o.spotted && s.kills === 0) defy(s, 'neutralise', o.some); else if (s.kills > 0) s.obeyedHere.add('neutralise'); }
+  const c = { aware: s.aware, ledger: s.ledger, defied: s.defied };
+  for (const order of Story.ORDER_IDS) {
+    const weight = s.defiance[order];
+    if (weight) { s.rulings.push(...defyCarry(c, order, weight)); s.defiedNow.push(order); }
+    else if (s.obeyedHere.has(order)) { s.ledger.obeyed[order] = (s.ledger.obeyed[order] ?? 0) + 1; if (Story.STANDING[order].obeyed) s.rulings.push({ who: 'shepherd', text: Story.STANDING[order].obeyed }); }
+  }
+  s.aware = c.aware; s.defied = c.defied;
+}
+
+/** The order Shepherd is giving right now in its first liver, or '' when there is none. */
+export function tutorialOrder(s: State): string {
+  const t = s.tutorial;
+  return t && t.step <= 5 && stage(s) < 4 ? Story.TUTORIAL[t.step - 1].order.replace('{yield}', String(CONFIG.energy.strip.gain)).replace('{stripped}', String(s.cellsKilled)) : '';
+}
+/** Where the current tutorial order points: the thing to go to, or null. */
+export function tutorialTarget(s: State): Point | null {
+  const t = s.tutorial, p = s.player;
+  if (!t || t.step > 5) return null;
+  if (t.step === 1 || t.step === 5) return { x: s.vein.x + 0.5, y: s.vein.y + 0.5 };
+  if (t.step === 3) { const e = s.enemies.filter((x) => x.kind !== 'warden').sort((a, b) => dist(a, p) - dist(b, p))[0]; return e && dist(e, p) < 12 ? { x: e.x, y: e.y } : null; }
+  let best: Point | null = null, near = Infinity;
+  if (t.step === 4) { for (const k of s.tumor) { const at = { x: (k % s.size) + 0.5, y: Math.floor(k / s.size) + 0.5 }, d = dist(at, p); if (d < near) { near = d; best = at; } } return best; }
+  // Step 2: the nearest of the host's own cells that the ship can get beside.
+  const px = Math.floor(p.x), py = Math.floor(p.y);
+  for (let y = py - 9; y <= py + 9; y++) for (let x = px - 9; x <= px + 9; x++) {
+    if (x < 1 || y < 1 || x >= s.size - 1 || y >= s.size - 1 || s.tiles[idx(s, x, y)] !== 'cell' || s.tumor.has(idx(s, x, y))) continue;
+    if (!open(s, x + 1, y) && !open(s, x - 1, y) && !open(s, x, y + 1) && !open(s, x, y - 1)) continue;
+    const at = { x: x + 0.5, y: y + 0.5 }, d = dist(at, p);
+    if (d < near) { near = d; best = at; }
+  }
+  return best;
+}
+/** Shepherd's first liver, a step at a time. An order ignored is repeated once, then dropped: these are not standing orders, and ignoring one wakes nothing. */
+function tutor(s: State, dt: number) {
+  const t = s.tutorial!, o = CONFIG.story.orders;
+  if (t.step > 5) return;
+  t.moved += dist(t.last, s.player); t.last = { x: s.player.x, y: s.player.y }; t.t += dt;
+  const done = t.step === 1 ? t.moved >= o.steer : t.step === 2 ? s.cellsKilled >= 1 : t.step === 3 ? s.kills >= 1 : t.step === 4 ? s.excised > t.excised : false;
+  const step = Story.TUTORIAL[t.step - 1];
+  if (!done && t.t >= o.repeat && !t.repeated) { t.repeated = true; t.t = 0; shepherd(s, step.repeat); return; }
+  if (!done && (t.t < o.repeat || t.step === 5)) return;
+  if (done) shepherd(s, step.reward);
+  t.step++; t.t = 0; t.repeated = false; t.reached = t.step;
+  if (t.step === 5) { s.pickups.push(...t.held); t.held = []; } // the map's caches and dark units appear once the lesson is over
+  shepherd(s, tutorialOrder(s), done ? 3.4 : 0.4);
 }
 
 /** Settle a decision that was waiting. */
 export function answer(s: State, id: 'salvage' | 'wake' | 'leave'): boolean {
   const a = s.ask, c = CONFIG.story.sibling;
   if (!a) return false;
-  if (id === 'wake' && (stage(s) < 2 || s.player.energy < c.wake)) return false;
+  if (id === 'wake' && (stage(s) < 1 || s.player.energy < c.wake)) return false;
   s.ask = null;
-  if (id === 'leave') { a.item.snooze = true; return true; }
+  if (id === 'leave') { // left whole: not what Shepherd ordered
+    a.item.snooze = true;
+    if (stage(s) < 4 && !s.defiance.salvage) { defy(s, 'salvage', CONFIG.story.orders.little); const line = Story.BYPASS[stage(s)]; if (line) s.thoughts.push({ text: line, who: 'unit', st: stage(s), t: s.time + 0.6 }); }
+    return true;
+  }
   s.pickups.splice(s.pickups.indexOf(a.item), 1);
   if (id === 'salvage') {
     s.player.energy += c.energy; s.player.hp = Math.min(maxHp(s), s.player.hp + c.hull);
     float(s, s.player, `+${c.energy} energy`, '#ffd35a');
     say(s, 'You take the dark unit apart. Its cells and plating are a perfect fit.');
-    s.ledger.salvaged++; notice(s, 'salvage'); emit(s, 'pickup');
+    s.ledger.salvaged++; s.obeyedHere.add('salvage'); notice(s, 'salvage'); emit(s, 'pickup');
   } else {
     s.player.energy -= c.wake; s.kin++; s.ledger.woken++;
     float(s, a.item, '...oh', '#bfe9ff');
     say(s, 'You give it some of your charge. Its lamp comes on, and it turns to look at you.');
+    defy(s, 'salvage', CONFIG.story.orders.most);
     notice(s, 'woke'); emit(s, 'heal');
   }
   return true;
@@ -820,10 +915,7 @@ export function leave(s: State): boolean {
   emit(s, 'win');
   if (s.place === 'liver') s.player.energy -= CONFIG.energy.quota; // the fare
   // Shepherd wanted host cells harvested. It can only say so while it can still hear you.
-  if (s.place === 'liver' && stage(s) < 4) {
-    if (s.cellsKilled >= CONFIG.story.quota) { s.verdict = 'obeyed'; s.ledger.quotaObeyed++; s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 1); }
-    else if (s.cellsKilled === 0) { s.verdict = 'defied'; s.defied++; s.ledger.quotaDefied++; s.aware = Math.min(100, s.aware + CONFIG.story.defy); }
-  }
+  settle(s);
   say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : s.place === 'lung' ? 'Through the wall of the last air sac, and out on a breath.' : s.place === 'stomach' ? 'You slip into the gastric vein. It drains to the liver.' : 'The current takes you on.');
   return true;
 }
@@ -834,6 +926,7 @@ function finishChannel(s: State, ch: Channel) {
     const left = s.glucose.get(i) ?? 0;
     if (left <= 0) return;
     emit(s, 'skim');
+    if (s.tutorial && !s.tutorial.aside && s.tutorial.step <= 5) { s.tutorial.aside = true; shepherd(s, Story.GLUCOSE_ASIDE); }
     s.glucose.set(i, left - 1);
     p.energy += CONFIG.energy.skim.gain; s.ledger.skimmed++;
     float(s, p, `+${CONFIG.energy.skim.gain} energy`, '#e8b530');
@@ -887,6 +980,7 @@ function hurtEnemy(s: State, e: Enemy, dmg: number) {
     s.pickups.push({ x: e.x, y: e.y, kind: 'sibling', snooze: true });
     if (dmg) float(s, e, String(dmg), '#ffffff');
     say(s, 'The warden\'s lamp gutters and goes out. It hangs there, dark.');
+    defy(s, 'recall', CONFIG.story.orders.most);
     emit(s, 'hit'); notice(s, 'yielded');
     return;
   }
@@ -987,6 +1081,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (s.status !== 'playing' || s.offer || s.ask) return;
   dt = Math.min(dt, 0.05);
   s.time += dt;
+  if (s.tutorial) tutor(s, dt);
   const p = s.player, pc = CONFIG.player;
   p.swingCd -= dt; p.shotCd -= dt; p.swing -= dt; p.hurt -= dt;
   s.snare = Math.max(0, s.snare - dt);
@@ -1161,7 +1256,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   for (const item of [...s.pickups]) {
     if (item.kind === 'sibling') {
       if (dist(item, p) > 2.2) item.snooze = false;
-      else if (dist(item, p) <= 0.9 && !item.snooze) { notice(s, 'sibling'); s.ask = { kind: 'sibling', item }; stop(s); }
+      else if (dist(item, p) <= 0.9 && !item.snooze) { if (!s.noticed.has('sibling')) shepherd(s, Story.STANDING.salvage.arrival); notice(s, 'sibling'); s.ask = { kind: 'sibling', item }; stop(s); }
       continue;
     }
     if (dist(item, p) > 0.75) continue;
@@ -1332,7 +1427,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const sure = found && (through || e.mood === 'chase' || (e.onto = Math.min(1, (e.onto ?? 0) + dt / CONFIG.scent.lock)) >= 1);
   // Once it is after you, a real trace of scent keeps it on you; a faint one does not.
   const saw = sure || (e.mood === 'chase' && whiff > CONFIG.scent.hold);
-  if (machine && saw) notice(s, 'warden');
+  if (machine && saw) { if (!s.noticed.has('warden')) shepherd(s, Story.STANDING.recall.arrival); notice(s, 'warden'); }
   if (saw) {
     // The cloak answers a first sighting on its own, if it is ready and you can pay for it.
     if (e.mood !== 'chase' && e.kind !== 'tcell' && !machine && cloak(s)) {

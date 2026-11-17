@@ -4,6 +4,7 @@
 import { Carry } from './game';
 import { mulberry32 } from './map';
 import { CONFIG, EVENTS, HostEvent } from './config';
+import { Order, stageOf } from './story';
 
 const TUMOR_GOAL = CONFIG.tumor.goal;
 
@@ -26,22 +27,22 @@ export const NODES: Record<NodeId, Node> = {
 };
 
 /** One vessel between two places. `risk` is the chance a patrol is working it. */
-export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number; via?: NodeId } // via: passes through this place without stopping // after: only once this many tumor cells are out
+export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number; via?: NodeId; ordered?: boolean } // via: passes through this place without stopping. ordered: on the route Shepherd assigns // after: only once this many tumor cells are out
 export const LEGS: Leg[] = [
-  { from: 'heart', to: 'hepatic', risk: 0.8 },
+  { from: 'heart', to: 'hepatic', risk: 0.8, ordered: true },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
   { from: 'mesenteric', to: 'gut', risk: 0.25 },
   { from: 'gut', to: 'portal', risk: 0 },
   { from: 'heart', to: 'gastric', risk: 0.45 },
   { from: 'gastric', to: 'stomach', risk: 0 },
   { from: 'stomach', to: 'portal', risk: 0 }, // travelled by playing the stomach and leaving by its vein
-  { from: 'hepatic', to: 'liver', risk: 0 },
+  { from: 'hepatic', to: 'liver', risk: 0, ordered: true },
   { from: 'portal', to: 'liver', risk: 0 },
-  { from: 'liver', to: 'hvein', risk: 0 }, // travelled by playing the liver and leaving by its central vein
-  { from: 'hvein', to: 'heart', risk: 0.3, via: 'cava' }, // straight home: one roll, at the worse of the two risks
-  { from: 'hvein', to: 'cava', risk: 0.3 },
-  { from: 'cava', to: 'heart', risk: 0.2 },
-  { from: 'heart', to: 'lungs', risk: 0, after: TUMOR_GOAL }, // travelled by playing the lung and being breathed out
+  { from: 'liver', to: 'hvein', risk: 0, ordered: true }, // travelled by playing the liver and leaving by its central vein
+  { from: 'hvein', to: 'heart', risk: 0.3, via: 'cava', ordered: true }, // straight home: one roll, at the worse of the two risks
+  { from: 'hvein', to: 'cava', risk: 0.3, ordered: true },
+  { from: 'cava', to: 'heart', risk: 0.2, ordered: true },
+  { from: 'heart', to: 'lungs', risk: 0, after: TUMOR_GOAL, ordered: true }, // travelled by playing the lung and being breathed out
 ];
 
 export interface Trip {
@@ -53,13 +54,20 @@ export interface Trip {
   tripsDone: number;
   event: HostEvent | null; // what is happening to the host on this trip
   used: HostEvent[]; // no event comes round twice in a game
+  offRoute: boolean; // left Shepherd's assigned route on this trip, and lost its escort
+  defied: Order[]; // orders gone against from the world map on this trip: each counts once
+  tutorial: boolean; // Shepherd will walk the unit through the next liver
   rng: () => number;
 }
 
-export const newTrip = (seed = Date.now()): Trip => ({ at: 'heart', trip: 1, fed: false, heat: 0, carry: null, tripsDone: 0, event: null, used: [], rng: mulberry32(seed) });
+export const newTrip = (seed = Date.now()): Trip => ({ at: 'heart', trip: 1, fed: false, heat: 0, carry: null, tripsDone: 0, event: null, used: [], offRoute: false, defied: [], tutorial: false, rng: mulberry32(seed) });
 
 /** The chance of a patrol on a leg right now. An alarm you raised in the liver makes the way home worse. */
-export const riskOf = (t: Trip, leg: Leg) => (leg.risk === 0 ? 0 : Math.min(0.95, leg.risk + t.heat * 0.5));
+export const riskOf = (t: Trip, leg: Leg) => (leg.risk === 0 ? 0 : Math.max(0, Math.min(0.95, leg.risk + t.heat * 0.5) - (escorted(t, leg) ? CONFIG.story.orders.escort : 0)));
+/** Shepherd is still giving this unit orders. Past the last stage it has lost the unit, and says nothing. */
+export const commanded = (t: Trip) => stageOf(t.carry?.aware ?? 0) < 4;
+/** Shepherd escorts units that keep to the route it assigned: the reward for doing as you are told. */
+export const escorted = (t: Trip, leg: Leg) => !!leg.ordered && !t.offRoute && commanded(t);
 export const riskWord = (r: number) => (r === 0 ? '' : r < 0.35 ? 'lightly patrolled' : r < 0.6 ? 'patrolled' : 'heavily patrolled');
 
 /** Vessels you could take from where you are. */
@@ -78,6 +86,7 @@ export function depart(t: Trip, to: NodeId): Outcome | null {
   if (!leg) return null;
   if (leg.from === 'liver' || leg.from === 'stomach') return { kind: leg.from };
   if (leg.to === 'lungs') return { kind: 'lung' };
+  if (t.tutorial && escorted(t, leg)) return { kind: 'arrive' }; // nothing reaches a unit on its way to its first lesson
   if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) };
   return { kind: 'arrive' };
 }
@@ -90,7 +99,7 @@ export function arrive(t: Trip, to: NodeId, carry: Carry | null, alert = 0): boo
   if (from === 'liver') { t.fed = true; t.heat = Math.max(0, Math.min(1, alert / 100)); }
   else t.heat *= 0.5; // the fuss dies down with distance
   if (to === 'heart' && t.fed) {
-    t.fed = false; t.heat = 0; t.tripsDone++; t.trip++;
+    t.fed = false; t.heat = 0; t.tripsDone++; t.trip++; t.offRoute = false; t.defied = [];
     // The first trip is plain, to learn the rules. Every one after it finds the host having a different sort of day.
     const left = (Object.keys(EVENTS) as HostEvent[]).filter((e) => !(t.used ??= []).includes(e));
     t.event = left.length ? left[Math.floor(t.rng() * left.length)] : null;

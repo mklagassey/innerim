@@ -5,7 +5,7 @@
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
 import { atmosphere } from './atmosphere';
-import { Enemy, Point, State, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, tutorialTarget, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -739,6 +739,26 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.strokeStyle = 'rgba(8,14,18,0.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(q.x - 6, y - 3); ctx.lineTo(q.x, y + 4); ctx.lineTo(q.x + 6, y - 3); ctx.stroke();
     ctx.strokeStyle = 'rgba(140,235,230,0.9)'; ctx.lineWidth = 2; ctx.stroke();
     ctx.strokeStyle = 'rgba(120,220,225,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(q.x, y + 7); ctx.lineTo(q.x, q.y - 6); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Shepherd's pointer in its first liver: a steady amber ring on the thing it wants, and a small chevron beside the ship toward it. Both breathe slowly; neither blinks.
+  const want = tutorialTarget(s);
+  if (want) {
+    const q = project(want.x, want.y), h = project(p.x, p.y), dx = q.x - h.x, dy = q.y - h.y, far = Math.hypot(dx, dy), ease = v.still ? 0.8 : 0.7 + 0.3 * Math.sin(v.time * 1.6);
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (s.visible[idx(s, Math.floor(want.x), Math.floor(want.y))] || far < 150) {
+      ctx.strokeStyle = `rgba(240,170,90,${0.8 * ease})`; ctx.lineWidth = 2.4; ctx.setLineDash([6, 5]);
+      const lift = s.tiles[idx(s, Math.floor(want.x), Math.floor(want.y))] === 'cell' ? 30 : 4; // on a cell, ring its top face
+      ctx.beginPath(); ctx.ellipse(q.x, q.y - lift, 28, 16, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (far > 70) {
+      const ux = dx / far, uy = dy / far, ax = h.x + ux * 46, ay = h.y - 8 + uy * 46;
+      for (const [w, col] of [[5, 'rgba(10,6,4,0.7)'], [2.4, `rgba(232,162,90,${0.9 * ease})`]] as const) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
+        ctx.moveTo(ax - ux * 7 - uy * 7, ay - uy * 7 + ux * 7); ctx.lineTo(ax + ux * 4, ay + uy * 4); ctx.lineTo(ax - ux * 7 + uy * 7, ay - uy * 7 - ux * 7); ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
   for (const shot of s.shots) {
     const c = project(shot.x, shot.y), tail = project(shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);
