@@ -325,3 +325,27 @@ The lead engineer's departures from the letter of this spec, all accepted:
 6. **Trust arrival line.** It plays on liver arrivals only.
 7. **Travel forks.** Forks exist only at the heart and the gut; other stops carry straight on.
 8. **Run reports.** They now carry chapter, trust, compliance, slip (`kind:meant:result`), took, met and pages.
+
+### 10.8 As built (unit-13, Version 62)
+
+The engine work shipped as follows:
+
+- `src/decisions.ts` holds the table.
+- `G.meet`, `G.take` and `G.fire` live in `game.ts`, along with the echo queue (`Carry.echoes`), which fires on arrival by place or chapter.
+- All numbers are in `CONFIG.marks`.
+
+The engineer's departures, all accepted:
+
+- **(a) Hold marks.** The player must hold still for 4 s within 1.7 tiles. Each liver gets one hold mark, chosen in this priority order: ethanol-correction (drink in her blood), then fever-damp (fever ≥ 1), then pain-damp. Each of these is offered once per game.
+- **(b) m1 lane.** This is judged at the end of the surge. It counts as deviated if the ship had no wall slams and moved less than 4 tiles; otherwise it counts as obeyed.
+- **(c) m3 kupffer-spare.** It counts as deviated if the cell that engulfed you is still alive when you leave the map. Its echo (it eats two neutrophils) fires on the next liver.
+- **(d) glucose.** Deviation fires on a liver after 6 skims with no strips. It carries no weight.
+- **(e) route-2.** This is offered once, on trip 2 or later, at the heart. Obeying forces the hepatic leg, with 2 tumour cells in the artery wall, for +2 trust each.
+- **(f) m8 bystander.** It appears in 45% of chapter 2+ vessels and lasts 22 s.
+- **(g) m13 kin-volunteer.** It triggers when hull is below 35% and 2 or more cells are chasing. The spec's "no cloak or bait ready" condition is kept on top of that (requested back).
+- **(h) fever-damp speed.** The immune speed change lasts until the ship is home.
+- **(i) Awareness.** It comes only from `take()`:
+  - Weights are 15/8/4.
+  - The first deviation floors awareness at 12.
+  - From the third deviation on the same decision id, its weight is halved.
+  - Weights are ×0.5 if `flags.repaired` is set.
