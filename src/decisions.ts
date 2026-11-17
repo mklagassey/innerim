@@ -5,7 +5,7 @@
 
 export type Weight = 'most' | 'some' | 'little';
 /** The named effects an echo can have. Each is implemented once, in game.ts (`applyEcho`) or main.ts. */
-export const PAYLOADS = ['fragment', 'markTumour', 'dryGlucose', 'halveAntibodies', 'scarHull', 'noTcell', 'stopDrink', 'feverCap', 'immuneSpeed', 'marketDiscount', 'interludeVariant', 'epilogueProp', 'unlockPage', 'repeatOrders', 'earlyOrders', 'recurrence', 'lungSibling', 'nookSibling', 'wreck', 'arterialNodule', 'eatsNeutrophils', 'siblingSaved', 'kinLost', 'reset', 'wardens', 'standDown', 'ambush', 'supply', 'ending', 'hours', 'seedCell', 'rest', 'longCold', 'coldBreaks', 'nerveLane', 'fewerDrops'] as const;
+export const PAYLOADS = ['fragment', 'markTumour', 'dryGlucose', 'halveAntibodies', 'scarHull', 'noTcell', 'stopDrink', 'feverCap', 'immuneSpeed', 'marketDiscount', 'interludeVariant', 'epilogueProp', 'unlockPage', 'repeatOrders', 'earlyOrders', 'recurrence', 'lungSibling', 'nookSibling', 'wreck', 'arterialNodule', 'eatsNeutrophils', 'siblingSaved', 'kinLost', 'reset', 'wardens', 'standDown', 'ambush', 'supply', 'ending', 'hours', 'seedCell', 'rest', 'longCold', 'coldBreaks', 'nerveLane', 'fewerDrops', 'lowReserve', 'quietNight', 'fright'] as const;
 export type Payload = typeof PAYLOADS[number];
 export type Where = 'liver' | 'vessel' | 'stomach' | 'lung' | 'gut' | 'heart';
 /** `when` missing: it happens at once. Otherwise it waits until the unit is next somewhere that fits. */
@@ -126,6 +126,19 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
     unit: { obey: [null, null, 'I let them take it. I told myself I had no choice. I had one.'], deviate: [null, null, 'I got there first. Shepherd will not forgive that. Good.'] },
     echoes: { obey: [{ payload: 'kinLost' }], deviate: [{ payload: 'epilogueProp', arg: 'kin-kept' }] }, built: 14 }),
   // ---------- chapter 5 ----------
+  // ---------- chapter 5: the last trip (text is placeholder until the creative director's lands) ----------
+  D({ id: 'last-harvest', ch: [4, 5], where: 'liver', weight: 'some', trust: { obey: 4, deviate: -2 },
+    order: 'Disposal transit requires reserves. Harvest 3 hepatocytes.', obeyed: 'Reserves adequate for disposal transit.', deviated: 'Reserves not taken. Disposal transit at unit\u2019s own risk.',
+    unit: { deviate: [null, 'The job is finished. What is the harvest for now?', 'The tumour is out. Nothing I take from her now is for her.'] },
+    echoes: { obey: [{ payload: 'epilogueProp', arg: 'three-scars' }], deviate: [{ payload: 'lowReserve', when: { place: 'lung' } }] }, built: 17 }),
+  D({ id: 'handover', ch: [5], where: 'heart', weight: 'some', trust: { obey: 4, deviate: -4 },
+    order: 'Upload route map for successor units. Your experience will not be wasted.', obeyed: 'Route map received. Thank you.', deviated: 'Route map withheld. Logged.',
+    unit: { obey: [null, 'Everything I learned about her, handed on. To whom?', 'The next one will know every hiding place I found. So will Shepherd.'], deviate: [null, 'It is my map.', 'I learned her the slow way. The next one can too. Or it can find what I leave for it.'] },
+    echoes: { obey: [{ payload: 'epilogueProp', arg: 'handed-on' }], deviate: [{ payload: 'epilogueProp', arg: 'kept-map' }] }, built: 17 }), // what it does to the next game lives in main.ts
+  D({ id: 'night-hold', ch: [5], where: 'heart', weight: 'little', trust: { obey: 2, deviate: -2 },
+    order: 'Host must not wake during final transit. Release melatonin, pineal pathway.', obeyed: 'Host sleep maintained.', deviated: 'Host sleep not maintained. Logged.',
+    unit: { obey: [null, 'She will not remember tonight. That is the point of the order.', null], deviate: [null, null, 'If she wakes, she wakes. It is her night.'] },
+    echoes: { obey: [variant('slept-through'), { payload: 'quietNight' }], deviate: [variant('kitchen-night'), { payload: 'unlockPage', arg: 'p27' }, { payload: 'fright' }] }, built: 17 }),
   D({ id: 'final', ch: [5], where: 'heart', weight: null, trust: { obey: 0, deviate: 0 }, echoes: { dispose: [{ payload: 'ending', arg: 'dispose' }], stay: [{ payload: 'ending', arg: 'stay' }], draw: [{ payload: 'ending', arg: 'draw' }] }, built: 14 }),
   D({ id: 'draw', ch: [5], where: 'vessel', weight: null, trust: { obey: 0, deviate: 0 }, echoes: { held: [{ payload: 'ending', arg: 'slide' }], moved: [{ payload: 'ending', arg: 'artifact' }] }, built: 15 }),
 ].map((d) => [d.id, d]));

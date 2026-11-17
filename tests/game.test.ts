@@ -1716,3 +1716,27 @@ test('unit-17: neither side of an order is free', () => {
   const lane = G.createGame(9, { ...base, chapter: 5, echoes: [{ id: 'suppress', choice: 'obey', i: 2 }] }, 'vessel');
   assert.ok(lane.enemies.filter((e) => e.kind === 'tcell').length >= G.createGame(9, { ...base, chapter: 5 }, 'vessel').enemies.filter((e) => e.kind === 'tcell').length + 1);
 });
+
+test('unit-17: the last trip has three more things Shepherd would like', () => {
+  // Last harvest: ordered as the last of the tumour comes out; three more cells is obeying, none is the unit's answer.
+  const s = lastLiver(); run(s, 1); exciseAll(s);
+  assert.ok(s.met.includes('last-harvest')); assert.match(G.markOrder(s) + ' ' + s.thoughts.map((t) => t.text).join(' '), /Harvest 3 hepatocytes/);
+  const host = s.hostHealth; let n = 0;
+  for (let y = 2; y < s.size - 2 && n < 3; y++) for (let x = 2; x < s.size - 2 && n < 3; x++) { const k = G.idx(s, x, y); if (s.tiles[k] === 'cell' && !s.margin.has(k) && !s.tumor.has(k)) { s.player.channel = { kind: 'strip', t: 0, total: 0.05, x, y }; run(s, 0.2); n++; } }
+  assert.equal(s.took['last-harvest'], 'obey'); assert.equal(s.hostHealth, host - 3 * Math.round(CONFIG.energy.strip.hostDamage * CONFIG.marks.orderedHarm)); assert.ok(s.flags['prop:three-scars']);
+  const no = lastLiver(); run(no, 1); exciseAll(no); run(no, CONFIG.marks.notice + 1); no.player.energy = 99; put(no, no.vein); assert.ok(G.leave(no));
+  assert.equal(no.took['last-harvest'], 'deviate');
+  const lung = G.createGame(5, { ...G.carryOf(no), energy: 30, chapter: 5 }, 'lung'); assert.equal(lung.player.energy, CONFIG.marks.reserve, 'and the last stretch starts short');
+  // At the chapter 5 heart: the handover, and at night the hold on her sleep.
+  const heart = G.createGame(6, carried({ chapter: 5, excised: CONFIG.tumor.goal, hour: 2.5, aware: 0, trust: 70 }), 'vessel', 0, 'artery', false, { kind: 'heart', exits: [] });
+  assert.deepEqual(heart.due.map((d) => d.kind), ['handover', 'nighthold']);
+  run(heart, 4); assert.equal(heart.ask?.kind, 'handover'); assert.ok(G.answer(heart, 'accept' as 'salvage')); assert.equal(heart.took.handover, 'obey');
+  run(heart, 6); assert.equal(heart.ask?.kind, 'nighthold'); assert.ok(G.answer(heart, 'refuse' as 'salvage')); assert.equal(heart.took['night-hold'], 'deviate'); assert.ok(heart.host.surge > 0, 'she wakes');
+  const day = G.createGame(6, carried({ chapter: 5, excised: CONFIG.tumor.goal, hour: 13, aware: 0, trust: 70 }), 'vessel', 0, 'artery', false, { kind: 'heart', exits: [] });
+  assert.deepEqual(day.due.map((d) => d.kind), ['handover']);
+  // The next game: a map handed on is a liver already known.
+  const heir = G.createGame(4, { ...G.carryOf(quiet(4)), flags: { inherited: true } });
+  assert.ok(heir.explored.every((x) => x === 1)); assert.equal(heir.flags.inherited, undefined);
+  const kept = G.createGame(4, { ...G.carryOf(quiet(4)), flags: { heirloom: true } });
+  assert.ok(kept.pickups.some((i) => i.kind === 'sibling'));
+});

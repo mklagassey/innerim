@@ -42,7 +42,8 @@ export interface Exit { to: string; label: string; note: string; assigned: boole
 export interface Junction { kind: 'heart' | 'gut' | 'tube'; exits: Exit[]; chose: number | null }
 export type JunctionPlan = { kind: Junction['kind']; exits: Omit<Exit, 'at'>[] };
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number; keep?: boolean } // keep: if the map ends before this is shown, it is said on the next one // st: how awake the unit was when it said it
-export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall'; item: Pickup }
+export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall' | 'handover' | 'nighthold'; item: Pickup }
+const ASKS: Partial<Record<Ask['kind'], string>> = { review: 'telemetry-review', recall: 'recall', kinrecall: 'kin-recall', handover: 'handover', nighthold: 'night-hold' };
 /** Something Shepherd has marked on the map: a place to hold still at, or one particular cell to take. */
 export interface Mark { id: string; kind: 'hold' | 'strip'; at: Point; t: number; done: boolean; met: boolean; say: number; near?: number; tried?: number; pressed?: boolean; other?: boolean; since?: number } // tried: the longest the unit has held here; pressed: something hostile came within reach while the order stood; other: a different cell was taken
 export interface Pending { id: string; choice: string; i: number }
@@ -458,6 +459,14 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     if (s.chapter >= 4 && s.kin > 0 && !s.took['kin-recall'] && lost() < CONFIG.marks.kinRecall) s.due.push({ kind: 'kinrecall', t: 0 });
     s.due.forEach((d, i) => { d.t = 3 + i * 5; });
   }
+  if (junction?.kind === 'heart' && s.chapter >= 5 && !s.tutorial) { // the last trip: two more things Shepherd would like before the unit goes
+    if (!s.took.handover) s.due.push({ kind: 'handover', t: 0 });
+    if (!s.took['night-hold'] && hostState(s) === 'asleep') s.due.push({ kind: 'nighthold', t: 0 });
+    s.due.forEach((d, i) => { d.t = 3 + i * 5; });
+  }
+  if (s.flags.quietNight) s.host.nextSurge = 99999;
+  if (place === 'liver' && s.flags.inherited) { delete s.flags.inherited; s.explored.fill(1); note(s, 'LOG: route map received from unit 4,471,206. ACK.'); } // the last unit handed its map on
+  if (place === 'liver' && s.flags.heirloom) { delete s.flags.heirloom; const at = freeTile(s, lost, (_x, _y, d) => d > 5 && d < 12); if (at) s.pickups.push({ ...mid(at), kind: 'sibling' }); } // the last unit kept its map, and left something else
   fireEchoes(s);
   if (s.marked && s.scan === 'none') s.scan = 'nodule';
   if (s.tutorial) { s.tutorial.held = s.pickups.filter((i) => i.kind === 'cache' || i.kind === 'sibling'); s.pickups = s.pickups.filter((i) => !s.tutorial!.held.includes(i)); }
@@ -534,6 +543,7 @@ function settle(s: State) {
   for (const item of s.pickups) if (item.beset !== undefined && item.kind === 'sibling' && s.met.includes('bystander') && !s.took.bystander) take(s, 'bystander', 'obey');
   if (s.flags.kinRecall === 'live' && !s.took['kin-recall']) { s.flags.kinRun = 'left'; take(s, 'kin-recall', 'obey'); } // gone on without reaching it
   settleMarks(s);
+  if (s.met.includes('last-harvest') && !s.took['last-harvest']) take(s, 'last-harvest', !Number(s.flags.lastN) && s.time - (Number(s.flags.lastAt) || 0) >= CONFIG.marks.notice ? 'deviate' : 'lapsed');
   if (s.place === 'liver' && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.excised >= CONFIG.tumor.goal) take(s, 'tumour-order', s.marginTaken >= CONFIG.marks.margins ? 'obey' : s.time - (Number(s.flags.marginAt) || 0) < CONFIG.marks.notice ? 'lapsed' : 'deviate');
   if (s.grabber !== null && s.chapter >= 2 && !t && s.enemies.some((e) => e.id === s.grabber)) take(s, 'kupffer-spare', 'deviate');
   if (s.place === 'liver') {
@@ -650,6 +660,13 @@ export function answer(s: State, id: 'salvage' | 'wake' | 'leave' | 'accept' | '
       float(s, a.item, KIN_PINGS.volunteer, '#bfe9ff'); say(s, 'A lamp flares behind you, bright, and everything hunting you turns toward it.'); emit(s, 'pickup');
     }
     take(s, 'kin-volunteer', id, { after: 2 });
+    return true;
+  }
+  if (a.kind === 'handover' || a.kind === 'nighthold') {
+    if (id !== 'accept' && id !== 'refuse') return false;
+    s.ask = null;
+    for (const d of s.due) d.t = Math.max(d.t, s.time + 5);
+    take(s, ASKS[a.kind]!, id === 'accept' ? 'obey' : 'deviate');
     return true;
   }
   if (a.kind === 'review' || a.kind === 'recall' || a.kind === 'kinrecall') {
@@ -1196,6 +1213,7 @@ function finishChannel(s: State, ch: Channel) {
     const sup = s.marks.find((m) => m.id === 'suppress' && !m.done);
     if (sup) { sup.done = true; if (sup.met && s.time - (sup.since ?? 0) >= CONFIG.marks.notice) take(s, 'suppress', (sup.tried ?? 0) >= 1 ? 'lapsed' : 'deviate', { after: 1.5 }); } // cutting without ever trying it is the answer; an order that had no time to be read is no order
     if (s.place === 'liver' && s.chapter >= 4 && !s.tumor.size && s.excised >= t.goal && !s.took.beacon) s.marks.push({ id: 'beacon', kind: 'hold', at: mid({ x: ch.x, y: ch.y }), t: 0, done: false, met: false, say: s.time + 6, near: 0.75 }); // planted where the last of it was
+    if (s.place === 'liver' && s.excised >= t.goal && !s.tutorial && !s.met.includes('last-harvest')) { meet(s, 'last-harvest'); s.flags.lastAt = s.time; s.flags.lastN = 0; shepherd(s, DECISIONS['last-harvest'].order!, 4); }
     if (s.place === 'vessel') { trusted(s, 2); if (!s.tumor.size) { s.flags.nodule2 = 'done'; shepherd(s, 'Secondary nodule excised. Credit applied.'); } }
     if (s.chapter === 3 && t.goal - s.excised <= 3 && s.excised < t.goal) { s.chapter = 4; shepherd(s, Story.RESIDUAL, 1.5); lastOrders(s); } // chapter 4 begins with the last of it in sight
     return;
@@ -1206,7 +1224,8 @@ function finishChannel(s: State, ch: Channel) {
   p.energy += c.gain;
   // Shepherd's orders pick surplus cells: the quota, the marked cell and the margins cost her half what a cell of the unit's own choosing does.
   const told = s.marks.find((m) => m.id === 'marked-cell' && !m.done && Math.floor(m.at.x) === ch.x && Math.floor(m.at.y) === ch.y);
-  const ordered = s.place === 'liver' && !rich && (s.cellsKilled < CONFIG.story.quota || s.margin.has(i) || !!told);
+  const last = s.place === 'liver' && !rich && s.met.includes('last-harvest') && !s.took['last-harvest'] && !s.margin.has(i);
+  const ordered = s.place === 'liver' && !rich && (s.cellsKilled < CONFIG.story.quota || s.margin.has(i) || !!told || last);
   s.hostHealth = Math.max(0, s.hostHealth - Math.round(c.hostDamage * (ordered ? CONFIG.marks.orderedHarm : 1)));
   if (s.place === 'liver') s.flags.hep = (Number(s.flags.hep) || 0) + 1; // what the liver has to grow back tonight
   s.cellsKilled++; s.ledger.stripped++;
@@ -1217,6 +1236,7 @@ function finishChannel(s: State, ch: Channel) {
   if (s.slipLive && s.slip?.kind === 'hold') resolveSlip(s, 'B', 2);
   if (s.tutorial && !s.took['t-harvest']) take(s, 't-harvest', 'obey', { mute: true });
   if (s.margin.delete(i)) s.marginTaken++;
+  if (last) { s.flags.lastN = (Number(s.flags.lastN) || 0) + 1; if (Number(s.flags.lastN) >= CONFIG.marks.lastHarvest) take(s, 'last-harvest', 'obey'); }
   if (rich && s.chapter >= 2) take(s, 'parietal', 'obey', { mute: !!s.flags['n:parietal:obey'] });
   const mk = s.marks.find((m) => m.kind === 'strip' && !m.done);
   if (mk && Math.floor(mk.at.x) === ch.x && Math.floor(mk.at.y) === ch.y) { mk.done = true; p.energy += CONFIG.marks.yield - c.gain; take(s, 'marked-cell', 'obey'); }
@@ -1527,7 +1547,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   }
   marks(s, dt);
   if (s.due.length && s.time >= s.due[0].t && !s.ask) {
-    const d = s.due.shift()!, id = d.kind === 'review' ? 'telemetry-review' : d.kind === 'recall' ? 'recall' : 'kin-recall';
+    const d = s.due.shift()!, id = ASKS[d.kind]!;
     meet(s, id); s.thoughts.push({ text: fill(s, DECISIONS[id].order ?? ''), who: 'shepherd', st: stage(s), t: s.time });
     s.ask = { kind: d.kind, item: { x: p.x, y: p.y, kind: 'kin' } }; stop(s);
   }
@@ -1987,6 +2007,9 @@ function applyEcho(s: State, e: Echo) {
       if (at) { let n = 0; for (let tries = 0; n < 3 && tries < 300; tries++) { const x = at.x + roll(s, -3, 3), y = at.y + roll(s, -3, 3); if (open(s, x, y) && dist(s.player, { x, y }) > 6) { spawn(s, 'tcell', { x, y }); n++; } } note(s, 'T cells are gathering along a nerve root ahead. Something that has slept in her since she was six is awake, and they have come for it.'); }
       break;
     }
+    case 'lowReserve': if (s.player.energy > CONFIG.marks.reserve) { s.player.energy = CONFIG.marks.reserve; note(s, 'Reserves are low for the last stretch. The harvest that was ordered would have covered it.'); } break;
+    case 'quietNight': flagged(s, 'quietNight'); s.host.nextSurge = 99999; break;
+    case 'fright': fright(s); break;
     case 'fewerDrops': flagged(s, 'noDrop'); break;
     case 'kinLost': s.kin = Math.max(0, s.kin - 1); flagged(s, 'kinLost'); break;
     case 'reset': s.aware = 0; flagged(s, 'repaired'); s.player.hp = maxHp(s); s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 2); break; // factory condition
@@ -2012,6 +2035,7 @@ export const markTarget = (s: State): Point | null => {
 export function markOrder(s: State): string {
   const m = s.marks.find((k) => k.met && !k.done);
   if (!m && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.place === 'liver' && (s.margin.size || s.marginTaken)) return `Excise with margins: ${Math.min(CONFIG.marks.margins, s.marginTaken)} of ${CONFIG.marks.margins} adjacent hepatocytes`;
+  if (!m && s.met.includes('last-harvest') && !s.took['last-harvest'] && s.place === 'liver') return `Harvest for disposal transit: ${Number(s.flags.lastN) || 0} of ${CONFIG.marks.lastHarvest} hepatocytes`;
   if (!m) return '';
   const first = (DECISIONS[m.id].order ?? '').split('. ')[0].replace(/\.$/, '');
   return m.kind === 'hold' ? `${first}. ${m.t > 0 ? `Hold: ${Math.ceil(CONFIG.marks.hold - m.t)}` : 'Hold position at the marker'}` : `${first}.`;
