@@ -153,6 +153,9 @@ These are the "many small decision points" between the big ones. Each liver, ves
 | m8 `bystander` | A vessel swarm is attacking a dark sibling, not you | Leave it ("Expected loss.") | Fight it off | L | **Saved:** the sibling survives to be woken or salvaged. **Left:** its telemetry fragment is lost; a gap you only notice on replay |
 | m9 `escort-refuse` | An escort offered on an ordered leg | Accept | "Travel unescorted" | L, and trust −4 after 2 | **Accepted every time:** in chapter 4 the recall comes through the escort, so it finds you faster |
 | m10 `gut-butyrate` | Gut lumen | (no order) | Release glucose for butyrate | L if trust ≥ 60 (Shepherd notices only when watching) | The next liver has no T cell |
+| m11 `pain-damp` | Liver 2, chapter 3 (creative text §12) | Dampen nociceptors in the liver capsule | Leave her pain signals alone | L, trust −4 | **Obeyed:** she feels nothing; if `suppress` is also obeyed, the shingles prodrome is damped too, so the epilogue shingles prop is the late, worse variant. **Deviated:** "The call" interlude variant (she phones the trial nurse); consent page p7 unlocks if not already |
+| m12 `fever-damp` | Any map during the "a cold" host event, chapter 3+, once per cold | Release prostaglandin inhibitors, hepatic lobe 2 | Let the fever run | S | **Obeyed:** immune speed ×0.85 for the rest of the trip (easier), the cold lasts one more host day, next interlude shows her sniffling. **Deviated:** immune speed ×1.15 this trip (harder), the cold ends a host day early. Real: fever aids the immune response |
+| m13 `kin-volunteer` | Any chapter, kin ≥ 1, cornered (alert ≥ 80, a cell within 2 tiles, no cloak or bait ready) | (no order) | Accept the kin's offer | none (not an order) | **Accepted:** kin −1 (counts against the draw and Quiet colony), its serial logged, audit line `voluntary` in the unit's hand. **Refused:** you face them together; no change |
 
 ### 5.3 Echo rules
 

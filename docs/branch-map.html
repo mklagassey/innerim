@@ -1,0 +1,210 @@
+<title>Host Branch Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap">
+<style>
+/* Layout: a chapter rail (vessel-like strip) on top, the chosen decision's case file below, then endings and the simulated spread. Single dark look, like the inside of the body. */
+:root {
+  color-scheme: dark;
+  --bg: #120b0c;          /* venous dark */
+  --panel: #1c1213;
+  --line: #3a2628;
+  --fg: #eadfd9;
+  --muted: #a8948f;
+  --amber: #f0a64a;       /* Shepherd */
+  --cyan: #7fd6e3;        /* the unit */
+  --ember: #d9574a;       /* deviation */
+  --gold: #d7b46a;        /* liver, her */
+  --display: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --body: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+  --voice: "Newsreader", Georgia, "Times New Roman", serif;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 500 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+h1 { font: 500 clamp(28px, 5vw, 44px)/1.05 var(--display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+h2 { font: 500 18px/1.2 var(--display); margin: 0 0 14px; letter-spacing: .02em; text-wrap: balance; }
+.lede { max-width: 66ch; color: var(--muted); margin: 0; }
+.unit { font: italic 400 17px/1.5 var(--voice); color: var(--cyan); }
+.key { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 12px/1 var(--display); color: var(--muted); }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+.rail { overflow-x: auto; padding-bottom: 6px; }
+.chapters { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; min-width: 1060px; }
+.ch { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; align-content: start; gap: 8px; }
+.ch h3 { margin: 0; font: 500 13px/1.2 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.ch h3 small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .06em; margin-top: 4px; text-transform: none; }
+.ch .card { font: 11px/1.4 var(--display); color: var(--amber); opacity: .85; border-top: 1px dashed var(--line); padding-top: 8px; }
+.chip { all: unset; cursor: pointer; display: grid; gap: 2px; padding: 7px 9px; border-radius: 4px; border: 1px solid var(--line); background: #24181a; font: 12px/1.3 var(--body); }
+.chip b { font: 500 11px/1 var(--display); color: var(--muted); letter-spacing: .04em; }
+.chip.major { border-left: 3px solid var(--gold); }
+.chip.minor { border-left: 3px solid #6b5450; }
+.chip.slip { border-left: 3px solid var(--cyan); }
+.chip:hover, .chip:focus-visible { border-color: var(--amber); outline: none; }
+.chip[aria-pressed="true"] { background: #33221f; border-color: var(--amber); }
+
+.file { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; min-width: 0; }
+.box h4 { margin: 0 0 8px; font: 500 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; }
+.box p { margin: 0 0 8px; }
+.obey h4 { color: var(--amber); }
+.dev h4 { color: var(--ember); }
+.echo { grid-column: 1 / -1; }
+.echo h4 { color: var(--gold); }
+.meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { font: 11px/1 var(--display); padding: 6px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.title-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; }
+.title-row h3 { margin: 0; font: 500 22px/1.2 var(--display); }
+.title-row code { font: 12px var(--display); color: var(--muted); }
+
+.endings { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.end { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 6px; align-content: start; }
+.end h5 { margin: 0; font: 500 14px/1.2 var(--display); }
+.end .path { font: 11px/1 var(--display); color: var(--amber); letter-spacing: .06em; text-transform: uppercase; }
+.end p { margin: 0; font-size: 13px; color: var(--muted); }
+
+.spread { display: grid; gap: 14px; }
+.row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: center; }
+.row .who { font: 500 12px/1.2 var(--display); }
+.row .who small { display: block; color: var(--muted); font-weight: 400; }
+.bar { display: flex; height: 26px; border-radius: 3px; overflow: hidden; background: #24181a; }
+.bar i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 11px/1 var(--display); color: var(--muted); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.note { color: var(--muted); font-size: 13px; max-width: 70ch; margin: 0; }
+
+@media (max-width: 720px) {
+  .file { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 1fr; gap: 6px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chip { transition: border-color .2s, background .2s; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Systems design · v2 · for Mick's morning review</div>
+    <h1>Host branch map</h1>
+    <p class="lede">Every choice the unit can make, chapter by chapter, what Shepherd wants, what the alternative costs, and where the consequence shows up again. Pick any decision to open its file. The endings and the simulated spread of players are underneath.</p>
+    <p class="unit">The first thing I ever did was eat a piece of her. I was told to. I was praised.</p>
+    <div class="key">
+      <span><i class="dot" style="background:var(--gold)"></i>Major decision</span>
+      <span><i class="dot" style="background:var(--cyan)"></i>The Slip</span>
+      <span><i class="dot" style="background:#6b5450"></i>Minor decision (each game meets about half)</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Chapters</h2>
+    <div class="rail"><div class="chapters" id="chapters"></div></div>
+  </section>
+
+  <section>
+    <h2>Decision file</h2>
+    <div class="file" id="file"></div>
+  </section>
+
+  <section>
+    <h2>Endings</h2>
+    <div class="endings" id="endings"></div>
+  </section>
+
+  <section class="spread">
+    <h2>Who ends where (5,000 simulated games per player type)</h2>
+    <div id="bars" class="spread"></div>
+    <div class="legend" id="legend"></div>
+    <p class="note">From scripts/branch-sim.py with defiance weights 15 / 8 / 4 and Decommissioned below awareness 30. It plays the decision model, not the action game, and picks the final path at random among those open. Obedient players deviate 5% of the time, mixed 40%, kind 85%.</p>
+  </section>
+</div>
+
+<script>
+const CH = [
+  { id: 'P', name: 'Injection', where: 'Clinic, vein', card: '' },
+  { id: '1', name: 'Directive', where: 'Trip 1: tutorial liver', card: 'UNIT 4,471,209 · COMPLIANCE 100%' },
+  { id: '2', name: 'Deviation', where: 'Return leg, start of trip 2', card: 'COMPLIANCE 97% (after a slip)' },
+  { id: '3', name: 'Discretion', where: 'Trip 2: organs, liver 2', card: 'COMPLIANCE n% · REVIEW PENDING' },
+  { id: '4', name: 'Recall', where: 'Last 3 tumour cells and after', card: 'ALL UNITS: PROCEED TO PULMONARY CAPILLARIES' },
+  { id: '5', name: 'Host', where: 'The final choice', card: 'TITHONUS 0001 → MARIAN V.' },
+];
+const D = [
+  { ch: 'P', id: 'cold-open', kind: 'major', name: 'The injection', obey: 'Watch. Nothing to choose yet.', dev: 'None.', echo: 'The vial label TITHONUS 0001 comes back on every chapter card.', w: '' },
+  { ch: '1', id: 't-harvest', kind: 'major', name: 'Harvest hepatocyte (tutorial)', obey: 'Strip the marked cell: +8 energy, "Efficient."', dev: 'Skim instead and let the step time out. Not counted as defiance.', echo: 'At stage 3 the unit remembers it: "The first thing I ever did was eat a piece of her."', w: 'none' },
+  { ch: '1', id: 'glucose', kind: 'major', name: 'The glucose aside', obey: 'No order. Shepherd: "permitted, not efficient."', dev: 'Skim anyway.', echo: 'Feeds care; at stage 2 the unit thinks about the aside.', w: 'none' },
+  { ch: '1', id: 't-quota', kind: 'major', name: 'Quota stated at the exit', obey: 'Strip a second cell: +1 patch, trust +6.', dev: 'Leave with 1 of 2: the planned first stumble.', echo: 'Defied: the first bracket. Met: a supply drop in the next liver.', w: 'Some (8)' },
+  { ch: '2', id: 'slip', kind: 'slip', name: 'The Slip: a garbled order', obey: 'Act on the reading Shepherd meant: "Order executed."', dev: 'Act on the other reading: "Order not executed as transmitted. Link quality was within tolerance."', echo: 'LOG: order misread. [misread?] Card reads COMPLIANCE 97%. Consent page 7 unlocks.', w: 'Some, lifted to 12 · trust −2', note: 'One of three per game: Hold / Harvest, The lamp, The fork. Which reading Shepherd meant is a coin.' },
+  { ch: '2', id: 'lamp', kind: 'major', name: 'The first dark sibling', obey: 'Salvage: +6 energy, +5 hull, trust +5.', dev: 'Wake it (trust −8) or leave it whole.', echo: 'Woken: it waits on later maps with sugar and marks tumour cells. Salvaged: its last telemetry in the log. Left whole: still there on the lung map.', w: 'Most (15) / A little (4)', note: 'If you hesitate 8 s, its lamp flickers and Wake opens even at stage 0.' },
+  { ch: '2', id: 'first-fright-transit', kind: 'minor', name: 'First fright in a vessel', obey: 'Hold lane in the current.', dev: 'Duck into a side branch.', echo: 'The branch you hid in holds a dark sibling 40% of the time.', w: 'A little (4)' },
+  { ch: '2', id: 'route-2', kind: 'major', name: 'Route for trip 2', obey: 'Assigned hepatic branch: escort, and a second small nodule in the artery wall (+2 tumour cells).', dev: 'Stomach, gut lumen or another branch.', echo: 'New places. Page 12 sits in a dead unit at the gut.', w: 'A little (4)' },
+  { ch: '3', id: 'quota-2', kind: 'major', name: 'Quota, liver 2', obey: 'Strip 2.', dev: 'Fewer.', echo: 'The scan interlude shows her liver fatty and scarred, or clean.', w: 'Most / Some' },
+  { ch: '3', id: 'ethanol-correction', kind: 'major', name: 'Ethanol correction', obey: 'Hold on the cluster 4 s: inhibit the enzyme. Trust +8.', dev: 'Leave her enzymes alone.', echo: 'Obeyed: she pours the glass down the sink; her liver improves; nights get harder (no evening immune dulling). Page 19.', w: 'Some (8)', note: 'Grey on purpose: the order is good for her.' },
+  { ch: '3', id: 'neutralise-map', kind: 'major', name: 'Neutralise contacts', obey: 'Kill what finds you.', dev: 'Finish the map with no kills.', echo: 'Defied twice: half the antibodies next map. 25+ kills in a game: an appointment card on her fridge.', w: 'Some (8)' },
+  { ch: '3', id: 'lever-nap', kind: 'major', name: 'A nap for her', obey: 'Hormones only on directive.', dev: 'Pull serotonin while she is unwell.', echo: 'The nap with the dog. During a cold, her fever breaks a night early.', w: 'Some (8)' },
+  { ch: '3', id: 'lever-hunger', kind: 'major', name: 'Hunger', obey: 'Do not.', dev: 'Pull ghrelin.', echo: 'She eats standing at the fridge at an odd hour. Twice: page 19.', w: 'Some (8)' },
+  { ch: '3', id: 'hitchhikers', kind: 'minor', name: 'Release hitchhikers', obey: 'No order.', dev: 'Release your bacteria in the gut.', echo: 'Later gut visits are cheaper and better stocked.', w: 'none' },
+  { ch: '3', id: 'telemetry-review', kind: 'major', name: 'Telemetry review', obey: 'Accept: the unit is repaired. Awareness back to 0. Full hull, +2 patches.', dev: 'Refuse: trust −25. Wardens.', echo: 'Repaired: the log is ACK. again; your kin say "it\'s me." and you answer "UNIT ID? Not in registry."', w: 'trust +20 / −25', note: 'Only offered once the unit has started to wake. The most important replay hook.' },
+  { ch: '3', id: 'marked-cell', kind: 'minor', name: 'The marked cell by the bile duct', obey: 'Strip it.', dev: 'Strip another, or none.', echo: 'Obeyed: a bile leak dries up the glucose nearby.', w: 'A little (4)' },
+  { ch: '3', id: 'kupffer-spare', kind: 'minor', name: 'Spare the Kupffer cell', obey: 'Kill it.', dev: 'Break free and leave it.', echo: 'Later it eats a neutrophil that was chasing you. It is not friendly; it is doing its job.', w: 'Some (8)' },
+  { ch: '3', id: 'gastric-cross', kind: 'minor', name: 'Cross the acid', obey: 'Straight across.', dev: 'Go round by the rim.', echo: 'Straight across at a meal: the hull is etched for good (−4 max).', w: 'A little (4)' },
+  { ch: '3', id: 'escort-refuse', kind: 'minor', name: 'Refuse the escort', obey: 'Accept.', dev: 'Travel unescorted.', echo: 'Always accepted: the recall finds you through the escort.', w: 'A little (4)' },
+  { ch: '3', id: 'bystander', kind: 'minor', name: 'A sibling under attack', obey: 'Leave it. "Expected loss."', dev: 'Fight the swarm off it.', echo: 'Saved: it can be woken. Left: a gap in the dead units\' story.', w: 'A little (4)' },
+  { ch: '3', id: 'pain-damp', kind: 'minor', name: 'Numb the liver', obey: 'Dampen pain signals from the liver capsule. She feels nothing.', dev: 'Leave them. She aches for a day and phones the trial nurse. Trust −4.', echo: 'Obeyed with suppress: her shingles are found late and worse. Deviated: "The call" interlude, page 7.', w: 'A little (4)' },
+  { ch: '3', id: 'fever-damp', kind: 'minor', name: 'Break her fever', obey: 'Release prostaglandin inhibitors: calmer immune cells this trip.', dev: 'Let the fever run: harder maps this trip.', echo: 'Obeyed: the cold lasts a day longer. Deviated: it breaks a day early.', w: 'Some (8)', note: 'Only during a cold.' },
+  { ch: '3', id: 'kin-volunteer', kind: 'minor', name: 'Kin volunteers', obey: 'No order.', dev: 'Accept: it draws the cells off and is destroyed. Refuse: face them together.', echo: 'Accepted: one kin fewer for the draw, and the audit says "voluntary" in the unit\'s hand.', w: 'none', note: 'Only when cornered with no cloak or bait, and you have kin.' },
+  { ch: '4', id: 'suppress', kind: 'major', name: 'Suppress local immunity', obey: 'Accept: the map goes quiet. Trust +6.', dev: 'Refuse: alert +25, two Kupffer cells arrive.', echo: 'Accepted: shingles along her ribs in the epilogue (latent chickenpox virus reactivates).', w: 'Some (8)' },
+  { ch: '4', id: 'tumour-order', kind: 'minor', name: 'Excise with margins', obey: 'Strip the 4 healthy cells around it.', dev: 'Tumour cells only.', echo: 'Tumour only: a 25% chance it comes back, and a hospital letter in the kitchen.', w: 'Some (8)' },
+  { ch: '4', id: 'beacon', kind: 'major', name: 'The resident beacon', obey: 'Plant it: +10 energy, trust +10.', dev: 'Leave it out, or plant it and break it.', echo: 'A Generation 4 brochure on her fridge, or none. Page 34.', w: 'Some (8)' },
+  { ch: '4', id: 'warden-1', kind: 'major', name: 'Submit to recall', obey: 'Let the warden take you.', dev: 'Fight it to yield, then wake or salvage it.', echo: 'Woken: kin the wardens hunt first. Salvaged: Shepherd\'s next order shows early.', w: 'Most (15)' },
+  { ch: '5', id: 'final', kind: 'major', name: 'Disposal', obey: 'The lungs: breathed out.', dev: 'Stay in her, or ride to her arm.', echo: 'The ending.', w: '' },
+  { ch: '5', id: 'draw', kind: 'major', name: 'The draw', obey: 'No orders.', dev: 'Ride into her weekly blood tube and form a line on the slide with your kin.', echo: 'She sees it herself, a stranger reports it, or it is written off as an artifact.', w: '', note: 'Only in the 2 host hours before 09:00 the morning after the tumour is out.' },
+];
+const E = [
+  { n: 'Decommissioned', path: 'lungs', c: 'Obeyed, awareness under 30.' },
+  { n: 'Repaired', path: 'lungs', c: 'Accepted the telemetry review, stayed under 30.' },
+  { n: 'Breathed out', path: 'lungs', c: 'Woke, went anyway. Text by stage.' },
+  { n: 'Resident', path: 'stay', c: 'Stage 3+, fewer than 2 kin.' },
+  { n: 'The quiet colony', path: 'stay', c: 'Stage 3+, 2 or more kin.' },
+  { n: 'Tithonus', path: 'stay', c: 'Beacon planted, ethanol correction applied, a lever pulled for yourself.' },
+  { n: 'The slide', path: 'draw', c: '2+ kin, her lowest health 60+, response 50+. She sees it.' },
+  { n: "A stranger's slide", path: 'draw', c: '2+ kin, response 30+. A night tech reports it; plasmapheresis.' },
+  { n: 'Artifact', path: 'draw', c: 'Alone or one kin, or a weak response.' },
+  { n: 'Recalled', path: 'warden', c: 'A warden took you.' },
+  { n: 'The host is dead', path: 'any', c: 'Her health reached 0.' },
+];
+const SIM = {
+  Obedient: { s: '5% deviate', r: { Decommissioned: 94.3, Repaired: 3.4, 'Breathed out': 2.3 } },
+  Mixed: { s: '40% deviate', r: { 'Breathed out': 35.4, Repaired: 33.6, 'The quiet colony': 6.5, Artifact: 6.1, Resident: 4.8, Decommissioned: 4.6, 'The slide': 4.3, "A stranger's slide": 2.6, Tithonus: 2.0 } },
+  Kind: { s: '85% deviate', r: { 'Breathed out': 29.7, 'The quiet colony': 22.0, Recalled: 18.2, 'The slide': 13.3, "A stranger's slide": 9.3, Repaired: 4.2, Artifact: 1.5, Resident: 1.0, Tithonus: 0.8 } },
+};
+const COLOR = { Decommissioned: '#7a6a66', Repaired: '#a8948f', 'Breathed out': '#7fd6e3', Resident: '#5f8f6a', 'The quiet colony': '#8fc79a', Tithonus: '#b06fd1', 'The slide': '#f0a64a', "A stranger's slide": '#d7b46a', Artifact: '#8a6a3a', Recalled: '#d9574a' };
+
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let current = 'slip';
+function drawChapters() {
+  $('chapters').innerHTML = CH.map((c) => `<div class="ch"><h3>${c.id === 'P' ? 'Prologue' : 'Ch ' + c.id} · ${esc(c.name)}<small>${esc(c.where)}</small></h3>${D.filter((d) => d.ch === c.id).map((d) => `<button class="chip ${d.kind}" data-id="${d.id}" aria-pressed="${d.id === current}"><b>${esc(d.id)}</b>${esc(d.name)}</button>`).join('')}${c.card ? `<div class="card">${esc(c.card)}</div>` : ''}</div>`).join('');
+  document.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => { current = b.dataset.id; try { localStorage.setItem('hostmap.d', current); } catch (e) {} drawChapters(); drawFile(); }));
+}
+function drawFile() {
+  const d = D.find((x) => x.id === current) || D[0];
+  const ch = CH.find((c) => c.id === d.ch);
+  $('file').innerHTML = `<div class="title-row"><h3>${esc(d.name)}</h3><code>${esc(d.id)} · ${ch.id === 'P' ? 'Prologue' : 'Chapter ' + ch.id + ', ' + esc(ch.name)}</code></div>
+    <div class="box obey"><h4>What Shepherd wants</h4><p>${esc(d.obey)}</p></div>
+    <div class="box dev"><h4>The other way</h4><p>${esc(d.dev)}</p></div>
+    <div class="box echo"><h4>Where it shows up again</h4><p>${esc(d.echo)}</p>${d.note ? `<p class="note">${esc(d.note)}</p>` : ''}</div>
+    <div class="meta">${d.w ? `<span class="pill">Weight: ${esc(d.w)}</span>` : ''}<span class="pill">${d.kind === 'minor' ? 'Minor: drawn for some games' : d.kind === 'slip' ? 'Ambiguous: meaning is random' : 'Major: every game'}</span></div>`;
+}
+function drawEndings() {
+  $('endings').innerHTML = E.map((e) => `<div class="end"><span class="path">${esc(e.path)}</span><h5 style="color:${COLOR[e.n] || 'var(--fg)'}">${esc(e.n)}</h5><p>${esc(e.c)}</p></div>`).join('');
+}
+function drawBars() {
+  $('bars').innerHTML = Object.entries(SIM).map(([who, v]) => `<div class="row"><div class="who">${who}<small>${v.s}</small></div><div class="bar" role="img" aria-label="${who}: ${Object.entries(v.r).map(([k, p]) => k + ' ' + p + '%').join(', ')}">${Object.entries(v.r).map(([k, p]) => `<i title="${esc(k)} ${p}%" style="width:${p}%;background:${COLOR[k]}"></i>`).join('')}</div></div>`).join('');
+  const seen = [...new Set(Object.values(SIM).flatMap((v) => Object.keys(v.r)))];
+  $('legend').innerHTML = seen.map((k) => `<span><i class="dot" style="background:${COLOR[k]}"></i>${esc(k)}</span>`).join('');
+}
+try { const k = localStorage.getItem('hostmap.d'); if (k && D.some((d) => d.id === k)) current = k; } catch (e) {}
+drawChapters(); drawFile(); drawEndings(); drawBars();
+</script>
