@@ -972,7 +972,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (now !== was) {
     if (now === 'stressed') {
       s.host.nap = 0;
-      say(s, `${was === 'asleep' ? outside(s, ['In the dream, they are falling.', 'A nightmare: their teeth are coming loose.', 'They dream of being chased, and their legs will not move.', 'In the dream there is an exam, and they never studied.', 'They dream of something small moving in their blood.']) : outside(s, ['A car horn, very close.', 'They missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said their name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : was === 'asleep' ? 'Their heart pounds, though they never wake.' : 'Their heart is pounding.'}`);
+      say(s, `${was === 'asleep' ? outside(s, ['In the dream, she is falling.', 'A nightmare: her teeth are coming loose.', 'She dreams of being chased, and her legs will not move.', 'In the dream there is an exam, and she never studied.', 'She dreams of something small moving in her blood.']) : outside(s, ['A car horn, very close.', 'She missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said her name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : was === 'asleep' ? 'Her heart pounds, though she never wakes.' : 'Her heart is pounding.'}`);
       emit(s, 'surge');
       // Adrenaline first, cortisol after: droplets of it turn up in the blood around you.
       for (let n = CONFIG.cortisol.drops, tries = 0; n > 0 && tries < 600; tries++) {
@@ -981,8 +981,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       }
       if (s.place === 'vessel') arrive(s, 1); // adrenaline shakes neutrophils loose into the blood
     } else if (was === 'stressed') say(s, 'The fright passes. The blood slows.');
-    else if (now === 'asleep') { say(s, `${s.host.nap > 0 ? 'Their eyelids are heavy. A nap on the sofa.' : outside(s, ['Lights out.', 'They fell asleep with the television on.', 'Bed, finally.'])} The blood slows, and the immune system goes to work.`); emit(s, 'sleep'); }
-    else { say(s, outside(s, ['An alarm clock. They hit snooze, but they are awake.', 'They wake before the alarm.', 'Awake, and not happy about it.'])); emit(s, 'wake'); }
+    else if (now === 'asleep') { say(s, `${s.host.nap > 0 ? 'Her eyelids are heavy. A nap on the sofa.' : outside(s, ['Lights out.', 'She fell asleep with the television on.', 'Bed, finally.'])} The blood slows, and the immune system goes to work.`); emit(s, 'sleep'); }
+    else { say(s, outside(s, ['An alarm clock. She hit snooze, but she is awake.', 'She wakes before the alarm.', 'Awake, and not happy about it.'])); emit(s, 'wake'); }
   }
 
   // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.

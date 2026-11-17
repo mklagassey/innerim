@@ -291,8 +291,8 @@ function market() {
     offer('Fibrin patch', m.patch.cost, 'One patch for the road.', c.patches < CONFIG.items.maxPatches, () => { c.patches++; }),
     offer('Butyrate', m.butyrate.cost, 'What gut bacteria make from fibre. It teaches the immune system tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }),
     offer('Stowaways', CONFIG.flora.cost, `${CONFIG.flora.aboard} gut bacteria come aboard. When an immune cell finds you and the cloak cannot answer, one goes over the side on its own, and every innate cell nearby goes for it instead of you. Each one loose costs the host ${CONFIG.flora.hostDamage}% health. Stomach acid kills them.`, (c.flora ?? 0) + CONFIG.flora.aboard <= CONFIG.flora.most, () => { c.flora = (c.flora ?? 0) + CONFIG.flora.aboard; }),
-    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and they mend.`, c.nap <= 0, () => { c.nap = CONFIG.levers.serotonin.hours; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
-    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone. The host is in the fridge before they know why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { c.snack = c.hour; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
+    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and she mends.`, c.nap <= 0, () => { c.nap = CONFIG.levers.serotonin.hours; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
+    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone. The host is in the fridge before she knows why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { c.snack = c.hour; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
     ...(Story.stageOf(c.aware ?? 0) >= 4 ? [offer('A gut feeling', CONFIG.story.feeling.cost, `Not a lever. One signal up the vagus nerve with nothing in it except: you are looked after. ${Story.HOST} will not know where it came from. +${CONFIG.story.feeling.heals}% host health.`, c.hostHealth < CONFIG.host.maxHealth, () => { c.hostHealth = Math.min(CONFIG.host.maxHealth, c.hostHealth + CONFIG.story.feeling.heals); said = `She stopped on the stairs with a hand on her stomach, and smiled at nothing. That was me. That was the first thing I ever said to her.`; })] : []),
     ...stock.map((id) => offer(`${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
       c.upgrades[id] = (c.upgrades[id] ?? 0) + 1;
@@ -305,12 +305,12 @@ function market() {
 /** What the host is up to and what is coming, so a trip can be timed. */
 function forecast(hour: number, nap = 0, snack = -1): string {
   const h = CONFIG.host, asleep = hour >= h.asleepFrom || hour < h.asleepUntil, fed = G.digesting(hour, snack);
-  if (nap > 0 && !asleep) return `${clock(hour)}. The host is napping for another ${nap <= 1 ? 'hour' : `${Math.ceil(nap)} hours`}: slow blood, sharp noses, and they are mending.`;
-  const habit = G.alcohol(hour) > 0 ? ' They have had a drink: sluggish immune cells, a swaying ship, a busy liver.' : G.caffeine(hour) > 0 ? ' They are full of coffee: fast blood and frequent frights.' : '';
+  if (nap > 0 && !asleep) return `${clock(hour)}. The host is napping for another ${nap <= 1 ? 'hour' : `${Math.ceil(nap)} hours`}: slow blood, sharp noses, and she is mending.`;
+  const habit = G.alcohol(hour) > 0 ? ' She has had a drink: sluggish immune cells, a swaying ship, a busy liver.' : G.caffeine(hour) > 0 ? ' She is full of coffee: fast blood and frequent frights.' : '';
   const until = (meal: number) => ((meal - hour + 24) % 24) || 24;
   const next = [...h.meals].sort((a, b) => until(a) - until(b))[0];
-  const state = asleep ? `The host is asleep until ${clock(h.asleepUntil)}: slow blood, sharp noses, and they are mending.` : `The host is awake until ${clock(h.asleepFrom)}.`;
-  const gut = fed > 0.5 ? 'They have just eaten: sugar is plentiful and stomach acid is at its worst.' : fed > 0 ? 'They are still digesting: extra sugar, strong acid.' : 'Their stomach is empty: acid is weak, sugar is ordinary.';
+  const state = asleep ? `The host is asleep until ${clock(h.asleepUntil)}: slow blood, sharp noses, and she is mending.` : `The host is awake until ${clock(h.asleepFrom)}.`;
+  const gut = fed > 0.5 ? 'She has just eaten: sugar is plentiful and stomach acid is at its worst.' : fed > 0 ? 'She is still digesting: extra sugar, strong acid.' : 'Her stomach is empty: acid is weak, sugar is ordinary.';
   return `${clock(hour)}. ${state} ${gut}${habit} Next meal ${clock(next)}. Coffee at 08:00 and 15:00, a drink at 20:30.`;
 }
 
