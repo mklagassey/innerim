@@ -1,7 +1,9 @@
-# Insiderim systems design
+# Host: systems design
+
+(The game was called Insiderim until 2026-11-17; Mick renamed it **Host**.)
 
 Owner: systems design. Audience: lead engineer (builds), creative director (story fit), QA (what to test).
-Status: first audit, 2026-11-17, against `realtime-isometric` at commit `90af4fc` (stats build `unit-2`).
+Status: first audit, 2026-11-17, against `realtime-isometric` at commit `90af4fc` (stats build `unit-2`). S1 to S7, S10 and S12 shipped the same day as builds `unit-3` to `unit-5`.
 
 This doc covers the gameplay systems: progression and builds, items, immune detection, alert loss, the host's body cycles, and balance. Every number below is a proposal to be tuned in `src/config.ts`; specs name the config keys and functions they touch so they can be built without guessing.
 
@@ -13,7 +15,8 @@ This doc covers the gameplay systems: progression and builds, items, immune dete
 2. **No eyes, only noses.** Innate immune cells find you by scent drifting downstream and by footprints. Nothing innate is omniscient. (Mick's rule.)
 3. **The selfish option is always faster.** Skim vs strip, salvage vs wake, obey vs defy. Each choice must cost something you feel within the same run.
 4. **Builds, not classes.** Tank, warrior, stealth and scout are directions the player drifts in, not menus. Committing to one should feel different, not just bigger.
-5. **Readable danger.** The player should always be able to see a death coming a few seconds early. No surprise wipes, no flashing (Mick is sensitive to strobing; ease things in).
+5. **Close to real.** (Mick, 2026-11-17.) Stick to scientific fact. Bend it only when the story needs it or when real time or physics would be unwieldy in a game, the way The Martian bends its windstorm. Never anthropomorphise biology: tumours, cells, bacteria and viruses have no motives, moods or personalities. Every mechanic is a real mechanism, and text describes it that way.
+6. **Readable danger.** The player should always be able to see a death coming a few seconds early. No surprise wipes, no flashing (Mick is sensitive to strobing; ease things in).
 
 ---
 
@@ -86,6 +89,9 @@ Rule for the next few builds: **no new systems until P0 and P1 ship and Mick has
 | S11 | P2 | Extend the balance sim to full trips | M |
 | S12 | P2 | Run report additions | XS |
 | S13 | P3 | Consolidation review of unreviewed systems | - |
+| S14 | P1 | Gut market becomes a fermentation site (no shopkeepers) | S |
+| S15 | P1 | Stewardship ledger: track how her insides were treated, for the endgame | S |
+| S16 | P2 | Realism pass on system text | XS |
 
 ### S1 (P0). Make the stomach survivable and readable
 
@@ -203,6 +209,57 @@ Before adding anything new, each unreviewed system gets one playtest from Mick a
 - **Levers** (serotonin, ghrelin) and **habits** (coffee, drink) are the same idea from two sides. Keep both only if S5 makes them readable.
 - **Stowaway bait** and the **cloak** both answer "a cell found me". Bait should stay for non-stealth builds; check it does not make CD47 pointless.
 
+### S14 (P1). The gut market becomes a fermentation site
+
+**Problem.** Bacteria "trade for sugar" reads as microbes running a shop, which breaks the realism rule (pillar 5). Flagged by the creative director (world bible section 11).
+
+**Spec.** Same node, same menu, same prices, no shopkeepers. The unit is doing chemistry, not commerce: it releases glucose into the gut lumen where the flora ferment it, and collects what fermentation and the gut wall make. Rename the node **Gut lumen** (kind `town` can stay in code). Each menu line is a real product of the gut:
+
+| Old item | New item | What the unit actually does (one bend at most) |
+|---|---|---|
+| Repair hull (3) | **Biofilm patch** | Gut bacteria secrete exopolysaccharide biofilm; the unit lets a film grow over the cracked hull and hardens it. Bend: it works as plating. |
+| Fibrin patch (4) | **Vitamin K2** | Gut bacteria make menaquinone (K2), which the liver needs to make clotting factors. The unit stores it and builds one fibrin patch from it. |
+| Butyrate (5) | **Butyrate** (unchanged) | A short-chain fatty acid from fermenting fibre; it really does push the immune system toward tolerance (regulatory T cells). Memory −0.2. |
+| Three upgrades (8 each) | **Shed lining salvage** | The gut lining replaces itself every few days; the unit picks through shed enterocytes for parts. Same 3 random upgrades. |
+| Stowaways (4) | **Hitchhikers** | Bacteria adhere to any surface, the hull included. The unit lets a few attach before leaving. No text about them trusting or wanting anything. |
+| Serotonin lever | **Serotonin** (unchanged) | About 90% of the body's serotonin is made by enterochromaffin cells in the gut wall, and fermentation products stimulate it. True as written. |
+| Ghrelin lever | **Ghrelin** | Made mostly in the stomach wall, not the gut. Keep the lever here for now but word it as the unit signalling the stomach; move it to the stomach map later. |
+
+All of it is text in `main.ts` (`market()`), `trip.ts` (`NODES.gut`) and `tips.ts`, plus the config comment "The gut flora trade for sugar". "Prices" become **glucose spent**: wording such as "Release 4 glucose" instead of "Buy for 4". No rules change.
+
+### S15 (P1). Stewardship ledger: track how her insides were treated
+
+**Why.** In Mick's endgame (world bible section 10), the unit reaches Marian, and how she responds depends on how her body was treated. The game needs a running record of it from now on, so the ending has real data and the run reports show the player's moral profile.
+
+**Spec.** Add `ledger` to `Carry` (and `State`), summed across every map of the mission and never reset until a new unit begins:
+
+| Field | Counted when |
+|---|---|
+| `stripped` | a host cell is stripped (hepatocyte or parietal), already `cellsKilled` per map |
+| `skimmed` | a skim finishes |
+| `excised` | already carried |
+| `quotaObeyed`, `quotaDefied` | `leave()` sets `verdict` |
+| `woken`, `salvaged` | `answer()` with `wake` / `salvage` (`kin` today only counts woken) |
+| `leversForHer`, `leversForMe` | serotonin nap while host health < 80 counts for her (she mends); ghrelin or a nap used only to refill glucose counts for you. Rule: a lever used when host health < 80 is for her, otherwise for you. |
+| `baitReleased` | `bait()` (each costs her 2%) |
+| `hostLowest` | lowest host health ever reached |
+| `feverPeak` | highest fever level ever reached |
+| `memoryPeak` | highest immune memory (already ratchets, so `memory` at the end) |
+| `feelings` | "A gut feeling" bought at stage 4 |
+
+Derived numbers for the endgame (computed, not stored): `harm = stripped×10 + baitReleased×2 + (100 − hostLowest)`, and `care = skimmed÷5 + excised×2 + leversForHer×5 + feelings×5 + quotaDefied×3`. Ending bands are the creative director's call; systems will set the thresholds once real runs exist. Show the ledger on the world map's unit log as plain facts ("Her cells you took: 6. Sugar you skimmed: 212."), never as a score.
+
+Add `ledger` to the run report (S12) so we can see real players' spread before tuning the bands.
+
+### S16 (P2). Realism pass on system text
+
+Text that gives cells or bacteria intent, to reword (not rules):
+- `game.ts` `bait()`: "Innate immune cells cannot resist a real bacterium" becomes "Phagocytes are built to engulf bacteria: any nearby will go for it."
+- `game.ts` cortisol pickup: "the immune system has orders to stand down" becomes "Cortisol damps immune activity for a while."
+- `config.ts` comments: "The gut flora trade for sugar" (see S14), "Adaptive immunity's assassin" becomes "Adaptive immunity's cytotoxic cell, made to match you".
+- Tumour wording everywhere: the tumour is tissue that drains her (S6 text "host losing 1% an hour" is fine). Never "enemy", "fights back" or similar.
+- Story lines that give feelings to cells are the creative director's pass, not this one.
+
 ---
 
 ## 4. Build order for the lead engineer
@@ -212,10 +269,12 @@ Before adding anything new, each unreviewed system gets one playtest from Mick a
 3. **Build `unit-5`:** S6 tumor drain, S10 rebalance, S12 report fields.
 4. **Then** S11 sim, S8 traits and S9 offers, and a balance pass from the sim plus Mick's runs.
 
+5. **Next text-and-data build:** S14, S15, S16. No gameplay change, so it can ship before Mick's unit-5 playtest.
+
 Ask Mick to play after steps 1 and 2; those fix what killed him and add the alert loop he asked for.
 
 ## 5. Open questions (for Mick or the creative director)
 
-- Should the tumor clock (S6) be visible as a number, or only as the host getting sicker? A number is clearer; a feeling is more Bethesda.
+- Should the tumour clock (S6) be visible as a number, or only as the host getting sicker? It ships as a number ("host losing 1% an hour"), which is clearer.
 - Are the four track traits (S8) the right fantasies? In particular, is "Scout" a track Mick wants, or should it fold into stealth?
 - Size tiers (design doc) are not in the game at all. They are the biggest unbuilt system and should get their own design pass once the current loop is solid.
