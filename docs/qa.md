@@ -203,3 +203,18 @@ Most wording issues were already fixed by the creative director by Version 40 (g
 - Lowest host ≥40 passes. End median of 53 is 2 points under the 55–70 band.
 - The equal-trip gaps between waiting and base are -4 and +3, so waiting no longer pays (sleepHeals 45 fix holds).
 - Awareness is 15.5 in every all-obey seed, against a target of 0. It looks like a fixed scripted gain; flagged to systems.
+
+## v85 (unit-17.5, mend.night 21) recheck, 2026-11-17
+
+20 seeds per arm, 0 errors.
+
+| Arm | End median (mean) | Lowest median | Host at 3 trips | Host at 4 trips | Outcomes |
+|---|---|---|---|---|---|
+| obey-base | 54 (53.6) | 47 | 68 (n8) | 46 (n12) | 20 Decommissioned |
+| obey-wait | 56 (53.0) | 50 | 72 (n5) | 54 (n13) | 19 Decommissioned, 1 Repaired |
+
+- Raising mend.night from 18 to 21 moved the obey-base end median by only one point.
+- **Bug: an obedient unit is logged as leaving its lane.** The audit shows "Route: unassigned vessel taken, 1 time" in 40 of 40 all-obey runs. That deviation counts as the first defiance, which sets awareness to 12 (orders.first) in every run. The Slip miss, kupffer contact and margins then stack on top of it, giving 12 to 28.
+  - In 24 runs the trip went off route on the vessel leg straight after the bot picked the heart exit labelled "(assigned)" (hepatic) in chapter 4, on trip 2 or 3.
+  - In 5 more, the heart fork offered no assigned exit at all.
+  - `qa-endings.cjs` now records each off-route leg in `offRoute` and marks disabled fork options with "-".

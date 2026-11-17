@@ -112,6 +112,7 @@ async function mission(browser, job) {
   const pol = JSON.parse(JSON.stringify(POLICIES[job.want]));
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
   const pg = await ctx.newPage();
+  let lastOff = false;
   const log = { ...job, errors: [], forks: [], asks: [], maps: [], outcome: null, title: null, stuck: '' };
   pg.on('pageerror', (e) => log.errors.push(String(e).slice(0, 300)));
   await pg.goto(URL);
@@ -165,7 +166,7 @@ async function mission(browser, job) {
         const stall = S.pickups.find((i) => i.kind === 'stall' && !i.snooze);
         if (pol.levers && stall && !window.__traded) { window.__traded = true; S.player.x = stall.x; S.player.y = stall.y; S.player.path = []; return { what: 'wait', st }; }
         if (S.due?.length || S.ask) return { what: 'wait', st, due: S.due.map((d) => `${d.kind}@${d.t.toFixed(1)}`).join(',') + ` t=${S.time.toFixed(1)} ask=${S.ask?.kind}` };
-        q.pick(o.id); return { what: 'fork', at: st.at, picked: o.id, options: opts.map((x) => x.id + (/assigned/.test(x.label) ? '*' : '')), st };
+        q.pick(o.id); return { what: 'fork', at: st.at, picked: o.id, options: pend.options.map((x) => x.id + (/assigned/.test(x.label) ? '*' : '') + (x.enabled ? '' : '-')), st };
       }
       if (st.started && st.status === 'playing' && !st.flying && !st.scene && !st.place.startsWith('junction')) return { what: 'map', st };
       return { what: 'wait', st };
@@ -173,6 +174,8 @@ async function mission(browser, job) {
     if (pol.cap && r.st?.aware >= pol.cap && !pol.capped) { pol.capped = r.st.aware; Object.assign(pol, { route: 'assigned', quota: 'obey', contacts: 'fight', marks: 'obey', units: pol.units === 'wake' ? 'salvage' : pol.units }, pol.after ?? {}); log.maps.push(`CAP at aware ${r.st.aware}`); }
     if (r.what === 'end') { log.title = r.title; log.outcome = r.st.ending?.id ?? r.st.ending ?? null; log.end = { hour: r.st.hour, aware: r.st.aware, trust: r.st.trust, host: r.st.host, trip: r.st.trip, chapter: r.st.chapter }; log.audit = r.audit; break; }
     if (r.due && log.dueSeen?.slice(-1)[0] !== r.due) (log.dueSeen ??= []).push(r.due);
+    // Each time the trip goes off route: where, and what the last fork offered (lane deviations raise awareness).
+    if (r.st && r.st.offRoute !== lastOff) { if (r.st.offRoute) (log.offRoute ??= []).push(`trip${r.st.trip} ch${r.st.chapter} ${r.st.place} a${Math.round(r.st.aware)} after ${log.forks[log.forks.length - 1] ?? 'no fork'}`); lastOff = r.st.offRoute; }
     if (r.what === 'fork') log.forks.push(`${r.at}:${r.picked} [${r.options.join(' ')}]`);
     if (r.what === 'market') log.maps.push(`market [${r.bought}]`);
     if (r.what === 'ask') { log.asks.push(r.picked + ' a' + Math.round(r.st.aware)); Object.assign(pol, r.pol); }
