@@ -3,7 +3,7 @@
 // /mnt/project-files/creative/storyboards.md and interludes.md (v3).
 import { Stage, lerp, ease, smooth, clamp, rgba, mixHex, hash } from './core';
 import { kitchen, fridgeClose, PAL, Kit } from './sets';
-import { clinic, sofa, bedroom, consult, lab, eyepiece, inside, Liver } from './sets2';
+import { clinic, sofa, sofaDay, bedroom, consult, lab, eyepiece, inside, Liver } from './sets2';
 import { Pose, reach, hand, woman, cap, blob, dog, headOf } from './rig';
 import { mug, paper, brochure, glass } from './props';
 import type { ShotDef } from './shots';
@@ -421,7 +421,12 @@ export const SHOTS2: Record<string, ShotDef> = {
       let her: Pose;
       if (a.healthHigh) {
         her = { x: 600, y: 384, s: 268, face: -1, lean: 0.02, slump: 0.05, neck: 0.05, head: 0, near: { sh: 0.25, el: 0.5, grip: 'fist' }, far: { sh: -0.05, el: 0.1 }, breath: breath(st), clothes: 'coat', stride: 0.3 };
-        if (a.shingles) { const r = reach(her, her.x - 14, 384 - 268 * 0.76, 1); her.far = { sh: r.sh, el: r.el, wr: -0.6, grip: 'open' }; her.slump = 0.3; }
+        if (a.shingles) {
+          // she reaches for the mug and stops short; the other hand goes flat to her side, under the ribs, where the rash is
+          const m = reach(her, 566, 200, 1); her.near = { sh: m.sh, el: m.el, wr: 0.1, grip: 'open' };
+          const r = reach(her, her.x + 16, 384 - 268 * 0.6, 1, true); her.far = { sh: r.sh, el: r.el, wr: 0.4, grip: 'open' };
+          her.slump = 0.22; her.lean = 0.08; her.neck = 0.2;
+        }
       } else {
         her = { x: 520, y: 384, s: 262, face: 1, legs: 'sit', seat: 0.46, lean: 0.12, slump: 0.6, neck: 0.4, head: 0.2, near: { sh: 0.7, el: 0.9, grip: 'open' }, far: { sh: 0.6, el: 0.9, grip: 'open' }, breath: breath(st, 3.6), clothes: 'gown' };
       }
@@ -770,6 +775,94 @@ export const SHOTS2: Record<string, ShotDef> = {
     look: 'dawn', a: { x: 500, y: 236, z: 0.92 }, b: { x: 500, y: 240, z: 0.94 }, wide: { x: 500, y: 236, z: 0.9 }, close: [{ x: 500, y: 236, z: 1.0 }, { x: 500, y: 240, z: 1.02 }],
     burn: 'TITHONUS 0001 · HOME CAM 1',
     draw: (st) => fridgeClose(st, { ...tithonusKit(st), gen4: true }, 'dawn'),
+  },
+
+  // ---------- echo variants (decisions-text.md section 6): short, two or three shots each ----------
+  'echo-fridge-lfts': {
+    label: 'The fridge door, close: a note from her GP in handwriting, stuck beside the brochure. "LFTs fine. See you in 3 months."',
+    look: 'day', a: { x: 470, y: 290, z: 1.5 }, b: { x: 470, y: 292, z: 1.56 }, wide: { x: 480, y: 270, z: 1.2 }, close: [{ x: 466, y: 300, z: 1.9 }, { x: 466, y: 302, z: 2.0 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => fridgeClose(st, { time: 'day', note: 'lfts' }, 'day'),
+  },
+  'echo-fridge-reserve': {
+    label: 'The fridge door, close: a line printed from the trial portal. "Hepatic reserve: 82%."',
+    look: 'day', a: { x: 470, y: 290, z: 1.5 }, b: { x: 470, y: 292, z: 1.56 }, wide: { x: 480, y: 270, z: 1.2 }, close: [{ x: 466, y: 300, z: 1.9 }, { x: 466, y: 302, z: 2.0 }],
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => fridgeClose(st, { time: 'day', note: 'reserve' }, 'day'),
+  },
+  'echo-read-lfts': {
+    label: 'She sticks the note up beside the brochure and stands back from it a moment.',
+    look: 'day', a: { x: 640, y: 196, z: 1.5 }, b: { x: 646, y: 196, z: 1.56 }, wide: { x: 520, y: 206, z: 0.95 },
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => { const k = smooth(st.p / 0.4); kitchen(st, { time: 'day', note: 'lfts', her: atFridge(st, lerp(724, 704, k), lerp(178, 250, k), { x: 672, neck: 0.2, head: 0.15 }), dog: null, steam: false }); },
+  },
+  'echo-read-reserve': {
+    label: 'She frowns at the percentage, then lets it go.',
+    look: 'day', a: { x: 640, y: 196, z: 1.5 }, b: { x: 646, y: 196, z: 1.56 }, wide: { x: 520, y: 206, z: 0.95 },
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => { const k = smooth((st.p - 0.4) / 0.4); kitchen(st, { time: 'day', note: 'reserve', her: atFridge(st, 716, lerp(180, 260, k), { x: 666, neck: lerp(0.35, 0.1, k), head: lerp(0.3, 0.05, k), slump: lerp(0.35, 0.2, k) }), dog: null, steam: false }); },
+  },
+  'antacid-mid': {
+    label: 'Kitchen, late. She shakes two tablets from a tub and chews. The dog sits and watches her.',
+    look: 'night', a: { x: 300, y: 200, z: 1.45 }, b: { x: 304, y: 198, z: 1.5 }, wide: { x: 520, y: 206, z: 0.95 },
+    burn: 'TITHONUS 0001 · HOME CAM 2',
+    draw: (st) => {
+      const chew = smooth((st.p - 0.3) / 0.2), m0: Pose = { x: 250, y: 384, s: 268, face: 1, lean: 0.06, slump: 0.3, neck: 0.15, head: 0.1, near: { sh: 0, el: 0 }, far: { sh: 0.1, el: 0.3, grip: 'open' }, breath: breath(st), clothes: 'cardigan', stride: 0.1 };
+      const mouth = headOf(m0).mouth, r = reach(m0, lerp(180, mouth[0] + 4, chew), lerp(196, mouth[1] + 8, chew), 1); m0.near = { sh: r.sh, el: r.el, wr: -0.4, grip: 'fist' };
+      kitchen(st, { time: 'night', tub: true, steam: false, mug: false, her: m0, dog: { x: 430, y: 388, d: 112, face: -1, pose: 'sit', head: 0.3, breath: breath(st, 2.8) } });
+    },
+  },
+  'antacid-tub': {
+    label: 'The tub on the counter, the lid off. Chalk-white tablets.',
+    look: 'night', a: { x: 180, y: 196, z: 4.2 }, b: { x: 182, y: 196, z: 4.4 }, wide: { x: 180, y: 196, z: 4.0 }, dof: 0.6,
+    burn: 'TITHONUS 0001 · HOME CAM 2',
+    draw: (st) => { kitchen(st, { time: 'night', tub: true, steam: false, mug: false, her: null, dog: null }); st.layer(1, (c) => { for (const [x, y] of [[205, 207], [214, 206]]) { c.fillStyle = '#d8d4cc'; c.beginPath(); c.ellipse(x, y, 4, 1.6, 0, 0, Math.PI * 2); c.fill(); } }); },
+  },
+  'nap-wide': {
+    label: 'Afternoon light through the blind. She is asleep on the sofa under a blanket. The dog is on her feet.',
+    look: 'day', a: { x: 500, y: 220, z: 1.05 }, b: { x: 510, y: 222, z: 1.1 }, wide: { x: 500, y: 214, z: 0.95 },
+    burn: 'TITHONUS 0001 · HOME CAM 4',
+    draw: (st) => { sofaDay(st, { breath: breath(st, 5.5), mug: 'cold' }); st.lit(1.02, (c) => dog(c, { x: 420, y: 252, d: 92, face: 1, pose: 'sleep', breath: breath(st, 3.6) }), { body: '#140e0c', rim: 0.8, width: 2, fill: 0.5, at: [440, 240, 120] }); },
+  },
+  'nap-mug': {
+    label: 'The mug on the table, gone cold.',
+    look: 'day', a: { x: 770, y: 286, z: 4.2 }, b: { x: 770, y: 284, z: 4.3 }, wide: { x: 770, y: 286, z: 3.8 }, dof: 0.5,
+    burn: 'TITHONUS 0001 · HOME CAM 4',
+    draw: (st) => sofaDay(st, { breath: breath(st, 5.5), mug: 'cold' }),
+  },
+  'groggy-clock': {
+    label: 'The clock on the wall: eight fifty-two.',
+    look: 'day', a: { x: 820, y: 70, z: 5.5 }, b: { x: 820, y: 70, z: 5.7 }, wide: { x: 820, y: 70, z: 5.0 }, dof: 0.4,
+    burn: 'TITHONUS 0001 · HOME CAM 4',
+    draw: (st) => { sofaDay(st, { breath: 0.5, mug: null, clock: '8:52', light: 'morning' }); st.layer(0.75, (c) => { c.strokeStyle = '#1a1412'; c.lineCap = 'round'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(820, 70); c.lineTo(820 + Math.sin((8.87 / 12) * Math.PI * 2) * 8, 70 - Math.cos((8.87 / 12) * Math.PI * 2) * 8); c.stroke(); c.lineWidth = 1; c.beginPath(); c.moveTo(820, 70); c.lineTo(820 + Math.sin((52 / 60) * Math.PI * 2) * 12, 70 - Math.cos((52 / 60) * Math.PI * 2) * 12); c.stroke(); }); },
+  },
+  'groggy-up': {
+    label: 'Morning. She is up off the sofa at once, the blanket half on the floor. The coffee is a big one.',
+    look: 'day', a: { x: 520, y: 220, z: 1.1 }, b: { x: 526, y: 222, z: 1.14 }, wide: { x: 500, y: 214, z: 0.95 },
+    burn: 'TITHONUS 0001 · HOME CAM 4',
+    draw: (st) => {
+      const k = smooth(st.p / 0.4);
+      const up: Pose = { x: 600, y: 384, s: 262, face: 1, legs: 'sit', seat: 0.48, lean: lerp(0.1, 0.6, k), slump: 0.2, neck: 0.1, head: 0, near: { sh: lerp(0.4, 0.75, k), el: lerp(0.9, 0.5, k), grip: 'open' }, far: { sh: 0.3, el: 0.9, grip: 'open' }, breath: breath(st, 2.6), clothes: 'cardigan' };
+      const r = reach(up, lerp(700, 752, k), lerp(330, 284, k), 1); up.near = { sh: r.sh, el: r.el, wr: -0.3, grip: k > 0.8 ? 'hold' : 'open' }; // reaching for the big coffee
+      up.far = { sh: -0.35, el: 0.25, grip: 'flat' }; // the other hand pushing off the cushion
+      sofaDay(st, { breath: 0.5, mug: 'hot', up, light: 'morning', clock: '8:52' });
+    },
+  },
+  'fridge3-mid': {
+    label: 'Afternoon. The fridge open, its light on her. She eats cold leftovers standing up, and does not know why.',
+    look: 'day', a: { x: 660, y: 196, z: 1.45 }, b: { x: 664, y: 196, z: 1.5 }, wide: { x: 520, y: 206, z: 0.95 },
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => {
+      const eat = 0.5 + 0.5 * Math.sin(st.still ? 0 : st.t * 1.1), base = atFridge(st, 700, 200, { x: 630, neck: 0.25, head: 0.15, slump: 0.3 });
+      const m = headOf(base).mouth, r = reach(base, m[0] + 6, m[1] + 6 + eat * 22, 1); base.near = { sh: r.sh, el: r.el, wr: -0.6, grip: 'hold' };
+      kitchen(st, { time: 'day', open: 1, her: base, dog: null, steam: false, mug: false });
+    },
+  },
+  'fridge3-close': {
+    label: 'Her profile in the fridge light, chewing slowly.',
+    look: 'day', a: { x: 640, y: 120, z: 3.0 }, b: { x: 642, y: 122, z: 3.1 }, wide: { x: 520, y: 206, z: 0.95 }, dof: 0.7,
+    burn: 'TITHONUS 0001 · HOME CAM 1',
+    draw: (st) => { const base = atFridge(st, 700, 200, { x: 630, neck: 0.25, head: 0.15, slump: 0.3 }); base.near = { sh: 0.3, el: 1.6, grip: 'hold' }; kitchen(st, { time: 'day', open: 1, her: base, dog: null, steam: false, mug: false }); },
   },
 };
 

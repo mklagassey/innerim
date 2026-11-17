@@ -75,6 +75,15 @@
   #ask-list button { text-align: left; display: grid; gap: 0.2rem; padding: 0.7rem 0.9rem; }
   #ask-list button small { opacity: 0.75; font-weight: 400; text-transform: none; letter-spacing: 0; }
   #over-body { white-space: pre-line; }
+  #over .card { max-height: calc(100dvh - 48px); overflow-y: auto; }
+  .audit { width: 100%; border-top: 1px solid rgba(240,170,90,0.35); padding-top: 12px; font: 12px/1.55 ui-monospace, Menlo, Consolas, monospace; color: #e8a25a; letter-spacing: 0.02em; }
+  .audit p, .audit ul { margin: 0 0 8px; }
+  .audit ul { padding-left: 1.2em; }
+  #audit-head { text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.8; }
+  #audit-foot { white-space: pre-line; opacity: 0.9; }
+  #audit-note { font: italic 400 0.98rem/1.5 var(--body, Georgia, serif); color: #f3e6d8; letter-spacing: 0; }
+  .restarts { display: grid; gap: 8px; width: 100%; }
+  .restarts small { opacity: 0.7; }
   #journal { display: grid; gap: 0.45rem; margin: 0 0 1.6rem; max-height: 40vh; overflow-y: auto; }
   #journal p { margin: 0; font: 500 0.7rem/1.4 var(--data); color: #8fd6e8; }
   #journal p.shepherd { color: #e8a25a; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
@@ -276,6 +285,7 @@
       <button id="begin" type="button">Begin</button>
       <button id="prologue" type="button" hidden>Prologue</button>
       <button id="resume" type="button" hidden>Continue</button>
+      <div id="chapters" class="restarts" hidden></div>
       <button id="tips-reset" type="button" class="quiet" hidden>Show all the info boxes again</button>
     </div>
   </div>
@@ -351,7 +361,9 @@
     <div class="card">
       <h2 id="over-title"></h2>
       <p id="over-body"></p>
+      <div id="audit" class="audit" hidden><p id="audit-head"></p><ul id="audit-lines"></ul><p id="audit-foot"></p><p id="audit-note" hidden></p></div>
       <p id="over-saved" class="fine"></p>
+      <div id="restarts" class="restarts" hidden></div>
       <button id="again" type="button">Start over</button>
     </div>
   </div>

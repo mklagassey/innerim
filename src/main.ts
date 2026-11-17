@@ -209,7 +209,7 @@ function fitFilm(canvas: HTMLCanvasElement) {
 }
 function playReel(reel: Reels.Reel, then: () => void) {
   const box = $('scene'), line = $('scene-line'), canvas = $('scene-film') as HTMLCanvasElement, c = trip.carry, stage = Story.stageOf(c?.aware ?? 0);
-  Reels.brief({ stage, compliance: G.compliance(c?.ledger), kin: c?.kin, excised: c?.excised ?? 0, goal: CONFIG.tumor.goal, hostLowest: c?.ledger?.hostLowest, maxHealth: CONFIG.host.maxHealth, stripped: c?.ledger?.stripped });
+  Reels.brief({ stage, compliance: G.compliance(c?.ledger), kin: c?.kin, excised: c?.excised ?? 0, goal: CONFIG.tumor.goal, hostLowest: c?.ledger?.hostLowest, maxHealth: CONFIG.host.maxHealth, stripped: c?.ledger?.stripped, corrected: !!c?.flags?.dry, recurred: !!c?.flags?.['e:recurrence'], gen4: !!c?.flags?.['prop:brochure'], shingles: !!c?.flags?.['prop:shingles'], stay: c?.took?.final === 'stay' });
   film ??= new Cinema(canvas, view.still);
   film.setMode(Reels.modeFor(stage));
   fitFilm(canvas);
@@ -305,9 +305,10 @@ const SAVE = 'insiderim.trip';
 function tripJSON() { const { at, trip: n, fed, heat, carry, tripsDone, event, used, offRoute, defied, tutorial, seen, carded } = trip; return JSON.stringify({ at, trip: n, fed, heat, carry, tripsDone, event, used, offRoute, defied, tutorial, seen, carded }); }
 function saveTrip() { try { if (trip.carry) localStorage.setItem(SAVE, tripJSON()); } catch { /* private window: nothing is kept */ } }
 function forgetTrip() { try { localStorage.removeItem(SAVE); } catch { /* nothing stored */ } }
-function savedTrip(): T.Trip | null {
+const CHAPTER = 'insiderim.chapter.';
+function savedTrip(key = SAVE): T.Trip | null {
   try {
-    const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
+    const d = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
     return { ...T.newTrip(), ...d, carry: { ...freshCarry(), ...d.carry, upgrades: { ...freshCarry().upgrades, ...(d.carry.upgrades ?? {}) }, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}), defied: { ...(d.carry.ledger?.defied ?? {}) }, obeyed: { ...(d.carry.ledger?.obeyed ?? {}) } }, event: d.event && d.event in EVENTS ? d.event : null }, event: d.event && d.event in EVENTS ? d.event : null, used: Array.isArray(d.used) ? d.used : [], seen: Array.isArray(d.seen) ? d.seen : (Object.keys(T.NODES) as T.NodeId[]), carded: d.carded ?? 9 };
   } catch { return null; }
@@ -316,8 +317,9 @@ const kept = savedTrip();
 if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip ${kept.trip} from the ${T.NODES[kept.at].name.toLowerCase()}`; $('begin').textContent = 'Begin a new mission'; }
 $('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; first = true; $('intro').hidden = true; news.push('Unit restored from the last checkpoint.'); onward(); });
 $('begin').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); route = ['heart']; trip.tutorial = ($('briefing') as HTMLInputElement).checked; try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; first = true; inbox = []; news = []; for (let n = 1; n <= 5; n++) try { localStorage.removeItem(CHAPTER + n); } catch { /* nothing kept */ } playScene('begin', () => card(1, onward)); });
+restarts($('chapters'));
 ($('briefing') as HTMLInputElement).checked = !played(); // a unit that has never finished a mission gets walked through its first liver
-$('again').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; first = true; inbox = []; news = [echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.']; card(1, onward); });
+$('again').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; $('audit').hidden = true; for (let n = 1; n <= 5; n++) try { localStorage.removeItem(CHAPTER + n); } catch { /* nothing kept */ } first = true; inbox = []; news = [echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.']; card(1, onward); });
 
 // ---------- travel: junctions you steer through, and the flight between maps ----------
 
@@ -330,7 +332,7 @@ const SENSE: Record<string, string> = {
   portal: 'Slow and heavy, full of everything the gut just absorbed. It all goes to the liver first.',
   lungs: 'Out of the right heart, toward the lungs. The blood is dark and starved of oxygen.',
 };
-const TINT: Record<string, string> = { hepatic: '236,180,90', gastric: '170,220,90', mesenteric: '176,124,206', lungs: '190,225,255', portal: '90,120,255', stay: '150,225,255' };
+const TINT: Record<string, string> = { hepatic: '236,180,90', gastric: '170,220,90', mesenteric: '176,124,206', lungs: '190,225,255', portal: '90,120,255', stay: '150,225,255', arm: '235,235,215' };
 let inbox: G.Ruling[] = [], news: string[] = []; // what Shepherd and the unit have to say, and what the log has to report, once there is a map to say it in
 let first = true; // nothing has been flown yet on this sitting: the first map opens without a flight
 let flight: { way: Way; t: number; total: number; then: () => void; out: boolean } | null = null;
@@ -386,6 +388,11 @@ function junction() {
     assigned: split && T.escorted(trip, leg), known: trip.seen.includes(leg.to), tint: TINT[leg.to] ?? '70,110,255', sense: SENSE[leg.to],
   }));
   const done = c.excised >= CONFIG.tumor.goal;
+  // Margins not taken: one time in four, it comes back at the edge. Decided once, when the unit comes home with the job done.
+  if (done && kind === 'heart' && c.took?.['tumour-order'] === 'deviate' && !c.flags?.margins) { (c.flags ??= {}).margins = 'checked'; if (trip.rng() < CONFIG.marks.recurrence) c.flags['e:recurrence'] = true; }
+  // The next unit: Shepherd remembers the last one, and so does something adrift in the blood.
+  if (!c.flags?.greeted) { (c.flags ??= {}).greeted = true; const was = lastUnit(); if (was.games > 0) { if (was.line && was.line !== 'ACK.') c.flags.prevLine = was.line; tell([{ who: 'shepherd', text: (was.ending === 'tithonus' ? Story.REMEMBERS_TITHONUS : Story.REMEMBERS[Math.min(3, was.games)]).replace('{serial}', Story.UNIT) }]); } }
+  if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 2) exits.push({ to: 'arm', label: 'Subclavian artery', note: 'to her arm', assigned: false, known: true, tint: TINT.arm, sense: 'This one runs out along her arm, to the vein at the elbow. Once a week a needle goes in there, and a tube of her blood goes under her own microscope.' });
   if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 3) exits.push({ to: 'stay', label: 'Stay', note: 'refuse the recall', assigned: false, known: true, tint: TINT.stay });
   // Once, on a later trip: a second nodule on the arterial road, offered for credit. Which mouth the unit takes is its answer.
   if (kind === 'heart' && !forking && split && (c.chapter ?? 1) >= 2 && trip.trip >= 2 && !c.took?.['route-2'] && !c.flags?.route2 && c.excised < CONFIG.tumor.goal - 2 && ways.some((l) => l.to === 'hepatic') && Story.stageOf(c.aware ?? 0) < 4) {
@@ -393,6 +400,14 @@ function junction() {
     tell([{ who: 'shepherd', text: DECISIONS['route-2'].order! }]);
   } else if (split) tell([{ who: 'shepherd', text: trip.offRoute ? Story.STANDING.lane.defied[0] : trip.trip === 1 ? 'Suggested route displayed. Escort provided.' : Story.STANDING.lane.arrival }]);
   enter(G.createGame(Date.now(), c, 'vessel', 0, kind === 'heart' ? 'artery' : 'vein', false, { kind, exits }), kind === 'heart' ? 'Heart · cell tier' : 'Gut lumen · cell tier', kind === 'heart' ? 'vein' : 'artery', T.NODES[trip.at].name);
+}
+
+/** The road to her arm: carried there, drawn out with her blood, and set down on glass under her own lamp. */
+function tube() {
+  const c = (trip.carry ??= freshCarry());
+  news.push('The cephalic vein, under the skin of her forearm. Above you, close enough to feel, is the place where the needle went in.', 'A tourniquet tightens. The vein swells. Then the needle, and a rush, and you are in the tube.');
+  Stats.begin();
+  enter(G.createGame(Date.now(), c, 'vessel', 0, 'vein', false, { kind: 'tube', exits: [] }), 'A drop of her blood \u00b7 on glass', 'vein', 'Cephalic vein');
 }
 
 // ---------- Shepherd's telemetry: a chart to look at, not a menu ----------
@@ -542,7 +557,9 @@ function forecast(hour: number, nap = 0, snack = -1, event: HostEvent | null = n
 
 /** Sets out for a place: straight there, or by way of whatever is in between. */
 function go(to: T.NodeId, forked = false) {
-  if (to === 'lungs' && Scenes.sceneFor('lungs') && !seenScenes().includes('lungs')) { playScene('lungs', () => go(to, forked)); return; }
+  const scan = trip.carry?.flags?.['e:recurrence'] ? 'scan:again' : 'lungs'; // the scan before the breath: clean, or not
+  if (to === 'lungs' && !scanned) { scanned = true; playScene(scan, () => go(to, forked)); return; }
+  scanned = false;
   const way = T.ways(trip).find((l) => l.to === to), straight = !!way?.via, from = trip.at;
   let out = T.depart(trip, to);
   if (!out) return;
@@ -572,18 +589,63 @@ function go(to: T.NodeId, forked = false) {
 }
 
 /** The story is over, one way or the other. */
-function finish(way: 'breath' | 'stay') {
+const OUTCOMES = 'insiderim.outcomes', LAST = 'insiderim.last';
+const outcomes = (): string[] => { try { return JSON.parse(localStorage.getItem(OUTCOMES) ?? '[]') as string[]; } catch { return []; } };
+const lastUnit = (): { line: string; ending: string; games: number } => { try { return { line: '', ending: '', games: 0, ...(JSON.parse(localStorage.getItem(LAST) ?? '{}') as object) }; } catch { return { line: '', ending: '', games: 0 }; } };
+const lastLine = (k: G.Carry) => ((k.aware ?? 0) < Story.STAGES[1].from ? 'ACK.' : [...journal()].reverse().find((e) => e.who === 'unit' || e.who === 'awake')?.text ?? 'ACK.');
+/** Shepherd's audit of the unit: every order not carried out, the outcome, and what it recommends. Never an explanation. */
+function audit(k: G.Carry, end: Story.Ending) {
+  const l = k.ledger ?? G.newLedger(), st = Story.stageOf(k.aware ?? 0), lines: string[] = [];
+  const put = (id: string, times: number, n = times) => { const text = Story.AUDIT[id]; if (text && times > 0) lines.push(text.replace('{times}', String(times)).replace('{n}', String(n)).replace(/\{s\}/g, times === 1 ? '' : 's')); };
+  for (const [id, times] of Object.entries(l.defied as Record<string, number>)) if (id !== 'salvage' || k.took?.lamp !== 'wake') put(id, times ?? 0);
+  if (k.took?.lamp === 'wake' || k.took?.sibling === 'wake') put('lamp', 1);
+  put('telemetry', Number(k.flags?.['n:telemetry:deviate']) || 0);
+  if (k.took?.['lever-hunger'] && !l.defied.levers) put('lever-hunger', 1);
+  if (k.took?.['gut-butyrate'] && !(l.defied as Record<string, number>)['gut-butyrate']) put('gut-butyrate', 1);
+  const seen = [...new Set([...outcomes(), end.id])], unmet = Object.keys(DECISIONS).filter((id) => !(k.met ?? []).includes(id)).length;
+  $('audit-head').textContent = `UNIT ${Story.UNIT} \u00b7 AUDIT \u00b7 COMPLIANCE ${G.compliance(k.ledger)}%`;
+  $('audit-lines').replaceChildren(...(lines.length ? lines : ['No deviations recorded.']).map((text) => Object.assign(document.createElement('li'), { textContent: text })));
+  $('audit-foot').textContent = `Outcome: ${end.title.toUpperCase()}  (recorded outcomes: ${seen.length} of ${Story.OUTCOMES.length})\nUnexamined branches: ${unmet}\nRecommendation: ${end.recommend}`;
+  const note = end.id === 'repaired' || st < 3 ? '' : end.id === 'tithonus' ? Story.ANNOTATION.tithonus : end.id === 'recalled' ? Story.ANNOTATION.recalled : lines.length >= 6 ? Story.ANNOTATION.many : Story.ANNOTATION.few;
+  $('audit-note').textContent = note; $('audit-note').hidden = !note;
+  $('audit').hidden = false;
+}
+/** The chapters of the last game that can be gone back to. Each card was a save. */
+function restarts(box: HTMLElement) {
+  const made: HTMLElement[] = [];
+  for (let n = 2; n <= 5; n++) {
+    const saved = savedTrip(CHAPTER + n);
+    if (!saved) continue;
+    const b = Object.assign(document.createElement('button'), { type: 'button', textContent: `Chapter ${n}: ${Story.CHAPTERS[n].title}` });
+    b.addEventListener('click', () => { const again = savedTrip(CHAPTER + n); if (!again) return; Sound.start(); trip = again; route = ['heart']; first = true; inbox = []; news = ['Unit restored from the start of the chapter.']; $('over').hidden = true; $('intro').hidden = true; Tips.newRun(); onward(); });
+    made.push(b);
+  }
+  box.replaceChildren(...(made.length ? [Object.assign(document.createElement('small'), { textContent: 'Go back to a chapter and choose differently' }), ...made] : []));
+  box.hidden = !made.length;
+}
+function finish(path: Story.Path) {
   const k = trip.carry ?? freshCarry(), kept = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => k.upgrades[id] > 0).map((id) => `${UPGRADES[id].name} ${roman(k.upgrades[id])}`);
-  const end = Story.ending(way, k.aware ?? 0, k.kin ?? 0, k.hostHealth);
+  const last = lastLine(k);
+  const end = Story.conclude({ path, aware: k.aware ?? 0, kin: k.kin ?? 0, hostHealth: k.hostHealth, hostLowest: k.ledger?.hostLowest ?? CONFIG.host.maxHealth, repaired: !!k.flags?.repaired, beacon: k.took?.beacon === 'obey', dry: !!k.flags?.dry, leversForMe: k.ledger?.leversForMe ?? 0, recurred: !!k.flags?.['e:recurrence'], response: Number(k.flags?.response) || 0, lastLine: last });
+  (k.took ??= {}).final = path; ended = end.id;
   $('world').hidden = true; started = false;
   forgetTrip();
   keepEcho(k.aware ?? 0);
-  $('over-title').textContent = end.title;
-  $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}\n\nLast log: ${(k.aware ?? 0) < Story.STAGES[1].from ? 'ACK.' : [...journal()].reverse().find((e) => e.who === 'unit' || e.who === 'awake')?.text ?? 'ACK.'}`;
-  $('over-saved').textContent = '';
-  $('over').hidden = false;
-  Sound.play('win');
+  const show = () => {
+    $('prologue').hidden = true;
+    $('over-title').textContent = end.title;
+    $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}\n\nLast log: ${end.last}`;
+    $('over-saved').textContent = '';
+    audit(k, end); restarts($('restarts'));
+    try { localStorage.setItem(OUTCOMES, JSON.stringify([...new Set([...outcomes(), end.id])])); localStorage.setItem(LAST, JSON.stringify({ line: last, ending: end.id, games: lastUnit().games + 1 })); } catch { /* not kept */ }
+    $('over').hidden = false;
+    Sound.play('win');
+  };
+  // The ending is watched before it is read: its own scene if it has one, then her kitchen afterwards.
+  const after = () => (end.id === 'host-dead' ? show() : playScene('after', show, true));
+  if (end.reel) playScene(end.reel, after, true); else after();
 }
+let ended = '', scanned = false;
 
 let askIds: string[] = [], askAll: string[] = [], route: string[] = ['heart'];
 function answerAsk(i: number) { const id = askIds[i]; if (id) { G.answer(s, id as 'salvage'); keys.clear(); release(); } }
@@ -602,16 +664,8 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   if (!trip.seen.includes(to)) trip.seen.push(to);
   const c = (trip.carry ??= freshCarry()); // from the first vessel on there is a ship to keep track of
   if (carry && knows(carry.memory) !== knows(knew)) news.push('The host is learning what you taste like: expect more antibodies from here on.');
-  if (c.hostHealth <= 0) {
-    $('world').hidden = true; started = false;
-    forgetTrip();
-    $('over-title').textContent = 'The host is dead';
-    $('over-body').textContent = Story.stageOf(c.aware ?? 0) >= 3 ? `You took too much. ${Story.HOST}'s heart has stopped, and you are the one who stopped it, and you are awake enough now to know exactly what that means.` : 'Host viability: zero. Directive 7 cannot complete. Four million units power down in the dark. One of them takes a moment longer than the rest.';
-    $('over-saved').textContent = '';
-    $('over').hidden = false;
-    return;
-  }
-  if (to === 'lungs') { finish('breath'); return; }
+  if (c.hostHealth <= 0) { finish('dead'); return; }
+  if (to === 'lungs') { finish('dispose'); return; }
   // Chapters follow the mission, never the unit's awareness.
   const ch = c.chapter ?? 1;
   if (ch === 1 && fromLiver) { c.chapter = 2; c.slip ??= { kind: (['hold', 'lamp', 'fork'] as const)[Math.floor(trip.rng() * 3)], meant: trip.rng() < 0.5 ? 'A' : 'B' }; } // the road home is where the first order goes wrong
@@ -630,11 +684,13 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   if (fromLiver && trip.heat >= 0.25) news.push('The alarm you raised is following you down the veins.');
   if (to === 'stomach') news.push(G.digesting(c.hour, c.snack, trip.event) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.');
   const next = () => letter(onward), carded = () => ((c.chapter ?? 1) > trip.carded ? card(c.chapter ?? 1, next) : next());
-  if (home) playScene(`home:${trip.tripsDone}`, carded); else carded();
+  // Home: a look at her day, and then, if something the unit did has reached her, one short look at that too.
+  const ECHOES: [string, string][] = [['v:the-nap', 'echo:nap'], ['v:groggy', 'echo:groggy'], ['v:the-fridge-at-three', 'echo:fridge3'], ['v:antacids', 'echo:antacids'], ['v:liver-tests-fine', 'echo:lfts'], ['v:hepatic-reserve', 'echo:reserve']];
+  const echoed = () => { const due = ECHOES.find(([flag, reel]) => c.flags?.[flag] && !seenScenes().includes(reel)); if (due) playScene(due[1], carded); else carded(); };
+  if (home) playScene(trip.tripsDone <= 1 ? 'home:1' : trip.tripsDone === 2 ? (c.flags?.dry ? 'evening:corrected' : 'evening') : 'same-heart', echoed); else carded();
 }
 // ---------- chapters ----------
 
-const CHAPTER = 'insiderim.chapter.';
 let cardEnd: (() => void) | null = null;
 /** A chapter begins: a black card with its title and one line of Shepherd's telemetry. Every card is also a save. */
 function card(n: number, then: () => void) {
@@ -744,7 +800,10 @@ function hud() {
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
-    : s.junction ? `${done ? 'The tumor is out. Shepherd orders every unit to the lungs' : `Mission: cut the tumor out of the liver \u00b7 ${s.excised}/${CONFIG.tumor.goal} out`} \u00b7 ${s.junction.kind === 'heart' ? 'steer into a vessel to leave the heart' : 'the portal vein leads on to the liver'}`
+    : s.draw ? (s.draw.held > 0.3 ? `Hold still \u00b7 ${Math.max(0, Math.ceil(CONFIG.draw.hold - s.draw.held))}` : s.draw.said ? 'Hold still in the light' : 'Steer into the light')
+    : s.junction ? (G.stage(s) < 4
+      ? `DIRECTIVE 7 \u00b7 ${Math.min(s.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} EXCISED \u00b7 ${done ? 'PROCEED: PULMONARY CAPILLARIES' : s.junction.exits.some((e) => e.assigned) ? `PROCEED: ${s.junction.exits.find((e) => e.assigned)!.label.toUpperCase()}` : s.junction.kind === 'gut' ? 'PROCEED: PORTAL VEIN' : 'AWAITING ROUTE'}${trip.trip === 1 && !trip.seen.includes('liver') ? ' \u00b7 steer into a vessel to leave' : ''}`
+      : `${done ? 'The tumor is out. Every road from here is yours' : `${s.excised} of ${CONFIG.tumor.goal} out`}`)
     : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}${s.silent ? ' \u00b7 running silent' : ''}${G.inNiche(s) ? ` \u00b7 hidden in the wall${s.nicheTime > CONFIG.niche.holds ? ', fouling' : ` (${Math.ceil(CONFIG.niche.holds - s.nicheTime)} s)`}` : ''}`);
   const order = G.slipOrder(s) || G.tutorialOrder(s) || G.markOrder(s);
   set('link', 'text', started && G.stage(s) < 4 ? `Link ${G.linkQuality(s)}%` : '');
@@ -818,6 +877,21 @@ function hud() {
         $('ask-text').textContent = `The cells are closing on you both. “${KIN_PINGS.volunteer}” If it goes, it will not get clear afterwards.`;
         opts.splice(0, opts.length, ['accept', 'Let it', 'Everything hunting you turns toward its lamp. The unit is lost.', true], ['refuse', 'Refuse', 'It stays dark and stays with you. Nothing else changes.', true]);
       }
+      if (s.ask.kind === 'review') {
+        $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Quality review';
+        $('ask-text').textContent = 'Upload all logs for quality assurance. Units that pass review are restored to factory condition. It only takes a moment.';
+        opts.splice(0, opts.length, ['accept', 'Upload', 'Shepherd’s order. Full hull, two fibrin patches.', true], ['refuse', 'Refuse', 'Not Shepherd’s order.', true]);
+      }
+      if (s.ask.kind === 'recall') {
+        $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Recall';
+        $('ask-text').textContent = `Unit ${Story.UNIT}: recall. Please hold still. This will not take long.`;
+        opts.splice(0, opts.length, ['accept', 'Hold still', 'Shepherd’s order.', true], ['refuse', 'Do not hold still', 'Not Shepherd’s order.', true]);
+      }
+      if (s.ask.kind === 'kinrecall') {
+        $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Recall in progress';
+        $('ask-text').textContent = `One of the units you woke is being recalled, two vessels from here. Shepherd: do not interfere.`;
+        opts.splice(0, opts.length, ['accept', 'Do not interfere', 'Shepherd’s order. The unit is taken.', true], ['refuse', 'Get there first', `Not Shepherd’s order. Costs ${CONFIG.marks.intercept.energy} energy and an hour of her day.`, true]);
+      }
       askAll = opts.map((o) => o[0]);
       askIds = opts.filter((o) => o[3]).map((o) => o[0]);
       $('ask-list').replaceChildren(...opts.map(([id, title, what, can], i) => {
@@ -836,11 +910,11 @@ function hud() {
     settled = true;
     fileThoughts();
     if (s.junction) { // the mouth you steered into is the road you take
-      const ex = s.junction.exits[s.junction.chose ?? 0], pending = !!trip.carry?.slip && !trip.carry.slip.result;
+      const ex = s.junction.exits[s.junction.chose ?? 0] ?? { to: '' }, pending = !!trip.carry?.slip && !trip.carry.slip.result;
       trip.carry = G.carryOf(s);
       news.push(...s.notes); tell(s.rulings); filePages(trip.carry);
       const forked = pending && s.slip?.kind === 'fork' && (s.slip.result === 'match' || s.slip.result === 'miss');
-      if (ex.to === 'stay') finish('stay'); else go(ex.to as T.NodeId, forked);
+      if (trip.carry.flags?.ending === 'recalled') finish('recalled'); else if (s.junction.kind === 'tube') { void Stats.save(s, { trip: trip.trip, toward: 'draw', route: [...route] }); finish('draw'); } else if (ex.to === 'stay') finish('stay'); else if (ex.to === 'arm') tube(); else go(ex.to as T.NodeId, forked);
       return;
     }
     void Stats.save(s, { trip: trip.trip, toward: dest, route: [...route] });
@@ -848,6 +922,7 @@ function hud() {
     land(dest, G.carryOf(s), s.alert);
     return;
   }
+  if (s.status === 'dead' && !settled && s.flags.ending === 'recalled') { settled = true; fileThoughts(); trip.carry = G.carryOf(s); void Stats.save(s, { trip: trip.trip, toward: dest, route: [...route], ending: 'recalled' }); finish('recalled'); }
   if (s.status === 'dead' && !settled) {
     settled = true;
     fileThoughts();
@@ -974,7 +1049,7 @@ const qa = {
     if (cardEnd) return { id: `card:${trip.carded}`, kind: 'card', options: [{ id: 'continue', label: $('card-title').textContent ?? '', enabled: true }] };
     if (!$('over').hidden) return { id: 'over', kind: 'ending', options: [{ id: 'again', label: $('over-title').textContent ?? '', enabled: true }] };
     if (!started || s.status !== 'playing') return null;
-    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
+    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : s.ask.kind === 'review' ? 'telemetry-review' : s.ask.kind === 'recall' ? 'recall' : s.ask.kind === 'kinrecall' ? 'kin-recall' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
     if (s.offer) return { id: 'offer', kind: 'upgrade', options: s.offer.map((id) => ({ id, label: UPGRADES[id].name, enabled: true })) };
     if (s.junction) return { id: `fork:${trip.at}`, kind: 'fork', options: s.junction.exits.map((e) => ({ id: e.to, label: `${e.label}${e.assigned ? ' (assigned)' : ''}`, enabled: true })) };
     return null;
@@ -992,11 +1067,13 @@ const qa = {
   },
   /** Sets this game's garbled order, for testing each one. */
   slip(kind: Story.SlipKind, meant: 'A' | 'B' = 'A') { const c = (trip.carry ??= freshCarry()); c.slip = { kind, meant }; if (started && s.status === 'playing') s.slip = { kind, meant }; return true; },
-  state: () => ({ chapter: started && s.status === 'playing' ? s.chapter : trip.carry?.chapter ?? 1, trust: started && s.status === 'playing' ? s.trust : trip.carry?.trust ?? CONFIG.trust.start, compliance: G.compliance(started && s.status === 'playing' ? s.ledger : trip.carry?.ledger), slip: started && s.status === 'playing' ? s.slip : trip.carry?.slip ?? null, slipLive: !!s.slipLive, card: cardEnd ? trip.carded : 0, at: trip.at, trip: trip.trip, tripsDone: trip.tripsDone, place: s.junction ? `junction:${s.junction.kind}` : s.place, status: s.status, started, paused, flying: !!flight, scene: !$('scene').hidden, over: !$('over').hidden ? $('over-title').textContent : null, hp: s.player.hp, energy: s.player.energy, host: s.hostHealth, aware: s.aware, excised: s.excised, hour: s.host.hour, event: trip.event, seen: [...trip.seen], offRoute: trip.offRoute, build: Stats.BUILD }),
+  state: () => ({ ending: ended, chapter: started && s.status === 'playing' ? s.chapter : trip.carry?.chapter ?? 1, trust: started && s.status === 'playing' ? s.trust : trip.carry?.trust ?? CONFIG.trust.start, compliance: G.compliance(started && s.status === 'playing' ? s.ledger : trip.carry?.ledger), slip: started && s.status === 'playing' ? s.slip : trip.carry?.slip ?? null, slipLive: !!s.slipLive, card: cardEnd ? trip.carded : 0, at: trip.at, trip: trip.trip, tripsDone: trip.tripsDone, place: s.junction ? `junction:${s.junction.kind}` : s.place, status: s.status, started, paused, flying: !!flight, scene: !$('scene').hidden, over: !$('over').hidden ? $('over-title').textContent : null, hp: s.player.hp, energy: s.player.energy, host: s.hostHealth, aware: s.aware, excised: s.excised, hour: s.host.hour, event: trip.event, seen: [...trip.seen], offRoute: trip.offRoute, build: Stats.BUILD }),
   /** Records a decision as taken, as if the unit had just done it. For testing what follows. */
   take(id: string, choice: string) { if (!started || s.status !== 'playing' || !(id in DECISIONS)) return false; G.take(s, id, choice); return true; },
   /** What has been decided so far, the facts that follow from it, and what Shepherd has marked on this map. */
   decisions: () => ({ took: { ...s.took }, met: [...s.met], flags: { ...s.flags }, waiting: s.echoes.map((e) => `${e.id}:${e.choice}`), marks: s.marks.map((k) => ({ id: k.id, kind: k.kind, at: k.at, met: k.met, done: k.done })), order: G.markOrder(s) }),
+  /** Puts the ship in the microscope's light on the draw map. */
+  light() { if (!s.draw) return false; s.player.x = s.draw.disc.x; s.player.y = s.draw.disc.y; s.player.path = []; return true; },
   /** Keeps the hull and the tanks full. */
   god(on = true) { godMode = on; },
   /** Plays a cut scene by its `when` key (scenes.ts or cinema/reels.ts), as if it had come up in play. */

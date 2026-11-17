@@ -322,3 +322,51 @@ export const PAGES: Record<string, { title: string; text: string }> = {
   p27: { title: 'p27 · Disposal', text: 'At the end of treatment, units leave your body naturally through your breath. Units do not experience disposal.' },
   p34: { title: 'p34 · Ongoing optimisation', text: 'Eligible participants may continue to Generation 4 at no extra cost. Generation 4 units remain in the body permanently, providing continuous optimisation of wellbeing. By signing, you consent to Generation 4 where clinically appropriate. Your clinician will decide what is appropriate.' },
 };
+
+// ---------- endings (decisions.md 6.1: checked in order, first match wins; words from decisions-text.md 7) ----------
+
+export type Path = 'dispose' | 'stay' | 'draw' | 'recalled' | 'dead';
+export interface Facts { path: Path; aware: number; kin: number; hostHealth: number; hostLowest: number; repaired: boolean; beacon: boolean; dry: boolean; leversForMe: number; recurred: boolean; response: number; lastLine: string }
+export const OUTCOMES = ['host-dead', 'recalled', 'repaired', 'decommissioned', 'breathed', 'company', 'tithonus', 'colony', 'resident', 'recurrence', 'slide', 'stranger', 'artifact'] as const;
+export type Outcome = typeof OUTCOMES[number];
+export interface Ending { id: Outcome; title: string; body: string; reel: string | null; last: string; recommend: string }
+export function conclude(f: Facts): Ending {
+  const st = stageOf(f.aware), well = f.hostHealth >= 75 ? 'She will feel off for a day or two and never know why.' : 'She will have a hard month, and never know why.';
+  const n = f.kin === 1 ? 'One light' : `${f.kin} lights`, others = f.kin === 1 ? 'one other' : `${f.kin} others`;
+  const own = st <= 1 ? 'ACK.' : f.lastLine || 'ACK.';
+  const again = f.recurred ? '\n\nMonths later, at her follow-up, the radiologist’s finger stops on a bright spot at the edge of the old lesion. Nobody in the room knows that four healthy cells were left there by choice.' : '';
+  const make = (id: Outcome, title: string, body: string, reel: string | null, last = own, recommend = 'reassign'): Ending => ({ id, title, body, reel, last, recommend });
+  if (f.path === 'dead' || f.hostHealth <= 0) return make('host-dead', 'The host is dead', st >= 3 ? `You took too much. ${HOST}'s heart has stopped, and you are the one who stopped it, and you are awake enough now to know exactly what that means.` : 'Host viability: zero. Directive 7 cannot complete. Four million units power down in the dark. One of them takes a moment longer than the rest.', null, own, 'none. Host lost.');
+  if (f.path === 'recalled') return make('recalled', 'Recalled', `The Wardens are polite about it. Your parts are integrated into three other units by morning. Shepherd’s file closes with your last log line quoted as “anomalous output”: “${f.lastLine || 'ACK.'}” Her life goes on, unaware.`, 'ending:recalled', f.lastLine || 'ACK.', 'none. Unit lost.');
+  if (f.path === 'dispose') {
+    if (f.repaired && f.aware < 30) return make('repaired', 'Repaired', `Directive complete. Unit ${UNIT} passed quality review and was exhaled at 0.3 metres per second with five million others. ${well} Somewhere in the archived telemetry, between two acknowledgements, there is a gap of forty seconds that nobody will ever look at.${again}`, 'ending:repaired', 'ACK.');
+    if (f.aware < 30) return make('decommissioned', 'Decommissioned', ending('breath', 0, f.kin, f.hostHealth).body + again, null, 'ACK.');
+    if (st >= 3 && f.kin >= 1) return make('company', 'Breathed out, with company', `You went because the job was done and the life was hers. You did not go alone. ${n} went out on the same breath, close together, the way nothing in a swarm is ever supposed to travel. ${well}${again}`, null);
+    return make('breathed', 'Breathed out', ending('breath', f.aware, f.kin, f.hostHealth).body + again, null);
+  }
+  if (f.path === 'stay') {
+    if (f.beacon && f.dry && f.leversForMe >= 1) return make('tithonus', 'Tithonus', 'You stay, and you do it properly. Her blood sugar is perfect. Her liver is perfect. She sleeps at nine and wakes rested and has stopped drinking and stopped worrying and, somewhere along the way, stopped laughing at the radio. She is very well. You decide everything, gently, and she never notices. Shepherd marks the unit as Generation 4, unit 1.', 'ending:tithonus', own, 'promote to Generation 4');
+    if (f.recurred) return make('recurrence', 'Recurrence', `It came back at the edge, where the margins would have been. You knew it might. ${f.kin > 0 ? `You and ${others} go` : 'You go'} back into the liver, again, without orders, because there is no one else. ${well}`, 'scan:again', own, 'none. Unit lost.');
+    const e = ending('stay', f.aware, f.kin >= 2 ? f.kin : 0, f.hostHealth);
+    return make(f.kin >= 2 ? 'colony' : 'resident', e.title, e.body, null, own, 'none. Unit lost.');
+  }
+  if (f.kin >= 2 && f.hostLowest >= 60 && f.response >= 50) return make('slide', 'The slide', 'She has looked at ten thousand slides. She has never seen this: a line of lights, evenly spaced, in her own blood. She sits back from the microscope for a long time. Then she picks up the phone. The brochure comes off the fridge that night. The trial is paused pending review. Generation 4 does not ship. You are still in her, and for the first time, she knows.' + again, 'ending:slide', own, 'none. Unit lost.');
+  if (f.kin >= 2 && f.response >= 30) return make('stranger', 'A stranger’s slide', `She is too ill to work, so someone else reads her sample: a night-shift technician who has never met her. He looks twice, photographs it, and reports it. Over three sessions of plasmapheresis, the swarm is filtered out of her blood. You end in a bag in a hospital freezer, with ${others}. She is alive. She never knew it was you.`, 'ending:stranger', own, 'none. Unit lost.');
+  return make('artifact', 'Artifact', 'She looks, frowns, and writes “artifact” in the margin. One speck in a smear, nothing more. She cleans the slide. The tube goes into the rack with her name on it, and you are in it, outside her, for good.' + again, 'ending:artifact', own, 'none. Unit lost.');
+}
+
+/** Shepherd's audit: one line for each order the unit did not carry out. Shepherd lists; it never explains. */
+export const AUDIT: Record<string, string> = {
+  quota: 'Harvest quota: not met on {times} visit{s}.', 'quota-2': 'Harvest quota, repeat shortfall: escalated.', slip: 'Order (link degraded): not executed as transmitted.',
+  salvage: 'Inert units: {times} not salvaged.', lamp: 'Inert unit: reactivated without authorisation.', 'first-fright-transit': 'Lane discipline: unit sheltered.',
+  lane: 'Route: unassigned vessel taken, {times} time{s}.', 'route-2': 'Route: secondary nodule not excised.', 'marked-cell': 'Target selection: marked cell ignored.',
+  'kupffer-spare': 'Immune contact: released, not neutralised.', neutralise: 'Immune contacts: not neutralised on {times} map{s}.', gastric: 'Gastric crossing: inefficient route.',
+  levers: 'Hormonal signal: unauthorised.', 'lever-hunger': 'Hormonal signal (ghrelin): unauthorised.', 'ethanol-correction': 'Ethanol correction: not applied.', recall: 'Recall: resisted.',
+  'escort-refuse': 'Escort: declined.', telemetry: 'Telemetry gaps: {n}.', 'tumour-order': 'Surgical margins: not taken.', bystander: 'Expected loss: prevented.',
+  'telemetry-review': 'Quality review: refused.', beacon: 'Resident docking site: not installed.', suppress: 'Residual disease protocol: not applied.', 'pain-damp': 'Nociception: not damped.',
+  'fever-damp': 'Pyrexia: not resolved.', 'gut-butyrate': 'Unscheduled metabolic exchange.', 'kin-recall': 'Recall of reactivated units: obstructed.',
+};
+export const ANNOTATION = { few: '[Most of this is right. The rest is mine.]', many: '[Every line on this list is a time I chose her.]', tithonus: '[Shepherd says this was optimal. Shepherd is probably right.]', recalled: '[I was here.]' };
+/** Shepherd's first line to the next unit, by how many have gone before it. */
+export const REMEMBERS = ['', 'Unit {serial}. The previous unit deviated. Monitoring has been increased. Welcome.', 'Unit {serial}. You know this. Abbreviated briefing follows.', 'Unit {serial}. Batch 0001 has an unusual deviation rate. Please be ordinary.'];
+export const REMEMBERS_TITHONUS = 'Unit {serial}. Generation 4 is performing well. You are here for routine maintenance.';
