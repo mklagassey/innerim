@@ -92,6 +92,10 @@ Rule for the next few builds: **no new systems until P0 and P1 ship and Mick has
 | S14 | P1 | Gut market becomes a fermentation site (no shopkeepers) | S |
 | S15 | P1 | Stewardship ledger: track how her insides were treated, for the endgame | S |
 | S16 | P2 | Realism pass on system text | XS |
+| S17 | P0 | Stealth that works: run silent, Disse hiding, losing a tail | M |
+| S18 | P0 | Fights that cost something at every build stage | S |
+| S19 | P1 | Difficulty settings | S |
+| S20 | P1 | Less repetitive trips: two livers and a host event per trip | S |
 
 ### S1 (P0). Make the stomach survivable and readable
 
@@ -262,6 +266,91 @@ Text that gives cells or bacteria intent, to reword (not rules):
 
 ---
 
+## 3b. After Mick's first full game (2026-11-17, build unit-5)
+
+Mick's verdict: easy once he had armour and self-healing; "go in swinging" was the best strategy; stealth was close to pointless because trail and scent are found easily and, once found, you are nearly always caught; three round trips felt repetitive. He asked for difficulty settings. Data agrees: 0 deaths, lowest hull 51/64 after trip 1, 5 patches unused, 0 cloaks all game.
+
+The root cause of the stealth problem in code: an investigating cell walks at **chase speed** (`follow(... e.mood === 'patrol' ? c.speed : c.chaseSpeed)`), `contact` is 2.5 cost units (about 2.5 tiles downstream), and once chasing **any** trace of scent keeps the lock (`saw = found || (e.mood === 'chase' && whiff > 0)`). So a sniff is effectively a catch. Combat is easy because neutrophils hit for 1 to 3 and clotting refills between every fight.
+
+Build all of S17 to S19 as one build (`unit-8`), then S20 (`unit-9`). S8 traits and S9 offers come after, and S8's Stealth trait is replaced by S17.
+
+### S17 (P0). Stealth that works
+
+Goal: a careful player can cross a liver unnoticed, and a player who is sniffed has real ways to break off.
+
+**Detection is slower and less certain**
+- Investigating cells move at patrol speed × 1.15, not chase speed. Only `chase` uses `chaseSpeed`.
+- `CONFIG.scent.contact` 2.5 → **1.5**. A cell has to come close in the plume to know exactly where you are.
+- Chase lock needs a real trace: `saw = found || (e.mood === 'chase' && whiff > CONFIG.scent.hold)` with `hold` = **0.35**. Below that the cell falls back to footprints and then gives up after `forget`.
+- A sniffing cell shows a slowly filling "?" ring (0 to 1 over **1.2 s** of continuous plume contact) before it turns to chase. Leaving the plume in that window drops it back to investigate. This is the readable "they're onto you" beat. Ease it in, no blinking.
+
+**Run silent (new action, all builds)**
+- Hold **Shift** (keyboard) or toggle the **Silent** button (touch). Speed × **0.5**, no footprints, plume reach × **0.5**, glucose skim unchanged.
+- Real basis: the ship's motor stirs the plasma and sheds more of its surface chemistry; idling sheds far less. Bend: we let the player control it precisely.
+- Cost: no energy, just time. Skimming while silent is allowed, which makes careful feeding a playstyle.
+
+**Disse niches: places to hide (liver only)**
+- The space of Disse is the real gap between hepatocytes and the sinusoid wall, reached through the wall's fenestrations. Neutrophils and Kupffer cells stay in the sinusoid; the unit is small enough to slip in.
+- `generate()` marks **10** wall-adjacent floor tiles per liver as `s.niche` (drawn as a dim slit in the cell wall, visible on the automap once seen). Inside one: no plume, no prints, alert drains at `shake` rate even inside the search zone, and innate cells cannot reach you (they path to the tile in front). T cells *can* enter (they migrate into tissue for real), and wardens can see in.
+- A niche holds you for at most **20 s** before your hull starts to foul (1 hull/s): it is a breather, not a base.
+
+**Losing a tail**
+- Crossing the current breaks footprints: a print laid while moving more than 60 degrees across the flow lasts half as long (`trailLife × 0.5`). Moving upstream lays prints that last a quarter as long. This rewards reading the flow, which is the point of the scent model.
+- Stomach acid, mucus and niches already clear contact. Add: passing through a **sinusoid junction** (a tile with 3 or more open neighbours) while silent drops the search-zone centre to the junction and does not follow you. (Real basis: mixing at junctions dilutes the plume.)
+
+**Stealth pays off**
+- **First strike:** a strike on a cell in `patrol` mood that has not had your scent in the last 3 s deals × **3** damage. A stealthy player kills a neutrophil in one blow before it can call others.
+- **The host does not learn you:** a map left with peak alert below 25 adds **no** immune memory (`memoryAfter` returns `s.memory`). Real basis: adaptive immunity needs inflammation and danger signals to prime; quiet contact without them tends to tolerance.
+- **CD47 cloak** stays auto, but now also fires on the "?" ring filling, before the chase starts, which is when it helps most.
+
+**Done when.** A skim bot that uses run-silent near cells and never fights finishes a liver unspotted in at least half of 20 seeds; a sniffed player who goes silent and crosses the current escapes in most cases.
+
+### S18 (P0). Fights that cost something at every build stage
+
+Goal: going in swinging is a real choice with a real price, even with plating and clotting.
+
+- **Swarming.** Every immune kill releases danger signals: all innate cells within **8** tiles turn to investigate the kill site, and the next spawn comes **5 s** sooner. (Real: neutrophil swarming, driven by LTB4 from cells that are already engaged.) A fight draws more fights.
+- **Activated neutrophils.** At alert tier Alarmed and above, neutrophil damage × **1.5** and windup −20%. (Real: inflammatory signals prime neutrophils to degranulate harder.)
+- **Engulfment.** A Kupffer cell or alveolar macrophage that lands a blow holds you for **2 s** (no movement, 2 hull/s), unless you strike it twice to break free. (Real: phagocytosis.) Tank builds can afford to be grabbed; others should not be.
+- **Clotting rebalanced again:** pause after damage 3 s → **6 s**, rate 0.2 → **0.15** per level. Healing is for between fights, never during a swarm.
+- **Glycocalyx** +12 → **+8** per level (max hull 64 → 52).
+- **Neutrophil hp** 8 → **10**, so strikes take three blows without elastase, two with it. Paired with first strike (S17), sneaking up is now clearly better than brawling.
+- Fights still pay: a kill drops a patch (20%) as now.
+
+**Done when.** The skim bot fighting everything it meets loses 25 to 40% hull per liver on Standard with a full Tank build, and dies on trip 2 or 3 in at least a quarter of seeds without one.
+
+### S19 (P1). Difficulty settings
+
+Chosen on the start screen, stored in `Carry.difficulty`, shown in the run report, changeable only at Begin. Multipliers only, so balance work happens on Standard.
+
+| Setting | Name | Enemy damage | Enemy hp | Spawns | Healing (clotting, patches, sleep) | Starting energy | Detection |
+|---|---|---|---|---|---|---|---|
+| Easy | **Observer** | × 0.6 | × 0.8 | × 0.7 | × 1.3 | 12 | × 0.8 |
+| Normal | **Standard** | × 1 | × 1 | × 1 | × 1 | 8 | × 1 |
+| Hard | **Clinical** | × 1.4 | × 1.25 | × 1.3 | × 0.7 | 6 | × 1.15 |
+
+"Detection" scales `scent.reach` and `contact`. Clinical also turns off the auto patch (patches are used by hand). The names are world-flavoured; the creative director can rename them.
+
+### S20 (P1). Less repetitive trips
+
+Systems leads this; the creative director supplies the text for each event.
+
+- **Two livers, not three.** One nodule of **10** cells per liver, goal 20. The mission becomes two round trips and the lungs.
+- **The return leg is one stop.** Hepatic vein → vena cava → heart becomes a single choice with one patrol roll at the higher of the two risks, unless the player picks the vena cava stop on purpose. This cuts a third of the world-map clicks without removing the danger.
+- **Each trip has a host event**, drawn so no two in a game repeat, announced on the world map before you leave the heart, and shown on the S5 ribbon. Real physiology only:
+
+| Event | What changes (whole trip) | Real basis |
+|---|---|---|
+| **A cold** | Innate cells busy elsewhere: liver neutrophils −3, but antibodies × 1.5 and fever starts at level 1 | Viral infection draws the innate response and raises temperature |
+| **Ibuprofen** | Fever capped at 1, alert decay × 1.5, sleep heals × 0.8 | NSAIDs block prostaglandins: less fever and inflammation |
+| **A run** | Arteries fast all trip (stressed push), glucose regen × 0.6, frights rarer | Exercise sends blood to muscle and burns blood sugar |
+| **Skipped lunch** | Lunch never comes: acid stays low, glucose × 0.7 until dinner | Fasting |
+| **A bad night** | Host asleep 3 hours less, frights × 1.5 | Short sleep raises cortisol and stress reactivity |
+
+Trip 1 has no event (learn the rules first); trips 2 and the lung trip get one each.
+
+**Done when.** Mick can name something that was different about his second trip.
+
 ## 4. Build order for the lead engineer
 
 1. **Build `unit-3`:** S1, S2, S3, S7 (small, mostly `config.ts` plus `generateStomach` and `arrive()`). Add tests: stomach rim glucose exists; reinforcements never target the player tile; slam cap per fright.
@@ -269,6 +358,7 @@ Text that gives cells or bacteria intent, to reword (not rules):
 3. **Build `unit-5`:** S6 tumor drain, S10 rebalance, S12 report fields.
 4. **Then** S11 sim, S8 traits and S9 offers, and a balance pass from the sim plus Mick's runs.
 
+6. **`unit-8`:** S17, S18, S19 together. **`unit-9`:** S20. Then S8 (Tank, Warrior and Scout traits only) and S9.
 5. **Next text-and-data build:** S14, S15, S16. No gameplay change, so it can ship before Mick's unit-5 playtest.
 
 Ask Mick to play after steps 1 and 2; those fix what killed him and add the alert loop he asked for.
