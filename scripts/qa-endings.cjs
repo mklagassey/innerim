@@ -44,7 +44,7 @@ const POLICIES = {
   // route-2 and beacon are decided by the game from what the ship does, so those arms act instead of recording.
   'obey-base': { target: null, asks: { 'telemetry-review': 'accept' } },
   'obey-wait': { target: null, asks: { 'telemetry-review': 'accept' }, deviateOnly: 'none' }, // the control for the payoff arms: same waits, refuses nothing
-  ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept', [id]: 'refuse' }, deviateOnly: id }])),
+  ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon', 'ethanol-correction'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept', [id]: 'refuse' }, deviateOnly: id }])),
   'recalled-b': { target: 'recalled', route: 'off', units: 'wake', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'recalled-c': { target: 'recalled', quota: 'defy', units: 'wake', marks: 'defy', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'host-dead': { quota: 'kill' },
@@ -118,6 +118,8 @@ async function mission(browser, job) {
   await pg.evaluate((d) => { localStorage.setItem('insiderim.scenes.ever', '["begin"]'); if (d) localStorage.setItem('insiderim.difficulty', d); }, arg('difficulty', ''));
   await pg.reload();
   await pg.evaluate(() => { window.insiderim.qa.god(true); window.insiderim.qa.skipScenes(true); });
+  // --set host.sleepHeals=9999 (comma list): override CONFIG values for an experiment
+  if (arg('set', '')) await pg.evaluate((kv) => { for (const pair of kv.split(',')) { const [k, v] = pair.split('='); const path = k.split('.'); let o = window.insiderim.CONFIG; for (const x of path.slice(0, -1)) o = o[x]; o[path[path.length - 1]] = Number(v); } }, arg('set'));
   await pg.click('#begin');
   const t0 = Date.now(); let idle = 0, lastKey = '';
   while (Date.now() - t0 < WALL) {
