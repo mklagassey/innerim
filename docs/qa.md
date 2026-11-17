@@ -243,3 +243,11 @@ Most wording issues were already fixed by the creative director by Version 40 (g
 - The heart fork with no "(assigned)" exit happens exactly when the Slip is the fork kind (5 of 5 fork-kind runs, 0 of 15 others). That's by design. The kind for a given seed changes between builds.
 - first-fright-transit: 0 deviations. But the order was met in 9 runs and settled in none. It only settles when the surge ends while the unit is still in the vessel, so obedient units that keep moving never get the obey. Sent to the engineer and systems.
 - `qa-endings.cjs` now records `slipKind`.
+
+## v88 (unit-17.8) first-fright pair, 2026-11-17
+
+20 seeds per side, 0 errors.
+
+- The order now settles on leaving the vessel. In the waiting control it resolved obey 6, deviate 1 (the bot drifted), and was never left open.
+- A surge lands on a vessel leg in only 7 of 20 seeds. Of those 7 deviate pairs, 3 ended on the same trip count, with host differences of +15, -7 and +7. That's noise.
+- The end hour is the same in every pair because the ending is anchored to the clock, so the ±0.5 hour echoes can't be measured at the end. Measuring them needs the hour logged per leg or a forced surge.
