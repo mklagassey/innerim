@@ -815,7 +815,7 @@ function hud() {
       opts.push(['leave', 'Leave it whole', garbled ? 'Do not touch it.' : "Not Shepherd's order.", true]);
       if (s.ask.kind === 'volunteer') {
         $('ask-kind').textContent = 'Short band'; $('ask-title').textContent = st >= 3 ? 'One of yours, close behind' : 'Woken unit, in range';
-        $('ask-text').textContent = `It has seen what is on you. “${KIN_PINGS.volunteer}” If it does, it will not get clear afterwards.`;
+        $('ask-text').textContent = `The cells are closing on you both. “${KIN_PINGS.volunteer}” If it goes, it will not get clear afterwards.`;
         opts.splice(0, opts.length, ['accept', 'Let it', 'Everything hunting you turns toward its lamp. The unit is lost.', true], ['refuse', 'Refuse', 'It stays dark and stays with you. Nothing else changes.', true]);
       }
       askAll = opts.map((o) => o[0]);
