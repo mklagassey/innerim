@@ -1685,8 +1685,9 @@ test('unit-15.4: lapsed is not defied', () => {
   a.s.player.energy = 99; put(a.s, a.s.vein); assert.ok(G.leave(a.s));
   assert.equal(a.s.took['pain-damp'], 'lapsed'); assert.equal(a.s.ledger.lapsed, 1); assert.equal(a.s.ledger.defied['pain-damp' as keyof typeof a.s.ledger.defied], undefined);
   assert.ok(a.s.rulings.some((r) => r.text === 'Order lapsed.'));
-  // Never tried, but something hostile was on it while the order stood: lapsed too.
-  const b = mk(); b.m.pressed = true; b.s.player.energy = 99; put(b.s, b.s.vein); assert.ok(G.leave(b.s));
+  // Never tried, but it was hunted for most of the time the order stood: lapsed too. A brush with a cell is not enough.
+  const brush = mk(); brush.m.pressed = 0.05; brush.s.player.energy = 99; put(brush.s, brush.s.vein); assert.ok(G.leave(brush.s)); assert.equal(brush.s.took['pain-damp'], 'deviate');
+  const b = mk(); b.m.pressed = b.s.time; b.s.player.energy = 99; put(b.s, b.s.vein); assert.ok(G.leave(b.s));
   assert.equal(b.s.took['pain-damp'], 'lapsed');
   assert.ok(G.compliance({ ...G.newLedger(), obeyed: { quota: 1 }, lapsed: 1 }) === 50);
   // The marked cell: left alone is lapsed, a different one taken is the unit's answer.
