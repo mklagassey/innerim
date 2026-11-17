@@ -33,6 +33,7 @@ function play(bot: Bot, s: G.State) {
     if (s.ask) { if (!G.answer(s, 'salvage')) G.answer(s, 'accept') || G.answer(s, 'leave'); }
     const p = s.player, vein = { x: s.vein.x + 0.5, y: s.vein.y + 0.5 };
     peak = Math.max(peak, s.alert);
+    if (p.hp < G.maxHp(s) * 0.4 && s.patches > 0) G.usePatch(s); // by hand, as a player would where autoPatch is off
     if (bot === 'stealth') { s.silent = true; const near = G.enemyNear(s, p, 5); if (near) { try { G.cloak(s); } catch { /* none */ } } }
     const foe = G.enemyNear(s, p, bot === 'attack' ? 4 : 1.6);
     if (G.canLeave(s)) G.leave(s);
@@ -79,7 +80,7 @@ function mission(d: Difficulty, bot: Bot, seed: number) {
 
 const med = (v: number[]) => { const a = [...v].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : NaN; };
 const peakOf: Record<string, number> = {};
-for (const d of Object.keys(DIFFICULTY) as Difficulty[]) for (const bot of ['attack', 'stealth'] as Bot[]) {
+for (const d of (process.env.LEVELS ? process.env.LEVELS.split(',') : Object.keys(DIFFICULTY)) as Difficulty[]) for (const bot of ['attack', 'stealth'] as Bot[]) {
   const runs = Array.from({ length: SEEDS }, (_, i) => mission(d, bot, i + 1));
   const dead = runs.filter((r) => r.cause && !/^stuck|^no way/.test(r.cause)), stuck = runs.filter((r) => /^stuck|^no way/.test(r.cause));
   const causes: Record<string, number> = {}; for (const r of runs) if (r.cause) causes[r.cause] = (causes[r.cause] ?? 0) + 1;
