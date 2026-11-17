@@ -615,9 +615,11 @@ export function draw(ctx: Ctx, s: State, v: View) {
       ctx.globalAlpha = seen ? 1 : 0.4;
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, 12, 5); ctx.fill();
       ctx.save(); ctx.translate(c.x, y); ctx.rotate(0.5 + Math.sin(v.time * 0.35 + item.x) * 0.5); ctx.scale(1.25, 1.25);
-      ctx.fillStyle = lit ? '#6f8582' : '#3b4a4d'; oval(ctx, -7, -3.4, 4, 1.8); ctx.fill(); oval(ctx, -7, 3.4, 4, 1.8); ctx.fill();
-      ctx.fillStyle = lit ? '#dfeae6' : '#5d6f70'; oval(ctx, 0, 0, 10, 4.6); ctx.fill();
-      ctx.fillStyle = lit ? '#7fd3e6' : '#8a7a3a'; ctx.fillRect(-8.5, -4, 2, 8);
+      ctx.fillStyle = lit ? '#3a464c' : '#262e32'; oval(ctx, -7, -3.4, 4, 1.8); ctx.fill(); oval(ctx, -7, 3.4, 4, 1.8); ctx.fill();
+      const body = ctx.createRadialGradient(1, -1.5, 0.5, 0, 0, 10);
+      body.addColorStop(0, lit ? '#c9d2d2' : '#6a7476'); body.addColorStop(0.55, lit ? '#7e8a8e' : '#434c50'); body.addColorStop(1, lit ? '#2e383e' : '#1e2528');
+      ctx.fillStyle = body; oval(ctx, 0, 0, 10, 4.6); ctx.fill();
+      ctx.fillStyle = lit ? '#7fd3e6' : '#6e6034'; ctx.fillRect(-8.5, -4, 2, 8);
       ctx.fillStyle = `rgba(150,225,255,${0.1 + blink * 0.8})`; oval(ctx, 5, 0, 3, 2.2); ctx.fill();
       ctx.restore();
       if (blink > 0.05) { ctx.fillStyle = `rgba(150,225,255,${blink * 0.12})`; oval(ctx, c.x, y, 22, 14); ctx.fill(); }
@@ -770,7 +772,9 @@ function enemy(ctx: Ctx, e: Enemy, v: View) {
     ctx.globalCompositeOperation = 'source-over';
     ctx.scale(1.25 * (1 + wind * 0.15), 1.25 * (1 + wind * 0.15));
     ctx.fillStyle = flash ? '#fff' : '#4a5558'; oval(ctx, -7, -3.4, 4, 1.8); ctx.fill(); oval(ctx, -7, 3.4, 4, 1.8); ctx.fill();
-    ctx.fillStyle = flash ? '#fff' : '#8d9a9b'; oval(ctx, 0, 0, 10, 4.6); ctx.fill();
+    if (flash) ctx.fillStyle = '#fff';
+    else { const body = ctx.createRadialGradient(1, -1.5, 0.5, 0, 0, 10); body.addColorStop(0, '#b4bec2'); body.addColorStop(0.55, '#6c787e'); body.addColorStop(1, '#283238'); ctx.fillStyle = body; }
+    oval(ctx, 0, 0, 10, 4.6); ctx.fill();
     ctx.strokeStyle = 'rgba(20,28,32,0.7)'; ctx.lineWidth = 0.8; ctx.stroke();
     ctx.fillStyle = flash ? '#fff' : '#e2953c'; ctx.fillRect(-8.5, -4, 2, 8);
     ctx.fillStyle = hunting || wind ? '#ff8a5a' : '#ffc46a'; oval(ctx, 5, 0, 3, 2.2); ctx.fill();
@@ -947,7 +951,11 @@ function hero(ctx: Ctx, s: State, v: View) {
     ctx.beginPath(); ctx.ellipse(c.x, c.y - 13, 40, 22, 0, a - 1.1 + t * 0.5, a - 0.2 + t * 1.3); ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
   }
-  const hurt = p.hurt > 0, hull = hurt ? '#ff9a8e' : '#e6efec', shade = hurt ? '#a8483f' : '#6f8582', dark = '#22303a';
+  // Worn gunmetal, satin rather than chrome (docs/art-audio-direction.md, section 6). A hit warms the
+  // plating for a moment and it cools back down: a fade, not a flash.
+  const burn = Math.max(0, Math.min(1, p.hurt / 0.25)), heat = burn * burn;
+  const mix = (a: number[], b: number[]) => `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * heat)).join(',')})`;
+  const hull = mix([100, 110, 116], [186, 110, 98]), shade = mix([34, 42, 48], [90, 36, 32]), shine = mix([178, 188, 190], [236, 180, 165]), dark = '#161e24';
   if (s.suppressed > 0 && !riding(s)) {
     // Cortisol in the water around you: a slow amber halo for as long as it lasts.
     ctx.fillStyle = `rgba(255,200,120,${Math.min(1, s.suppressed / 2) * (0.1 + 0.05 * Math.sin(v.time * 1.8))})`;
@@ -963,21 +971,47 @@ function hero(ctx: Ctx, s: State, v: View) {
     for (const side of [-3.4, 3.4]) { ctx.beginPath(); ctx.moveTo(-11, side - 1.8); ctx.lineTo(-12 - len, side); ctx.lineTo(-11, side + 1.8); ctx.fill(); }
     ctx.globalCompositeOperation = 'source-over';
   }
-  // Twin engine pods and tail fins.
-  ctx.fillStyle = shade;
+  // Twin engine pods and tail fins, darker than the hull and edged where the lamp catches them.
   for (const side of [-1, 1]) {
+    const pod = ctx.createLinearGradient(0, side * 1.3, 0, side * 5.5);
+    pod.addColorStop(0, hull); pod.addColorStop(1, shade);
+    ctx.fillStyle = pod;
     ctx.beginPath(); ctx.roundRect(-13, side * 3.4 - 2.1, 7.5, 4.2, 1.8); ctx.fill();
+    ctx.fillStyle = shade;
     ctx.beginPath(); ctx.moveTo(-6, side * 4.5); ctx.lineTo(-12.5, side * 9); ctx.lineTo(-10.5, side * 4.5); ctx.fill();
+    ctx.strokeStyle = 'rgba(220,228,228,0.25)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(-12.4, side * 3.4 - side * 2); ctx.lineTo(-6.2, side * 3.4 - side * 2); ctx.stroke();
   }
   ctx.fillStyle = dark; for (const side of [-3.4, 3.4]) { oval(ctx, -13, side, 1.1, 1.7); ctx.fill(); }
-  // The pressure hull: a fat teardrop, pale on top.
-  const skin = ctx.createRadialGradient(1, -2, 1, 0, 0, 13);
-  skin.addColorStop(0, '#ffffff'); skin.addColorStop(0.55, hull); skin.addColorStop(1, shade);
-  ctx.fillStyle = skin;
-  ctx.beginPath(); ctx.moveTo(13, 0); ctx.bezierCurveTo(11, -7, -4, -7.5, -10.5, -3.6); ctx.lineTo(-10.5, 3.6); ctx.bezierCurveTo(-4, 7.5, 11, 7, 13, 0); ctx.fill();
-  ctx.strokeStyle = 'rgba(30,45,55,0.5)'; ctx.lineWidth = 0.7;
-  ctx.beginPath(); ctx.moveTo(-3.5, -6.6); ctx.lineTo(-3.5, 6.6); ctx.stroke(); // hull seam
-  ctx.fillStyle = '#e2b53c'; ctx.fillRect(-8.5, -5, 2, 10); // a band of hazard yellow: every unit of the swarm wears one
+  // The pressure hull: a fat teardrop of worn gunmetal, lit from above and warmed underneath by the flesh around it.
+  const hullPath = () => { ctx.beginPath(); ctx.moveTo(13, 0); ctx.bezierCurveTo(11, -7, -4, -7.5, -10.5, -3.6); ctx.lineTo(-10.5, 3.6); ctx.bezierCurveTo(-4, 7.5, 11, 7, 13, 0); };
+  const skin = ctx.createRadialGradient(2, -2.5, 0.5, 0, 0, 13);
+  skin.addColorStop(0, shine); skin.addColorStop(0.5, hull); skin.addColorStop(1, shade);
+  ctx.fillStyle = skin; hullPath(); ctx.fill();
+  ctx.save(); hullPath(); ctx.clip();
+  // Bounce light: the red of the tissue reflected up onto the belly.
+  const bounce = ctx.createLinearGradient(0, 2, 0, 7.5);
+  bounce.addColorStop(0, 'rgba(190,60,60,0)'); bounce.addColorStop(1, 'rgba(190,60,60,0.35)');
+  ctx.fillStyle = bounce; ctx.fillRect(-12, 0, 26, 8);
+  // Panel lines and scuffs: this hull has done this before.
+  ctx.strokeStyle = 'rgba(16,24,30,0.45)'; ctx.lineWidth = 0.55;
+  ctx.beginPath(); ctx.moveTo(-3.5, -6.6); ctx.lineTo(-3.5, 6.6); ctx.moveTo(8.5, -4.8); ctx.quadraticCurveTo(7.6, 0, 8.5, 4.8); ctx.moveTo(-3.5, -2.4); ctx.lineTo(1.5, -2.4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(235,240,240,0.12)'; ctx.lineWidth = 0.4;
+  for (const [x1, y1, x2, y2] of [[-1, -5.2, 3, -4.6], [5, 3.8, 9, 3], [-7, 1.5, -5, 2.6]]) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.restore();
+  // A satin highlight along the spine, soft rather than a hard chrome glint.
+  ctx.strokeStyle = 'rgba(235,240,238,0.32)'; ctx.lineWidth = 1; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(10, -3.2); ctx.bezierCurveTo(5, -5.6, -2, -5.8, -7.5, -3.6); ctx.stroke();
+  ctx.fillStyle = '#b88a2e'; ctx.fillRect(-8.5, -5, 2, 10); // a band of hazard yellow, faded: every unit of the swarm wears one
+  ctx.fillStyle = 'rgba(20,16,10,0.35)'; ctx.fillRect(-8.5, -1.2, 2, 0.8); ctx.fillRect(-8.5, 2.4, 2, 0.6);
+  // Cyan running lights on the pod tips: steady, never blinking.
+  ctx.globalCompositeOperation = 'lighter';
+  for (const side of [-1, 1]) {
+    const run = ctx.createRadialGradient(-12.6, side * 5.2, 0, -12.6, side * 5.2, 3);
+    run.addColorStop(0, 'rgba(120,235,255,0.8)'); run.addColorStop(1, 'rgba(120,235,255,0)');
+    ctx.fillStyle = run; oval(ctx, -12.6, side * 5.2, 3, 3); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
   // Extra plating shows as a pale shell over the hull, one line per level.
   for (let k = 0; k < s.upgrades.glycocalyx; k++) {
     ctx.strokeStyle = `rgba(215,240,255,${0.55 - k * 0.12})`; ctx.lineWidth = 0.8;
@@ -1005,8 +1039,10 @@ function hero(ctx: Ctx, s: State, v: View) {
   // Stowaways cling on aft.
   for (let k = 0; k < Math.min(4, s.flora); k++) { ctx.fillStyle = k % 2 ? '#9be38a' : '#6cc46a'; oval(ctx, -9.5 + (k % 2) * 2.2, (k < 2 ? -1 : 1) * (5.6 + (k % 2)), 2.1, 0.9, k * 0.9 + Math.sin(v.time * 1.5 + k) * 0.3); ctx.fill(); }
   // The canopy.
-  ctx.fillStyle = '#0f1c26'; oval(ctx, 4.6, 0, 4.6, 3.6); ctx.fill();
-  ctx.fillStyle = 'rgba(160,220,255,0.6)'; oval(ctx, 5.6, -1.2, 2.1, 1); ctx.fill();
+  ctx.fillStyle = '#0b141b'; oval(ctx, 4.6, 0, 4.6, 3.6); ctx.fill();
+  ctx.strokeStyle = 'rgba(16,24,30,0.8)'; ctx.lineWidth = 0.6; ctx.stroke();
+  ctx.fillStyle = 'rgba(120,200,230,0.42)'; oval(ctx, 5.8, -1.3, 2.2, 0.9, -0.15); ctx.fill(); // the lamp's spill caught in the glass
+  ctx.fillStyle = 'rgba(200,70,70,0.25)'; oval(ctx, 4.2, 1.8, 2.6, 0.8); ctx.fill(); // and the flesh, reflected underneath
   // The lamp on the nose.
   ctx.globalCompositeOperation = 'lighter';
   const lamp = ctx.createRadialGradient(13, 0, 0, 13, 0, 7);
