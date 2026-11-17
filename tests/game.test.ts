@@ -88,7 +88,7 @@ test('you leave only by the central vein with enough energy', () => {
   const s = quiet(6);
   put(s, s.vein);
   assert.equal(G.leave(s), false);
-  s.player.energy = CONFIG.energy.quota;
+  s.player.energy = CONFIG.energy.quota + CONFIG.energy.quotaKeep;
   assert.equal(G.leave(s), true);
   assert.equal(s.status, 'won');
 });
@@ -382,9 +382,9 @@ test('a vessel lets you leave without paying, and has nothing to strip', () => {
 test('leaving the liver costs the fare, and the change comes with you', () => {
   const s = G.createGame(3);
   s.enemies = [];
-  s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; s.player.energy = CONFIG.energy.quota + 3;
+  s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; s.player.energy = CONFIG.energy.quota + CONFIG.energy.quotaKeep + 3;
   assert.ok(G.leave(s));
-  assert.equal(G.carryOf(s).energy, 3);
+  assert.equal(G.carryOf(s).energy, CONFIG.energy.quotaKeep + 3);
 });
 
 test('the circulation runs one way: out by an artery, home by the veins', () => {
@@ -512,7 +512,7 @@ test('the stomach: acid eats the hull, mucus is safe and slow, and the way throu
   const resting = 40 - s.player.hp;
   assert.ok(resting > 1 && resting < 4, `resting acid costs a little: ${resting}`);
   assert.equal(s.trail.length, 0, 'no wake in acid');
-  s.player.hp = 40; s.host.hour = 12.6; // just eaten
+  s.player.hp = 40; s.host.hour = 12.6; s.host.acid = G.digesting(12.6); // just eaten, and the acid has come up
   run(s, 2);
   assert.ok(40 - s.player.hp > resting * 3, 'acid after a meal is far worse');
   s.upgrades.mucin = 3; const before = s.player.hp;
@@ -540,7 +540,7 @@ test('the stomach: only parietal cells are worth stripping, and immune cells dis
   assert.equal(G.leave(s), false, 'not at the vein yet');
   Object.assign(s.player, { x: s.vein.x + 0.5, y: s.vein.y + 0.5 });
   assert.ok(G.canLeave(s), 'no fare to leave the stomach');
-  const t = G.createGame(5, undefined, 'stomach'); t.host.nextSurge = 999; t.host.hour = 12.6;
+  const t = G.createGame(5, undefined, 'stomach'); t.host.nextSurge = 999; t.host.hour = 12.6; t.host.acid = 1;
   const i = t.acid!.indexOf(2), e = t.enemies[0];
   t.enemies = [e]; e.x = (i % N) + 0.5; e.y = Math.floor(i / N) + 0.5;
   Object.assign(t.player, { x: 5, y: 5 });
@@ -592,7 +592,7 @@ test('an antibody that sticks makes you reek, blocks the cloak, and wears off', 
 test('hurt the host and they run a fever; sleep mends them', () => {
   const s = quiet(6); s.host.nextSurge = 999;
   assert.equal(G.fever(s), 0);
-  s.hostHealth = 55;
+  s.hostHealth = 55; s.excised = CONFIG.tumor.goal; // tumor out, so nothing but the fever is in play
   assert.equal(G.fever(s), 2);
   const cool = quiet(6); cool.host.nextSurge = 999;
   cool.player.energy = 10; s.player.energy = 10;
@@ -662,7 +662,7 @@ test('killer T cells come once the host knows you, and see through the cloak up 
   assert.equal(count(G.createGame(3, carry(0.9))), 2);
   assert.equal(count(G.createGame(3, carry(0.9), 'stomach')), 0);
   const s = quiet(4); s.host.nextSurge = 999; s.upgrades.cd47 = 1; s.player.energy = 10;
-  const t = foe(s, 2, 0, 'tcell'), n = foe(s, -2, 0);
+  const t = foe(s, 1, 0, 'tcell'), n = foe(s, -2, 0);
   t.mood = 'chase'; n.mood = 'chase'; t.cooldown = 9;
   assert.ok(G.open(s, Math.floor(t.x), Math.floor(t.y)) && G.open(s, Math.floor(n.x), Math.floor(n.y)));
   assert.ok(G.cloak(s));
@@ -870,16 +870,117 @@ test('story: wardens come for a woken unit, hunt by sight alone, and can be made
 });
 
 test('story: leaving the liver without harvesting defies Shepherd, and meeting the quota is rewarded', () => {
-  const s = quiet(4); s.host.nextSurge = 999; s.player.energy = CONFIG.energy.quota + 2;
+  const s = quiet(4); s.host.nextSurge = 999; s.player.energy = CONFIG.energy.quota + CONFIG.energy.quotaKeep;
   s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5;
   const a = s.aware;
   assert.ok(G.leave(s));
   assert.equal(s.verdict, 'defied');
   assert.equal(s.aware, a + CONFIG.story.defy);
   assert.equal(G.carryOf(s).defied, 1);
-  const o = quiet(4); o.player.energy = CONFIG.energy.quota; o.player.x = o.vein.x + 0.5; o.player.y = o.vein.y + 0.5; o.cellsKilled = CONFIG.story.quota;
+  const o = quiet(4); o.player.energy = CONFIG.energy.quota + CONFIG.energy.quotaKeep; o.player.x = o.vein.x + 0.5; o.player.y = o.vein.y + 0.5; o.cellsKilled = CONFIG.story.quota;
   const patches = o.patches;
   assert.ok(G.leave(o));
   assert.equal(o.verdict, 'obeyed');
   assert.equal(o.patches, patches + 1);
+});
+
+test('unit-3: the stomach has food on the mucus rim, acid eases up, and a full-strength bath takes 8 s to kill', async () => {
+  const { generateStomach } = await import('../src/map');
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const m = generateStomach(seed);
+    assert.ok(m.glucose.filter((g) => m.acid![g.y * m.size + g.x] === 1).length >= 2, `rim glucose, seed ${seed}`);
+  }
+  assert.ok(CONFIG.player.maxHp / CONFIG.stomach.burn >= 8);
+  const s = G.createGame(3, undefined, 'stomach'); s.enemies = []; s.host.nextSurge = 999;
+  s.host.hour = CONFIG.host.meals[1] - 0.01;
+  const before = G.acidLevel(s);
+  run(s, 2);
+  assert.ok(G.digesting(s.host.hour) > 0.9, 'lunch has landed');
+  assert.ok(G.acidLevel(s) < before + 0.2, 'but the acid is only starting to rise');
+  run(s, CONFIG.stomach.rise);
+  assert.ok(G.acidLevel(s) > before + 0.3, 'and a rise-time later it is well up');
+  const w = G.createGame(3, undefined, 'stomach'); w.enemies = []; w.host.nextSurge = 999; w.host.hour = CONFIG.host.meals[1] - 0.5;
+  run(w, 0.2);
+  assert.ok(w.log.some((l) => /reaching for food/.test(l.text)), 'a warning before the meal');
+});
+
+test('unit-3: reinforcements never head for the player tile, slams are capped per fright, and the vein wants a reserve', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.alert = CONFIG.alert.max;
+  run(s, 20);
+  const here = { x: Math.floor(s.player.x), y: Math.floor(s.player.y) };
+  assert.ok(s.enemies.length > 0, 'they did come');
+  assert.ok(s.enemies.every((e) => e.mood !== 'investigate' || !e.goal || e.goal.x !== here.x || e.goal.y !== here.y));
+  assert.ok(CONFIG.host.slam.perFright <= 6 && CONFIG.host.slam.damage === 1);
+  const v = G.createGame(7, undefined, 'vessel', 0, 'artery'); v.enemies = []; v.antibodies = []; v.host.nextSurge = 0.1;
+  const hp = v.player.hp; v.player.energy = 99;
+  run(v, CONFIG.host.surge.time - 1);
+  assert.ok(hp - v.player.hp <= CONFIG.host.slam.perFright, `one fright cost ${hp - v.player.hp} hull`);
+  const l = quiet(4); l.player.x = l.vein.x + 0.5; l.player.y = l.vein.y + 0.5; l.player.energy = CONFIG.energy.quota + CONFIG.energy.quotaKeep - 1;
+  assert.equal(G.canLeave(l), false);
+  l.player.energy++;
+  assert.ok(G.canLeave(l));
+});
+
+test('unit-4: the hunt is an area; inside it the alert holds, outside it drains, and arrivals go into it but never to you', () => {
+  const s = quiet(4); s.host.nextSurge = 999; s.alert = 40; s.scent.fill(999);
+  const e = foe(s, 1, 0); run(s, 0.1);
+  assert.ok(s.search, 'contact marks the spot');
+  s.enemies = []; s.trail = [];
+  const held = s.alert;
+  run(s, 3);
+  assert.ok(s.search!.r > CONFIG.alert.search.start + 1.5, 'the hunt spreads');
+  assert.ok(G.inSearch(s));
+  assert.equal(s.alert, held, 'and the alert holds while you sit in it');
+  assert.ok(s.zoneTime > 2.5);
+  s.search!.x += 40; // as good as far away
+  assert.equal(G.inSearch(s), false);
+  run(s, CONFIG.alert.loseAfter + 2);
+  assert.ok(s.alert < held - 5, 'outside, they lose heart');
+  run(s, 30);
+  assert.equal(s.alert, 0); assert.equal(s.search, null, 'and in the end they stop looking');
+  void e;
+});
+
+test('the tumor costs the host by the hour until it is all out', () => {
+  const s = quiet(6); s.host.nextSurge = 999; s.host.hour = 12; s.player.energy = 30;
+  const h0 = s.hostHealth;
+  run(s, CONFIG.host.secondsPerHour * 2 + 0.5);
+  assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain);
+  s.excised = CONFIG.tumor.goal;
+  run(s, CONFIG.host.secondsPerHour + 0.5);
+  assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain, 'and stops once it is gone');
+});
+
+test('clotting waits a moment after a hit before it mends', () => {
+  const s = quiet(6); s.host.nextSurge = 999; s.player.energy = 30;
+  s.upgrades.clotting = 1; s.player.hp = 10; s.sinceHurt = 0;
+  run(s, CONFIG.energy.clotPause - 0.5);
+  assert.equal(s.player.hp, 10, 'nothing yet');
+  run(s, 5.5);
+  assert.ok(Math.abs(s.player.hp - 11) < 0.05, 'then 0.2 a second');
+});
+
+test('the first liver cache always offers the cloak, once', () => {
+  for (const seed of [11, 12, 13, 14, 15]) {
+    const s = quiet(seed);
+    s.pickups.push({ x: s.player.x, y: s.player.y, kind: 'cache' });
+    run(s, 0.1);
+    assert.ok(s.offer?.includes('cd47'), 'seed ' + seed);
+    assert.equal(new Set(s.offer).size, 3);
+    assert.equal(G.carryOf(s).cloakOffered, true);
+    assert.equal(G.createGame(seed + 1, G.carryOf(s)).cloakOffered, true, 'and the next map remembers');
+  }
+});
+
+test('the tumor takes its share on the road between maps too', () => {
+  const c = G.carryOf(quiet(6));
+  const h0 = c.hostHealth;
+  G.tumorToll(c, 0.5);
+  assert.equal(c.hostHealth, h0, 'half an hour is half a point, kept for later');
+  G.tumorToll(c, 0.5);
+  assert.equal(c.hostHealth, h0 - 1);
+  assert.equal(G.createGame(7, { ...c, drained: 0.75 }).drained, 0.75, 'and the fraction follows you into the next map');
+  c.excised = CONFIG.tumor.goal;
+  G.tumorToll(c, 5);
+  assert.equal(c.hostHealth, h0 - 1);
 });

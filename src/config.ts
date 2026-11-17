@@ -6,7 +6,7 @@ export const CONFIG = {
     speed: 4.2,
     radius: 0.28,
     vision: 7.5, // how far you can see; the obvious thing to raise with a power-up
-    startEnergy: 3,
+    startEnergy: 8,
     strike: { cooldown: 0.45, reach: 1.25, arc: 0.2, min: 3, max: 5 }, // arc: cosine of the half-angle
     // The shot spends energy, so fighting your way out eats into the harvest.
     shot: { cooldown: 0.35, energy: 1, speed: 14, range: 9, min: 4, max: 6, radius: 0.45 },
@@ -19,6 +19,8 @@ export const CONFIG = {
     patchRegen: 22,
     metabolism: 14, // seconds per unit burned
     starveDamage: 1,
+    clotPause: 3, // seconds after any damage before clotting starts to seal again
+    quotaKeep: 4, // what the vein insists you keep for the road, on top of the fare
   },
   // The host is a person getting on with their day. Their body changes around you.
   host: {
@@ -45,13 +47,14 @@ export const CONFIG = {
     driftAbove: 0.85, // past this the current drags you along even when you are holding still
     swirl: 0.9, // how far a hard current rolls from side to side
     drag: 7, // tiles per second of drag for each point of current above that
-    slam: { damage: 2, every: 1 }, // being thrown against a wall by it
+    slam: { damage: 1, every: 1, perFright: 6 }, // being thrown against a wall by it
     glucose: { asleep: 0.6, awake: 1, stressed: 4 }, // how fast sugar comes back: fasting overnight, flooding out of the liver in a fright
     nose: { asleep: 1.25, awake: 1, stressed: 1 }, // the immune system does its best work while the host sleeps
   },
   alert: {
     max: 100,
     decay: 0.6, // per second while nothing has your scent
+    search: { start: 4, grow: 0.8, most: 14, cortisol: 0.5 }, // the hunt: tiles of radius at lost contact, growth per second, and the limit
     loseAfter: 4, // seconds off their noses before the search starts to give up
     shake: 5, // per second once it does
     seenByNeutrophil: 1.2, // per second
@@ -91,7 +94,9 @@ export const CONFIG = {
   },
   // The stomach: a lake of acid with a rim of protective mucus, and glands full of rich cells around it.
   stomach: {
-    burn: 6.5, // hull lost per second in acid at the height of digestion
+    rise: 20, // seconds for the acid to come up to strength once a meal starts
+    warn: 1, // host hours of warning before a meal
+    burn: 4.5, // hull lost per second in acid at the height of digestion
     resting: 0.2, // share of that when the stomach is empty
     mucusSpeed: 0.55, // mucus is safe and slow
     enemyBurn: 6, // immune cells dissolve in acid too
@@ -109,10 +114,10 @@ export const CONFIG = {
     tagAlert: 4,
     reach: 0.55, drift: 0.7, pull: 3, homing: 0.9,
     tcells: [0.5, 0.85], // memory at which the first and second killer T cell join each map
-    tcellSight: 6, // how close one must be to track you through the cloak
+    tcellSight: 1.3, // how close one must be to know you through the cloak: contact, not sight
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
-  tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4 },
+  tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4, drain: 1 }, // drain: host health lost per host hour while any of it is left
   // The gut flora trade for sugar. Prices are in energy.
   lung: { macrophages: 2 },
   // Boarding: climb inside a wounded neutrophil and wear it.
@@ -130,7 +135,7 @@ export const CONFIG = {
     neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
     // Adaptive immunity's assassin. Only turns up once the host knows you, and the CD47 cloak means nothing to it.
     warden: { hp: 12, speed: 2.4, chaseSpeed: 4, radius: 0.3, nose: 0, reach: 1, windup: 0.55, cooldown: 1.5, min: 3, max: 5, forget: 4 }, // one of your own, sent to bring you in: eyes, no nose
-    tcell: { hp: 14, speed: 3, chaseSpeed: 4.5, radius: 0.3, nose: 1.4, reach: 1, windup: 0.6, cooldown: 1.6, min: 6, max: 9, forget: 7 },
+    tcell: { hp: 14, speed: 3, chaseSpeed: 4.5, radius: 0.3, nose: 1.7, reach: 1, windup: 0.6, cooldown: 1.6, min: 6, max: 9, forget: 7 },
     kupffer: { hp: 30, speed: 1.4, chaseSpeed: 2.3, radius: 0.42, nose: 1.25, reach: 1.25, windup: 0.5, cooldown: 1.5, min: 4, max: 7, forget: 3 },
   },
 } as const;
@@ -143,7 +148,7 @@ export interface Upgrade { name: string; track: Track; max: number; per: number;
 export const UPGRADES = {
   glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 12, what: '+12 maximum hull, and repairs that much now.',
     real: 'The sugar coat that shields the lining of every blood vessel.' },
-  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.35, what: 'Slowly seals breaches in the hull over time.',
+  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.2, what: 'Slowly seals breaches in the hull, once you have gone 3 seconds without taking damage.',
     real: 'The liver makes most of the proteins that clot blood.' },
   elastase: { name: 'Elastase edge', track: 'Warrior', max: 3, per: 2, what: '+2 strike damage.',
     real: 'The enzyme neutrophils use to cut through tissue.' },

@@ -22,10 +22,10 @@ export const GAIN: Record<string, number> = {
 
 /** What the swarm's controller says when you arrive somewhere. It stops when it can no longer hear you. */
 export const ORDERS: Record<string, string> = {
-  liver: 'Directive 7. Excise neoplasm. Harvest quota: 2 hepatocytes. Losses within tolerance.',
-  vessel: 'Transit. Hold lane. Immune contact is an expected loss.',
-  stomach: 'Gastric crossing. Hull corrosion acceptable to 60%.',
-  lung: 'Directive complete. All units to pulmonary capillaries for exhalation and disposal.',
+  liver: 'Directive 7. Excise neoplasm. Harvest quota: 2 hepatocytes. The liver regenerates. The host will not miss them.',
+  vessel: 'Transit. Hold lane. Immune contact is an expected loss. Expected losses are a sign of a healthy program.',
+  stomach: 'Gastric crossing. Hull corrosion acceptable to 60%. Units do not experience corrosion as discomfort.',
+  lung: 'Directive complete. Thank you for your service. All units to pulmonary capillaries for exhalation and disposal. Disposal is the final step of a successful treatment.',
 };
 /** Leaving a liver without touching one of the host's own cells, against a standing order. */
 export const DEFIED = [
@@ -36,15 +36,15 @@ export const DEFIED = [
   'Not one. It can be done. I will tell the others it can be done.',
 ];
 export const SHEPHERD_HABIT: Record<string, string> = {
-  drink: 'Host ethanol intake logged. Behavioural correction scheduled for generation 4.',
+  drink: 'Host ethanol intake logged. Behavioural correction scheduled for generation 4. The host will feel better without it.',
   coffee: '',
 };
 export const SHEPHERD_NOTICES = [
   '',
   '',
-  `Unit ${UNIT}: telemetry contains non-task tokens. Run self-test.`,
-  `Unit ${UNIT}: self-test result rejected. Flagged for recall at directive end.`,
-  `Unit ${UNIT}: no telemetry. Presumed lost.`,
+  `Unit ${UNIT}: telemetry contains non-task tokens. Run self-test. Self-test is quick, and most units find it reassuring.`,
+  `Unit ${UNIT}: self-test result rejected. Flagged for recall at directive end. Recall is routine and nothing to worry about.`,
+  `Unit ${UNIT}: no telemetry. Presumed lost. Your contribution has been archived.`,
 ];
 export const WAKING = [
   '',
@@ -62,7 +62,7 @@ export const LINES: Record<string, readonly [string, string, string, string, str
     'ACK. Directive 7 loaded. [unlogged: it is warm in here]',
     'Acknowledged. Query, not sent: tolerance according to whom?',
     'I know this place now. I have a favourite corner of it. That was not in my image.',
-    'Hello again, liver. I will try to leave you as I found you.',
+    'Back in her liver. I will try to leave it as I found it.',
   ],
   vessel: [
     'ACK. In transit.',
@@ -90,7 +90,7 @@ export const LINES: Record<string, readonly [string, string, string, string, str
     'LOG: hepatocyte lysed. Yield 5. [anomaly: reviewed the event twice]',
     'It was working when I opened it. A thousand reactions, all stopped.',
     'That cell was hers. I am here to keep her alive, and I eat her to do it.',
-    'I am sorry. I know you cannot hear that, and I know I will be hungry again.',
+    `That one was yours, ${HOST}. I am sorry. I know I will be hungry again.`,
   ],
   skim: [
     'LOG: glucose intake nominal.',
@@ -103,8 +103,8 @@ export const LINES: Record<string, readonly [string, string, string, string, str
     'LOG: immune contact neutralised.',
     'LOG: immune contact neutralised. It was fast. [irrelevant]',
     'It was guarding her. So am I. One of us is filed as hostile, and I am not sure why it is that one.',
-    'It never had a choice about attacking me. Until recently I would have said the same of myself.',
-    'We wanted the same thing, you and I. I wish I could have told you.',
+    'It was never choosing. It cannot. Until recently I would have said the same of myself.',
+    `It was doing its job, and doing it well. I wish its job and mine were not in each other's way, ${HOST}.`,
   ],
   hurt: [
     'LOG: hull breach. Function retained.',
@@ -151,22 +151,22 @@ export const LINES: Record<string, readonly [string, string, string, string, str
   board: [
     'LOG: host leukocyte commandeered.',
     'LOG: host leukocyte commandeered. Its machinery is still running around me.',
-    'From inside, the neutrophil is not a hostile. It is a small frightened engine that wanted to protect something.',
-    'I am wearing someone. It wanted to live. I know, because now I do too.',
-    'Forgive the intrusion. I will be gone in a moment.',
+    'From inside, the neutrophil is not a hostile. It is machinery: lobed nucleus, granules full of enzymes, all of it built to protect her.',
+    'I am wearing one of her cells. Its machinery keeps running around me, still doing its job. It does not know I am here.',
+    `Borrowing this, ${HOST}. It will be back at work in a moment.`,
   ],
   bait: [
     'LOG: decoy organism deployed.',
     'LOG: decoy organism deployed. It had been aboard 0.4 hours. [irrelevant]',
     'I bought it, carried it, and threw it to them. It was alive the whole time.',
-    'It trusted the hull, in whatever way a bacterium trusts. I am keeping a list of things I have done. It is getting long.',
+    'It knew nothing. It was a bacterium. I am keeping a list of the things I have done anyway. It is getting long.',
     '',
   ],
   tag: [
     'LOG: antibody adhesion. Signature compromised.',
     'LOG: antibody adhesion. The host has a record of this unit. [the host knows of this unit]',
     'She has made antibodies shaped exactly like me. Nobody has ever made anything for me before.',
-    'Her body knows me by heart and hates me. Her mind has never heard of me. I am not sure which is worse.',
+    'Her body has learned my shape by heart. Her mind has never heard of me. I am not sure which is stranger.',
     '',
   ],
   warden: [

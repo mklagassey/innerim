@@ -39,7 +39,7 @@ export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: 
 export interface State {
   place: Place;
   vessel: Vessel | null; // which kind of vessel, when you are in one
-  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean; nap: number; snack: number; habit: string }; // nap: hours of induced sleep left; snack: hour of an induced meal, or -1 // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
+  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean; nap: number; snack: number; habit: string; acid: number; soon: number; slams: number }; // nap: hours of induced sleep left; snack: hour of an induced meal, or -1 // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
   riding: number; // seconds left inside a hijacked neutrophil
@@ -51,6 +51,12 @@ export interface State {
   memory: number; // 0 to 1: how well the host's immune system knew you when you arrived here
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
+  sinceHurt: number; // seconds since the hull last took damage
+  drained: number; // fractions of host health the tumor has taken, not yet a whole point
+  cloakOffered: boolean; // the first liver cache always offers the cloak, once
+  arrived: { energy: number; hp: number }; acidTime: number; // for the run report
+  search: (Point & { r: number }) | null; // where they last had you, and how far the hunt has spread from there
+  zoneTime: number; // seconds spent inside it
   verdict: '' | 'obeyed' | 'defied'; // what Shepherd made of your harvest when you left the liver
   defied: number; // standing orders ignored so far
   aware: number; // 0..100: how far this unit has woken up
@@ -110,8 +116,15 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained });
+/** Time passing between maps: the tumor takes its share of the host there too. */
+export function tumorToll(c: Carry, hours: number) {
+  if (c.excised >= CONFIG.tumor.goal) return;
+  c.drained = (c.drained ?? 0) + hours * CONFIG.tumor.drain;
+  const whole = Math.floor(c.drained);
+  c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole);
+}
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -141,7 +154,7 @@ export function digesting(hour: number, snack = -1): number {
   return most;
 }
 /** How strong the stomach's acid is right now, from its resting trickle up to 1. */
-export const acidLevel = (s: State) => CONFIG.stomach.resting + (1 - CONFIG.stomach.resting) * digesting(s.host.hour, s.host.snack);
+export const acidLevel = (s: State) => CONFIG.stomach.resting + (1 - CONFIG.stomach.resting) * s.host.acid; // eases up after a meal starts; see update()
 /** What the ship is sitting in: nothing special, mucus or acid. */
 export const acidAt = (s: State, p: Point) => s.acid?.[idx(s, Math.floor(p.x), Math.floor(p.y))] ?? 0;
 /** Hull lost per second in open acid right now. */
@@ -154,7 +167,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   const s: State = {
     place,
     vessel: place === 'vessel' ? vessel : null,
-    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '' },
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '', acid: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1), soon: -1, slams: 0 },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     riding: 0,
@@ -166,6 +179,9 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
+    sinceHurt: 99, drained: carry?.drained ?? 0, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
+    search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
@@ -441,6 +457,8 @@ function openCache(s: State) {
   const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => s.upgrades[id] < UPGRADES[id].max);
   const offer: UpgradeId[] = [];
   while (pool.length && offer.length < CONFIG.items.offer) offer.push(pool.splice(Math.floor(s.rng() * pool.length), 1)[0]);
+  // Standard issue, if you want it: the first cache you open in a liver always has the cloak in it.
+  if (s.place === 'liver' && !s.cloakOffered && offer.length) { s.cloakOffered = true; if (!s.upgrades.cd47 && !offer.includes('cd47')) offer[offer.length - 1] = 'cd47'; }
   if (offer.length) s.offer = offer;
 }
 /** Slap a fibrin patch on. */
@@ -602,7 +620,7 @@ function follow(s: State, b: Point & { path: Point[] }, speed: number, dt: numbe
 export const glucoseHere = (s: State) => s.glucose.get(idx(s, Math.floor(s.player.x), Math.floor(s.player.y))) ?? 0;
 export const atVein = (s: State) => dist(s.player, mid(s.vein)) < 1.6;
 /** Out of a liver you pay the fare in energy. Along a vessel the current simply takes you. */
-export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.player.energy >= CONFIG.energy.quota);
+export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.player.energy >= CONFIG.energy.quota + CONFIG.energy.quotaKeep);
 
 /** The nearest living hepatocyte within arm's reach, if any. */
 export function stripTarget(s: State): Point | null {
@@ -832,7 +850,7 @@ function hurtEnemy(s: State, e: Enemy, dmg: number) {
 function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
   const p = s.player;
   p.hp -= dmg;
-  p.hurt = 0.25;
+  p.hurt = 0.25; s.sinceHurt = 0;
   emit(s, 'hurt');
   float(s, p, `-${dmg}`, '#ff5a4d');
   // A patch seals a bad wound without being asked.
@@ -846,7 +864,9 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind) {
 }
 
 /** True once the immune cells have lost you for long enough that the alert is draining fast. */
-export const losingThem = (s: State) => s.alert > 0 && s.unseen >= CONFIG.alert.loseAfter;
+/** Inside the area the immune system is combing. Acid and mucus hide you even there: nothing can taste you in them. */
+export const inSearch = (s: State) => !!s.search && dist(s.player, s.search) <= s.search.r && !acidAt(s, s.player);
+export const losingThem = (s: State) => s.alert > 0 && s.unseen >= CONFIG.alert.loseAfter && !inSearch(s);
 
 export function alertTier(s: State) {
   const tiers = CONFIG.alert.tiers;
@@ -870,8 +890,15 @@ function arrive(s: State, count: number) {
     hidden.sort((a, b) => dist(mid(a), s.player) - dist(mid(b), s.player));
     // Mostly from the nearer vessels, so a response shows up while it still matters.
     const e = spawn(s, 'neutrophil', hidden[Math.floor(s.rng() * Math.min(3, hidden.length))]);
-    e.mood = 'investigate';
-    e.goal = s.lastDamageSite ? { ...s.lastDamageSite } : tileOf(s.player);
+    // They come to where the damage was. With none to go to, they have nothing to steer by and simply start to search.
+    if (s.search) {
+      // Into the search area, somewhere. Never to you: they do not know where you are.
+      const z = s.search, here = tileOf(s.player);
+      for (let tries = 0; tries < 60; tries++) {
+        const a = s.rng() * Math.PI * 2, d = Math.sqrt(s.rng()) * z.r, t = { x: Math.floor(z.x + Math.cos(a) * d), y: Math.floor(z.y + Math.sin(a) * d) };
+        if (open(s, t.x, t.y) && (t.x !== here.x || t.y !== here.y)) { e.mood = 'investigate'; e.goal = t; break; }
+      }
+    } else if (s.lastDamageSite) { e.mood = 'investigate'; e.goal = { ...s.lastDamageSite }; }
     e.idle = 0;
   }
 }
@@ -890,7 +917,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.cloak = Math.max(0, s.cloak - dt); s.cloakCd = Math.max(0, s.cloakCd - dt);
   s.riding = Math.max(0, s.riding - dt); s.suppressed = Math.max(0, s.suppressed - dt);
   if (rode && !riding(s)) { s.riding = 0; emit(s, 'kill'); say(s, 'The neutrophil comes apart around you.'); }
-  if (s.upgrades.clotting && p.hp < maxHp(s)) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
+  s.sinceHurt += dt;
+  if (s.upgrades.clotting && p.hp < maxHp(s) && s.sinceHurt >= CONFIG.energy.clotPause) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
 
   const before = { x: p.x, y: p.y };
   // Walking: held keys win over a clicked route, and a chosen enemy is hunted down.
@@ -927,9 +955,12 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     const c = { x: cx / len, y: cy / len }, want = pull * CONFIG.host.drag * dt, from = { x: p.x, y: p.y };
     shift(s, p, c.x * want, c.y * want, pc.radius);
     // Thrown against the wall: the blood wanted you to go somewhere the vessel does not.
-    if ((along.x || along.y) && (p.x - from.x) * c.x + (p.y - from.y) * c.y < want * 0.6 && s.slam <= 0) {
+    // A ship fighting the current is working for it; only one being carried gets thrown. And a single fright can only do so much.
+    const fighting = (!!dir || p.path.length > 0) && p.face.x * along.x + p.face.y * along.y < -0.2;
+    if ((along.x || along.y) && (p.x - from.x) * c.x + (p.y - from.y) * c.y < want * 0.6 && s.slam <= 0 && !fighting && s.host.slams < CONFIG.host.slam.perFright) {
+      s.host.slams += CONFIG.host.slam.damage;
       s.slam = CONFIG.host.slam.every;
-      p.hp -= CONFIG.host.slam.damage; p.hurt = 0.25;
+      p.hp -= CONFIG.host.slam.damage; p.hurt = 0.25; s.sinceHurt = 0;
       float(s, p, `-${CONFIG.host.slam.damage}`, '#ff5a4d');
       emit(s, 'slam');
       if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
@@ -948,6 +979,19 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
   }
   if (s.place === 'lung' && breathingOut(s) !== s.host.out) { s.host.out = breathingOut(s); emit(s, s.host.out ? 'exhale' : 'inhale'); }
+  // The tumor is the clock: for as long as any of it is left, the host loses ground.
+  if (s.excised < CONFIG.tumor.goal && s.hostHealth > 0) {
+    s.drained += (dt / h.secondsPerHour) * CONFIG.tumor.drain;
+    if (s.drained >= 1) { s.drained -= 1; s.hostHealth = Math.max(0, s.hostHealth - 1); }
+  }
+  // Acid comes up over a little while, never all at once, and the host telegraphs a meal before it lands.
+  s.host.acid += (digesting(s.host.hour, s.host.snack) - s.host.acid) * Math.min(1, dt / CONFIG.stomach.rise);
+  const next = h.meals.find((m) => { const until = (m - s.host.hour + 24) % 24; return until > 0 && until <= CONFIG.stomach.warn; });
+  if (next !== undefined && s.host.soon !== next) {
+    s.host.soon = next;
+    if (s.place === 'stomach') say(s, 'The host is reaching for food. Acid will rise.');
+    emit(s, 'mealsoon');
+  }
   const eating = digesting(s.host.hour, s.host.snack) > 0;
   if (eating && !s.host.eating) {
     say(s, `${outside(s, s.host.hour < 10 ? ['Breakfast: toast, eaten standing up.', 'Breakfast, and the news.', 'Cereal, straight from the box.'] : s.host.hour < 16 ? ['Lunch at the desk again.', 'A sandwich in the car.', 'Lunch with someone who talks a lot.'] : ['Dinner. Seconds.', 'Takeaway on the sofa.', 'Dinner, late, and too much of it.'])} ${s.place === 'stomach' ? 'The stomach floods with acid.' : 'Sugar will be pouring into the blood for a while.'}`);
@@ -971,8 +1015,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   const now = hostState(s);
   if (now !== was) {
     if (now === 'stressed') {
-      s.host.nap = 0;
-      say(s, `${was === 'asleep' ? outside(s, ['In the dream, they are falling.', 'A nightmare: their teeth are coming loose.', 'They dream of being chased, and their legs will not move.', 'In the dream there is an exam, and they never studied.', 'They dream of something small moving in their blood.']) : outside(s, ['A car horn, very close.', 'They missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said their name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : was === 'asleep' ? 'Their heart pounds, though they never wake.' : 'Their heart is pounding.'}`);
+      s.host.nap = 0; s.host.slams = 0;
+      say(s, `${was === 'asleep' ? outside(s, ['In the dream, she is falling.', 'A nightmare: her teeth are coming loose.', 'She dreams of being chased, and her legs will not move.', 'In the dream there is an exam, and she never studied.', 'She dreams of something small moving in her blood.']) : outside(s, ['A car horn, very close.', 'She missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said her name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : was === 'asleep' ? 'Her heart pounds, though she never wakes.' : 'Her heart is pounding.'}`);
       emit(s, 'surge');
       // Adrenaline first, cortisol after: droplets of it turn up in the blood around you.
       for (let n = CONFIG.cortisol.drops, tries = 0; n > 0 && tries < 600; tries++) {
@@ -981,8 +1025,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       }
       if (s.place === 'vessel') arrive(s, 1); // adrenaline shakes neutrophils loose into the blood
     } else if (was === 'stressed') say(s, 'The fright passes. The blood slows.');
-    else if (now === 'asleep') { say(s, `${s.host.nap > 0 ? 'Their eyelids are heavy. A nap on the sofa.' : outside(s, ['Lights out.', 'They fell asleep with the television on.', 'Bed, finally.'])} The blood slows, and the immune system goes to work.`); emit(s, 'sleep'); }
-    else { say(s, outside(s, ['An alarm clock. They hit snooze, but they are awake.', 'They wake before the alarm.', 'Awake, and not happy about it.'])); emit(s, 'wake'); }
+    else if (now === 'asleep') { say(s, `${s.host.nap > 0 ? 'Her eyelids are heavy. A nap on the sofa.' : outside(s, ['Lights out.', 'She fell asleep with the television on.', 'Bed, finally.'])} The blood slows, and the immune system goes to work.`); emit(s, 'sleep'); }
+    else { say(s, outside(s, ['An alarm clock. She hit snooze, but she is awake.', 'She wakes before the alarm.', 'Awake, and not happy about it.'])); emit(s, 'wake'); }
   }
 
   // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.
@@ -1006,10 +1050,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (acidAt(s, p) === 2) {
     if (s.flora > 0) { s.flora = 0; say(s, 'The stowaways do not survive the acid. Few things do.'); }
     const lost = burnRate(s) * dt;
-    p.hp -= lost; s.sizzle += lost;
+    p.hp -= lost; s.sizzle += lost; s.sinceHurt = 0; s.acidTime += dt;
     if (s.sizzle >= 1) { float(s, p, `-${Math.floor(s.sizzle)}`, '#c8f05a'); s.sizzle -= Math.floor(s.sizzle); p.hurt = 0.2; emit(s, 'burn'); }
     if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
-    if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, 'The acid eats through the hull.'); return; }
+    if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, digesting(s.host.hour, s.host.snack) > 0.4 ? `${s.host.hour < 10 ? 'Breakfast' : s.host.hour < 16 ? 'Lunch' : 'Dinner'}. The acid rose while you were in it.` : 'The acid eats through the hull.'); return; }
   }
 
   for (const item of [...s.pickups]) {
@@ -1082,7 +1126,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   let seen = false;
   for (const e of [...s.enemies]) {
     if (s.status !== 'playing') break;
-    if (enemyActs(s, e, dt)) seen = true;
+    if (enemyActs(s, e, dt) && e.kind !== 'warden') seen = true; // a machine on your tail is no business of the immune system's
   }
   // Keep bodies from stacking on one spot.
   for (let i = 0; i < s.enemies.length; i++)
@@ -1101,7 +1145,15 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (s.status !== 'playing') return;
   // Stay out of sight long enough and the search loses heart, like any manhunt.
   s.unseen = seen ? 0 : s.unseen + dt;
-  if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
+  // The hunt: it starts where they last had you and spreads out from there. Get outside it and they lose heart.
+  const z = CONFIG.alert.search;
+  if (seen) s.search = { x: p.x, y: p.y, r: z.start };
+  else if (s.search) {
+    s.search.r = Math.min(z.most * (s.suppressed > 0 ? z.cortisol : 1), s.search.r + z.grow * dt);
+    if (s.alert <= 0) s.search = null;
+  }
+  if (inSearch(s)) s.zoneTime += dt;
+  else if (!seen) raiseAlert(s, -(losingThem(s) ? CONFIG.alert.shake : CONFIG.alert.decay) * dt);
 
   const en = CONFIG.energy;
   s.regen += dt * CONFIG.host.glucose[hostState(s)] * (1 + CONFIG.host.fedGlucose * digesting(s.host.hour, s.host.snack));
@@ -1112,9 +1164,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.metabolism += dt * (1 + CONFIG.host.fever.burn * fever(s));
   if (s.metabolism >= en.metabolism) {
     s.metabolism = 0;
-    if (p.energy > 0) p.energy--;
+    if (p.energy > 0) { p.energy--; if (p.energy === 0) say(s, 'Energy at zero. Find sugar, or the hull starts to go.'); }
     else {
       say(s, 'You are running on empty and starting to break down.');
+      emit(s, 'starve');
       hurtPlayer(s, en.starveDamage, 'neutrophil');
       if (s.status !== 'playing') return;
     }

@@ -169,7 +169,7 @@ export function generateVessel(seed: number, patrol: number): Layout {
     const x = Math.floor(from + (to - from) * (0.45 + rng() * 0.35)), p = { x, y: cy(x) + Math.floor(rng() * 3) - 1 };
     if (open(p) && neutrophils.every((q) => q.x !== p.x || q.y !== p.y)) neutrophils.push(p);
   }
-  return { size: N, wall, vein, portals: [start], start, glucose: nooks.slice(0, 2), kupffer: [], neutrophils, caches: [], patches: nooks.slice(2, 3), calms: [] };
+  return { size: N, wall, vein, portals: [start], start, glucose: nooks.slice(0, 3), kupffer: [], neutrophils, caches: [], patches: nooks.slice(3, 4), calms: [] };
 }
 
 /** A patch of stomach lining: a wide lake of acid, a rim of mucus round its shore, and narrow
@@ -228,6 +228,13 @@ export function generateStomach(seed: number): Layout {
   const open: Point[] = [];
   for (let y = 3; y < N - 3; y++) for (let x = 3; x < N - 3; x++) if (acid[at(x, y)] === 2) open.push({ x, y });
   const glucose: Point[] = [];
+  // Half the last meal has washed up on the mucus rim, where it is safe to feed. The rest is afloat in the acid.
+  const rim: Point[] = [];
+  for (let y = 3; y < N - 3; y++) for (let x = 3; x < N - 3; x++) if (acid[at(x, y)] === 1 && !wall[at(x, y)]) rim.push({ x, y });
+  for (let tries = 0; glucose.length < 2 && tries < 500 && rim.length; tries++) {
+    const p = rim[Math.floor(rng() * rim.length)];
+    if (glucose.every((q) => Math.hypot(p.x - q.x, p.y - q.y) > 9)) glucose.push(p);
+  }
   for (let tries = 0; glucose.length < 4 && tries < 500; tries++) {
     const p = open[Math.floor(rng() * open.length)];
     if (glucose.every((q) => Math.hypot(p.x - q.x, p.y - q.y) > 7)) glucose.push(p); // the host's last meal, afloat in the acid
