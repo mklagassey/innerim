@@ -2,6 +2,22 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 2: 2026-11-17, recheck at Version 43 (head e2489a3)
+
+`tsc` clean, 68/68 tests, bot runs at desktop, iPhone 13 and Galaxy S8 sizes with no JavaScript errors. Acceptance checks unchanged from pass 1 (S1, S2, S3, S7 met).
+
+| Bug | Status | Evidence |
+|---|---|---|
+| B1 stomach pathing through acid | **Half fixed** | With the stomach fully explored the walk to the exit now spends 0.0 s in open acid (was 5.7). With normal fog it is still 5.7 s, because `moveTo` only routes through explored tiles, so the dry rim route is almost never known yet when the player taps the exit, and the fallback wades straight across. Suggest: when the dry search does not reach, walk the dry route to the known dry tile closest to the target instead of wading, and only wade when the tap itself lands in acid. |
+| B2 fare shown as 20 | Fixed | Orb reads `8/24`; `#need` says "You need 24 energy to ride it out: 20 for the ride, 4 for the road." |
+| B3 F strips a healthy cell | Fixed | Tumor cell chosen in 20 of 20 test livers (was 15). |
+| B4 starvation blamed on neutrophils | Fixed | Ending "The ship ran dry", log "Nothing left to burn." |
+| B5 see-through menus | Mostly fixed | Veil is now 95% opaque; on a phone the HUD buttons and log line are still faintly visible behind the world map text. Low priority now. |
+| B6 lungs leg drawn early | Fixed | Not drawn until unlocked. |
+| B7 small phone buttons | Fixed for the top row | 40 px tall now. The clock ribbon icons (meal, coffee, sleep) are still 22x18 px tap targets. |
+
+**New, watch only:** the page bot, which cuts the tumor out first and then skims, ran dry in a liver in both desktop runs that ended there (Version 38 and Version 43) (24-energy fare, 1 energy burned every 14 s). That is a simple bot, not proof, but it is the same direction as the S2 energy concern, so it is worth watching in Mick's `energyOnArrival` numbers. Desktop frame times in this pass (median 33 ms) are not meaningful: three browsers shared four CPUs.
+
 ## Pass 1: 2026-11-17, builds unit-2 to Version 40 (head 51e9e59)
 
 **How it was tested.** `npm run build`, `tsc` and `npm test` (66/66 pass at 51e9e59). A Playwright bot (`scripts/qa-bot.cjs`) played the real page at desktop 1366x768, iPhone 13 and Galaxy S8 sizes, about 45 bot minutes in all, clicking every menu, info box, offer and choice through the DOM. Rules-level checks in Node for the systems-design "Done when" lines (`scripts/qa-accept.ts`). Touch tests on an emulated iPhone. Mick's 16 run reports from the artifact's `runs` data.
