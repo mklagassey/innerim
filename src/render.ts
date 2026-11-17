@@ -915,6 +915,16 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.restore();
   }
   // Shepherd's pointer in its first liver: a steady amber ring on the thing it wants, and a small chevron beside the ship toward it. Both breathe slowly; neither blinks.
+  // The docking site, once planted: a small amber lamp on the scar. Steady while it works, dark once broken.
+  if (s.dock && s.visible[idx(s, Math.floor(s.dock.at.x), Math.floor(s.dock.at.y))]) {
+    const q = project(s.dock.at.x, s.dock.at.y), on = !s.dock.broken, glow = v.still ? 0.8 : 0.7 + 0.15 * Math.sin(v.time * 1.1);
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,5,4,0.55)'; ctx.beginPath(); ctx.ellipse(q.x, q.y + 2, 11, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = on ? '#5a4632' : '#3a3632'; ctx.beginPath(); ctx.moveTo(q.x - 7, q.y); ctx.lineTo(q.x, q.y - 16); ctx.lineTo(q.x + 7, q.y); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = on ? 'rgba(240,170,90,0.9)' : 'rgba(120,112,104,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+    if (on) { ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(q.x, q.y - 16, 1, q.x, q.y - 16, 26); g.addColorStop(0, `rgba(255,190,110,${0.7 * glow})`); g.addColorStop(1, 'rgba(255,190,110,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y - 16, 26, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
   // The microscope's lamp on the smear: a steady disc of light that eases in. It never pulses.
   if (s.draw) {
     const q = project(s.draw.disc.x, s.draw.disc.y), up = v.still ? 1 : Math.min(1, s.time / 4), held = Math.min(1, s.draw.held / 10);

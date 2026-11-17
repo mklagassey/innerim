@@ -117,6 +117,7 @@ export interface State {
   draw: { disc: Point; t: number; held: number; shape: number; last: Point; said: boolean } | null; // the tube of her blood on the microscope stage: the lit disc, how long since the unit reached it, how long it has held still there
   due: { kind: Ask['kind']; t: number }[]; // what Shepherd means to put to the unit in this chamber, in order
   stood: boolean; // her immune cells here have been told to stand down
+  dock: { at: Point; hits: number; broken: boolean } | null; // the docking site for Generation 4, once planted
   margin: Set<number>; marginTaken: number; // the healthy cells ringing the last of the nodule, and how many have been taken
   site: Point | null; // where the last of the nodule was
   junction: Junction | null; // a chamber with several ways out: no patrol, no way back, and the mouth you enter is the road you take
@@ -285,7 +286,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     drainHere: 0, tumorCost: carry?.tumorCost ?? 0,
     verdict: '', defied: carry?.defied ?? 0, spots: 0, defiance: {}, obeyedHere: new Set(), defiedNow: [], rulings: [], tutorial: null,
     trust: carry?.trust ?? CONFIG.trust.start, chapter: carry?.chapter ?? 1, slip: carry?.slip ? { ...carry.slip } : null, slipLive: null, slipAt: -1, took: { ...(carry?.took ?? {}) }, met: [...(carry?.met ?? [])], pages: [...(carry?.pages ?? [])], flags: { ...(carry?.flags ?? {}) }, scan: 'nodule', trustPaid: new Set(), selfTest: false,
-    marks: [], echoes: (carry?.echoes ?? []).map((e) => ({ ...e })), marked: false, grabber: null, lane: null, gap: 0, notes: [], draw: null, due: [], stood: false, margin: new Set(), marginTaken: 0, site: null,
+    marks: [], echoes: (carry?.echoes ?? []).map((e) => ({ ...e })), marked: false, grabber: null, lane: null, gap: 0, notes: [], draw: null, due: [], stood: false, dock: null, margin: new Set(), marginTaken: 0, site: null,
     junction: junction ? { kind: junction.kind, exits: junction.exits.map((e, i) => ({ ...e, at: m.mouths![i] })), chose: null } : null, market: false,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
@@ -1068,6 +1069,13 @@ export function strike(s: State, toward?: Point): boolean {
   emit(s, 'swing');
   s.cloak = 0; // violence gives you away
   interrupt(s);
+  // What was planted can be unplanted. Shepherd only hears that the signal has gone.
+  if (s.dock && !s.dock.broken && dist(s.dock.at, p) <= c.reach + 0.6 && ++s.dock.hits >= CONFIG.marks.dockBreaks) {
+    s.dock.broken = true; s.took.beacon = 'broken'; delete s.flags['prop:brochure']; s.flags.beacon = 'broken';
+    trusted(s, -CONFIG.marks.dockTrust);
+    if (stage(s) < 4) { const before = stage(s), l = s.ledger.defied as Record<string, number>; l['beacon-broken'] = 1; s.defied++; s.aware = Math.min(100, s.aware + CONFIG.story.orders.some * (s.flags.repaired ? 0.5 : 1)); tellNow(s, [['shepherd', 'Docking site signal lost. Investigating.'], ['unit', DECISIONS.beacon.unit?.deviate?.[Math.max(0, Math.min(2, stage(s) - 1))]], ...(stage(s) > before ? [['unit', Story.WAKING[stage(s)]] as [Thought['who'], string]] : [])], 1); }
+    float(s, s.dock.at, 'broken', '#ff9a5a'); say(s, 'The docking site comes apart under the second blow. Its little lamp goes out.'); emit(s, 'hit');
+  } else if (s.dock && !s.dock.broken && dist(s.dock.at, p) <= c.reach + 0.6) { float(s, s.dock.at, 'crack', '#ffd35a'); emit(s, 'hit'); }
   const swept = s.antibodies.filter((a) => dist(a, p) <= c.reach);
   if (swept.length) { s.antibodies = s.antibodies.filter((a) => !swept.includes(a)); float(s, swept[0], 'cleared', '#b8c8ff'); }
   for (const e of [...s.enemies]) {
@@ -1999,7 +2007,7 @@ function marks(s: State, dt: number) {
     if (!m.met || m.kind !== 'hold') continue;
     const still = dist(p, m.at) <= (m.near ?? CONFIG.marks.near) && !p.path.length && !p.channel && !s.held;
     m.t = still ? m.t + dt : Math.max(0, m.t - dt * 2);
-    if (m.t >= CONFIG.marks.hold) { m.done = true; emit(s, 'heal'); float(s, m.at, 'done', '#ffb84a'); take(s, m.id, 'obey'); }
+    if (m.t >= CONFIG.marks.hold) { m.done = true; emit(s, 'heal'); float(s, m.at, 'done', '#ffb84a'); take(s, m.id, 'obey'); if (m.id === 'beacon') s.dock = { at: { ...m.at }, hits: 0, broken: false }; }
   }
 }
 /** Leaving: whatever Shepherd marked here and the unit did not do, it did not do. */

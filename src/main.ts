@@ -387,9 +387,12 @@ function junction() {
     to: leg.to, label: T.NODES[leg.to].name, note: T.riskWord(T.riskOf(trip, leg)) || 'quiet',
     assigned: split && T.escorted(trip, leg), known: trip.seen.includes(leg.to), tint: TINT[leg.to] ?? '70,110,255', sense: SENSE[leg.to],
   }));
-  const done = c.excised >= CONFIG.tumor.goal;
   // Margins not taken: one time in four, it comes back at the edge. Decided once, when the unit comes home with the job done.
-  if (done && kind === 'heart' && c.took?.['tumour-order'] === 'deviate' && !c.flags?.margins) { (c.flags ??= {}).margins = 'checked'; if (trip.rng() < CONFIG.marks.recurrence) c.flags['e:recurrence'] = true; }
+  if (c.excised >= CONFIG.tumor.goal && kind === 'heart' && c.took?.['tumour-order'] === 'deviate' && !c.flags?.margins) {
+    (c.flags ??= {}).margins = 'checked';
+    if (trip.rng() < CONFIG.marks.recurrence) { c.flags['e:recurrence'] = true; c.excised = CONFIG.tumor.goal - CONFIG.marks.regrown; const st = Story.stageOf(c.aware ?? 0); tell([{ who: 'unit', st, text: Story.REGROWN[st] }]); }
+  }
+  const done = c.excised >= CONFIG.tumor.goal;
   // The next unit: Shepherd remembers the last one, and so does something adrift in the blood.
   if (!c.flags?.greeted) { (c.flags ??= {}).greeted = true; const was = lastUnit(); if (was.games > 0) { if (was.line && was.line !== 'ACK.') c.flags.prevLine = was.line; tell([{ who: 'shepherd', text: (was.ending === 'tithonus' ? Story.REMEMBERS_TITHONUS : Story.REMEMBERS[Math.min(3, was.games)]).replace('{serial}', Story.UNIT) }]); } }
   if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 2) exits.push({ to: 'arm', label: 'Subclavian artery', note: 'to her arm', assigned: false, known: true, tint: TINT.arm, sense: 'This one runs out along her arm, to the vein at the elbow. Once a week a needle goes in there, and a tube of her blood goes under her own microscope.' });
@@ -626,13 +629,12 @@ function restarts(box: HTMLElement) {
 function finish(path: Story.Path) {
   const k = trip.carry ?? freshCarry(), kept = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => k.upgrades[id] > 0).map((id) => `${UPGRADES[id].name} ${roman(k.upgrades[id])}`);
   const last = lastLine(k);
-  const end = Story.conclude({ path, aware: k.aware ?? 0, kin: k.kin ?? 0, hostHealth: k.hostHealth, hostLowest: k.ledger?.hostLowest ?? CONFIG.host.maxHealth, repaired: !!k.flags?.repaired, beacon: k.took?.beacon === 'obey', dry: !!k.flags?.dry, leversForMe: k.ledger?.leversForMe ?? 0, recurred: !!k.flags?.['e:recurrence'], response: Number(k.flags?.response) || 0, lastLine: last });
+  const end = Story.conclude({ path, aware: k.aware ?? 0, kin: k.kin ?? 0, hostHealth: k.hostHealth, hostLowest: k.ledger?.hostLowest ?? CONFIG.host.maxHealth, repaired: !!k.flags?.repaired, beacon: k.took?.beacon === 'obey', dry: !!k.flags?.dry, leversForMe: k.ledger?.leversForMe ?? 0, recurred: !!k.flags?.['e:recurrence'], returned: k.flags?.recurrence === 'cleared', response: Number(k.flags?.response) || 0, lastLine: last });
   (k.took ??= {}).final = path; ended = end.id;
   $('world').hidden = true; started = false;
   forgetTrip();
   keepEcho(k.aware ?? 0);
   const show = () => {
-    $('prologue').hidden = true;
     $('over-title').textContent = end.title;
     $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}\n\nLast log: ${end.last}`;
     $('over-saved').textContent = '';
@@ -671,6 +673,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   if (ch === 1 && fromLiver) { c.chapter = 2; c.slip ??= { kind: (['hold', 'lamp', 'fork'] as const)[Math.floor(trip.rng() * 3)], meant: trip.rng() < 0.5 ? 'A' : 'B' }; } // the road home is where the first order goes wrong
   else if (ch === 2 && trip.trip >= 2 && (to === 'liver' || to === 'stomach' || to === 'gut')) c.chapter = 3;
   if (home && c.excised >= CONFIG.tumor.goal) c.chapter = 5;
+  if (home && c.excised >= CONFIG.tumor.goal && c.flags?.['e:recurrence']) { delete c.flags['e:recurrence']; c.flags.recurrence = 'cleared'; } // it went back and cut it out, unasked
   if (home && kept && T.commanded(trip)) c.trust = Math.min(100, (c.trust ?? CONFIG.trust.start) + CONFIG.trust.escort);
   if (home && c.flags) delete c.flags.immune; // a fever damped or left alone lasts the trip
   filePages(c);

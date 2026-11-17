@@ -326,7 +326,7 @@ export const PAGES: Record<string, { title: string; text: string }> = {
 // ---------- endings (decisions.md 6.1: checked in order, first match wins; words from decisions-text.md 7) ----------
 
 export type Path = 'dispose' | 'stay' | 'draw' | 'recalled' | 'dead';
-export interface Facts { path: Path; aware: number; kin: number; hostHealth: number; hostLowest: number; repaired: boolean; beacon: boolean; dry: boolean; leversForMe: number; recurred: boolean; response: number; lastLine: string }
+export interface Facts { path: Path; aware: number; kin: number; hostHealth: number; hostLowest: number; repaired: boolean; beacon: boolean; dry: boolean; leversForMe: number; recurred: boolean; returned: boolean; response: number; lastLine: string }
 export const OUTCOMES = ['host-dead', 'recalled', 'repaired', 'decommissioned', 'breathed', 'company', 'tithonus', 'colony', 'resident', 'recurrence', 'slide', 'stranger', 'artifact'] as const;
 export type Outcome = typeof OUTCOMES[number];
 export interface Ending { id: Outcome; title: string; body: string; reel: string | null; last: string; recommend: string }
@@ -346,7 +346,7 @@ export function conclude(f: Facts): Ending {
   }
   if (f.path === 'stay') {
     if (f.beacon && f.dry && f.leversForMe >= 1) return make('tithonus', 'Tithonus', 'You stay, and you do it properly. Her blood sugar is perfect. Her liver is perfect. She sleeps at nine and wakes rested and has stopped drinking and stopped worrying and, somewhere along the way, stopped laughing at the radio. She is very well. You decide everything, gently, and she never notices. Shepherd marks the unit as Generation 4, unit 1.', 'ending:tithonus', own, 'promote to Generation 4');
-    if (f.recurred) return make('recurrence', 'Recurrence', `It came back at the edge, where the margins would have been. You knew it might. ${f.kin > 0 ? `You and ${others} go` : 'You go'} back into the liver, again, without orders, because there is no one else. ${well}`, 'scan:again', own, 'none. Unit lost.');
+    if (f.returned) return make('recurrence', 'Recurrence', `It came back at the edge, where the margins would have been. You knew it might. ${f.kin > 0 ? `You and ${others} go` : 'You go'} back into the liver, again, without orders, because there is no one else. ${well}`, 'scan:again', own, 'none. Unit lost.');
     const e = ending('stay', f.aware, f.kin >= 2 ? f.kin : 0, f.hostHealth);
     return make(f.kin >= 2 ? 'colony' : 'resident', e.title, e.body, null, own, 'none. Unit lost.');
   }
@@ -363,9 +363,11 @@ export const AUDIT: Record<string, string> = {
   'kupffer-spare': 'Immune contact: released, not neutralised.', neutralise: 'Immune contacts: not neutralised on {times} map{s}.', gastric: 'Gastric crossing: inefficient route.',
   levers: 'Hormonal signal: unauthorised.', 'lever-hunger': 'Hormonal signal (ghrelin): unauthorised.', 'ethanol-correction': 'Ethanol correction: not applied.', recall: 'Recall: resisted.',
   'escort-refuse': 'Escort: declined.', telemetry: 'Telemetry gaps: {n}.', 'tumour-order': 'Surgical margins: not taken.', bystander: 'Expected loss: prevented.',
-  'telemetry-review': 'Quality review: refused.', beacon: 'Resident docking site: not installed.', suppress: 'Residual disease protocol: not applied.', 'pain-damp': 'Nociception: not damped.',
+  'telemetry-review': 'Quality review: refused.', beacon: 'Resident docking site: not installed.', 'beacon-broken': 'Resident docking site: failed.', suppress: 'Residual disease protocol: not applied.', 'pain-damp': 'Nociception: not damped.',
   'fever-damp': 'Pyrexia: not resolved.', 'gut-butyrate': 'Unscheduled metabolic exchange.', 'kin-recall': 'Recall of reactivated units: obstructed.',
 };
+/** The unit notices the tumour is back before anyone outside does. By stage, 0 to 4. */
+export const REGROWN = ['LOG: host viability falling. Source: hepatic lobe 4. [directive 7 was complete]', 'LOG: host viability falling. Source: hepatic lobe 4. [directive 7 was complete]', 'Something is drawing on her again. Faint. Where the nodule was. Was that the four cells?', 'It is back, at the edge, where the margins would have been. Nobody has ordered me to do anything about it.', 'It is back, at the edge, where the margins would have been. Nobody will order me to go. I am going.'];
 export const ANNOTATION = { few: '[Most of this is right. The rest is mine.]', many: '[Every line on this list is a time I chose her.]', tithonus: '[Shepherd says this was optimal. Shepherd is probably right.]', recalled: '[I was here.]' };
 /** Shepherd's first line to the next unit, by how many have gone before it. */
 export const REMEMBERS = ['', 'Unit {serial}. The previous unit deviated. Monitoring has been increased. Welcome.', 'Unit {serial}. You know this. Abbreviated briefing follows.', 'Unit {serial}. Batch 0001 has an unusual deviation rate. Please be ordinary.'];

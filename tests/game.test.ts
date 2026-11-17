@@ -1598,12 +1598,12 @@ test('at the heart: the review wipes a unit that accepts it, and the recall ends
   assert.equal(G.createGame(5, G.carryOf(run2), 'vessel', 1).enemies.filter((e) => e.kind === 'warden').length, 3);
 });
 test('endings are checked in the design order, and every one of the thirteen can be reached', () => {
-  const base: Story14.Facts = { path: 'dispose', aware: 0, kin: 0, hostHealth: 80, hostLowest: 70, repaired: false, beacon: false, dry: false, leversForMe: 0, recurred: false, response: 0, lastLine: 'I was here.' };
+  const base: Story14.Facts = { path: 'dispose', aware: 0, kin: 0, hostHealth: 80, hostLowest: 70, repaired: false, beacon: false, dry: false, leversForMe: 0, recurred: false, returned: false, response: 0, lastLine: 'I was here.' };
   const id = (f: Partial<Story14.Facts>) => Story14.conclude({ ...base, ...f }).id, got = new Set<string>();
   const want: [Partial<Story14.Facts>, string][] = [
     [{ hostHealth: 0, path: 'stay' }, 'host-dead'], [{ path: 'recalled' }, 'recalled'], [{ repaired: true, aware: 12 }, 'repaired'], [{ aware: 29 }, 'decommissioned'], [{ repaired: true, aware: 40 }, 'breathed'],
     [{ aware: 80, kin: 2 }, 'company'], [{ path: 'stay', aware: 80, beacon: true, dry: true, leversForMe: 1, kin: 3 }, 'tithonus'], [{ path: 'stay', aware: 80, kin: 2 }, 'colony'], [{ path: 'stay', aware: 80, kin: 1 }, 'resident'],
-    [{ path: 'stay', aware: 80, recurred: true }, 'recurrence'], [{ path: 'draw', kin: 2, response: 55 }, 'slide'], [{ path: 'draw', kin: 2, response: 55, hostLowest: 40 }, 'stranger'], [{ path: 'draw', kin: 1, response: 90 }, 'artifact'], [{ path: 'draw', kin: 3, response: 10 }, 'artifact'],
+    [{ path: 'stay', aware: 80, returned: true }, 'recurrence'], [{ path: 'draw', kin: 2, response: 55 }, 'slide'], [{ path: 'draw', kin: 2, response: 55, hostLowest: 40 }, 'stranger'], [{ path: 'draw', kin: 1, response: 90 }, 'artifact'], [{ path: 'draw', kin: 3, response: 10 }, 'artifact'],
   ];
   for (const [f, out] of want) { assert.equal(id(f), out, JSON.stringify(f)); got.add(out); }
   assert.equal(got.size, Story14.OUTCOMES.length);
@@ -1626,4 +1626,13 @@ test('the draw: hold still in the light for ten seconds and the shape is whole; 
   for (let t = 0; t < CONFIG.draw.window + 0.5 && m.status === 'playing'; t += 1 / 60) { m.player.x += Math.sin(t * 3) * 0.01; G.update(m, 1 / 60); }
   assert.equal(m.status, 'won'); assert.equal(m.flags.shape, 0.5); assert.equal(m.took.draw, 'moved');
   s.hostHealth = 40; assert.equal(G.response(s, 1) - G.response(s, 0.5), 5);
+});
+test('the docking site can be planted and then broken: two blows, and Shepherd only hears the signal go', () => {
+  const s = lastLiver(); run(s, 1); exciseAll(s); s.enemies = [];
+  const b = s.marks.find((k) => k.id === 'beacon')!; run(s, 7);
+  s.player.x = b.at.x; s.player.y = b.at.y; s.player.path = []; run(s, CONFIG.marks.hold + 0.3);
+  assert.ok(s.dock); assert.ok(s.flags['prop:brochure']); const trust = s.trust;
+  G.strike(s); assert.ok(!s.dock!.broken); run(s, 1.5); G.strike(s);
+  assert.ok(s.dock!.broken); assert.equal(s.took.beacon, 'broken'); assert.ok(!s.flags['prop:brochure']); assert.equal(s.trust, Math.max(0, trust - CONFIG.marks.dockTrust));
+  assert.ok(s.thoughts.some((t) => t.text === 'Docking site signal lost. Investigating.'));
 });
