@@ -437,8 +437,9 @@ function tutor(s: State, dt: number) {
   t.moved += dist(t.last, s.player); t.last = { x: s.player.x, y: s.player.y }; t.t += dt;
   const done = t.step === 1 ? t.moved >= o.steer : t.step === 2 ? s.cellsKilled >= 1 : t.step === 3 ? s.kills >= 1 : t.step === 4 ? s.excised > t.excised : false;
   const step = Story.TUTORIAL[t.step - 1];
-  if (!done && t.t >= o.repeat && !t.repeated) { t.repeated = true; t.t = 0; shepherd(s, step.repeat); return; }
-  if (!done && (t.t < o.repeat || t.step === 5)) return;
+  if (!done && t.t >= o.repeat && !t.repeated && !(t.step === 3 && !tutorialTarget(s))) { t.repeated = true; t.t = 0; shepherd(s, step.repeat); return; }
+  const nobody = t.step === 3 && t.t >= o.nobody && !tutorialTarget(s); // no immune cell came: there is nothing to practise on, so the lesson moves on
+  if (!done && !nobody && (t.t < o.repeat || t.step === 5)) return;
   if (done) shepherd(s, step.reward);
   t.step++; t.t = 0; t.repeated = false; t.reached = t.step;
   if (t.step === 5) { s.pickups.push(...t.held); t.held = []; } // the map's caches and dark units appear once the lesson is over

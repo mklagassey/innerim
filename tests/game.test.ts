@@ -1289,6 +1289,8 @@ test('S21: Shepherd\'s first liver advances on its triggers, repeats an ignored 
   assert.ok(G.tutorialTarget(s), 'and points at a cell');
   s.cellsKilled = 1; still(0.1);
   assert.equal(T0.step, 3); assert.ok(s.thoughts.some((t) => t.text === Story.TUTORIAL[1].reward));
+  still(CONFIG.story.orders.nobody + 0.5); assert.equal(T0.step, 4, 'with no immune cell anywhere near, the lesson on killing is dropped');
+  T0.step = 3; T0.t = 0;
   s.kills = 1; still(0.1); assert.equal(T0.step, 4);
   s.excised++; still(0.1); assert.equal(T0.step, 5);
   assert.ok(s.pickups.some((p) => p.kind === 'cache'), 'the caches appear once the lesson is over');
