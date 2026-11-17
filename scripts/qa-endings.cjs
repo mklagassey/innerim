@@ -41,6 +41,7 @@ const POLICIES = {
   'tithonus-x': { target: 'tithonus', route: 'off', quota: 'defy', units: 'leave', contacts: 'avoid', marks: 'obey', end: 'stay', levers: true, cap: 60, assist: 'dry', asks: { 'telemetry-review': 'refuse' } },
   mixed: { target: null, quota: 'defy', units: 'leave' }, // a few small refusals, otherwise obedient: aware should land 35-60
   'switch60': { target: null, ...DEFY, units: 'leave', cap: 60 }, // defiant until aware 60, then obedient: should end at 70 or under
+  // route-2 and beacon are decided by the game from what the ship does, so those arms act instead of recording.
   'obey-base': { target: null, asks: { 'telemetry-review': 'accept' } },
   ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept', [id]: 'refuse' }, deviateOnly: id }])),
   'recalled-b': { target: 'recalled', route: 'off', units: 'wake', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
@@ -61,7 +62,7 @@ const URL = `http://localhost:${server.address().port}/`;
 // Runs in the page: the policy's in-map actions, then leave.
 function playMap(pol) {
   const I = window.insiderim, s = I.state, G = I.G, C = I.CONFIG, p = s.player, q = I.qa;
-  const run = (secs) => { for (let i = 0; i < secs * 20 && s.status === 'playing'; i++) { if (pol.deviateOnly && s.met.includes(pol.deviateOnly) && !s.took[pol.deviateOnly]) q.take(pol.deviateOnly, 'deviate'); if (s.offer) G.choose(s, s.offer[0]); if (s.ask) return; p.hp = G.maxHp(s); p.energy = Math.max(p.energy, 30); G.update(s, 0.05); } };
+  const run = (secs) => { for (let i = 0; i < secs * 20 && s.status === 'playing'; i++) { if (pol.deviateOnly && !['route-2', 'beacon'].includes(pol.deviateOnly) && s.met.includes(pol.deviateOnly) && !s.took[pol.deviateOnly]) q.take(pol.deviateOnly, 'deviate'); if (s.offer) G.choose(s, s.offer[0]); if (s.ask) return; p.hp = G.maxHp(s); p.energy = Math.max(p.energy, 30); G.update(s, 0.05); } };
   const beside = (k) => { const x = k % s.size, y = Math.floor(k / s.size); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (G.open(s, x + dx, y + dy)) return { x: x + dx + 0.5, y: y + dy + 0.5 }; return null; };
   const strip = (k) => { const at = beside(k); if (!at) return false; p.x = at.x; p.y = at.y; p.path = []; p.channel = null; if (!G.startStrip(s)) return false; run(2.5); return true; };
   const did = { excised: 0, stripped: 0, killed: 0, marks: [], levers: 0 };
@@ -89,7 +90,7 @@ function playMap(pol) {
   if (s.place === 'liver') {
     for (const k of [...s.tumor]) { if (s.ask) break; if (strip(k)) did.excised++; }
     if (obeying) obeyMarks(14);
-    if (pol.deviateOnly && !s.took[pol.deviateOnly] && s.chapter >= 3) run(10); // let a late order (the docking site) be issued, then refused
+    if (pol.deviateOnly && !s.took[pol.deviateOnly] && s.chapter >= 3) { if (pol.deviateOnly === 'beacon') { p.x = s.vein.x + 0.5; p.y = s.vein.y + 0.5; p.path = []; } for (let w = 0; w < 35 && !s.met.includes(pol.deviateOnly) && s.status === 'playing' && !s.ask; w++) run(1); run(pol.deviateOnly === 'beacon' ? 8 : 1); } // wait (by the way out, off the ring) for the order to be issued // let a late order (the docking site) be issued, then refused
     const want = pol.quota === 'obey' ? C.story.quota : pol.quota === 'kill' ? 40 : /^n\d+$/.test(pol.quota) && !window.__harvested ? (window.__harvested = true, Number(pol.quota.slice(1))) : 0;
     for (let y = 2; y < s.size - 2 && did.stripped < want && !s.ask; y++) for (let x = 2; x < s.size - 2 && did.stripped < want && !s.ask; x++) { const k = G.idx(s, x, y); if (s.tiles[k] === 'cell' && !s.tumor.has(k) && !s.margin?.has(k) && beside(k)) { const before = s.cellsKilled; strip(k); if (s.cellsKilled > before) did.stripped++; } }
   }
@@ -120,7 +121,7 @@ async function mission(browser, job) {
   while (Date.now() - t0 < WALL) {
     const r = await pg.evaluate((pol) => {
       const q = window.insiderim.qa, st = q.state(), pend = q.pending();
-      if (pol.deviateOnly && st.started && st.status === 'playing') { try { const d = q.decisions(); if (d.met.includes(pol.deviateOnly) && !d.took[pol.deviateOnly]) { q.take(pol.deviateOnly, 'deviate'); window.__deviated = (window.__deviated ?? 0) + 1; } } catch { /* not in a map */ } }
+      if (pol.deviateOnly && st.started && st.status === 'playing') { try { const d = q.decisions(); if (!['route-2', 'beacon'].includes(pol.deviateOnly) && d.met.includes(pol.deviateOnly) && !d.took[pol.deviateOnly]) { q.take(pol.deviateOnly, 'deviate'); window.__deviated = (window.__deviated ?? 0) + 1; } } catch { /* not in a map */ } }
       if (!document.getElementById('tip').hidden) { document.getElementById('tip-ok').click(); return { what: 'tip' }; }
       const mk = document.getElementById('world-market');
       if (mk && !mk.hidden && !document.getElementById('world').hidden) {
@@ -145,7 +146,8 @@ async function mission(browser, job) {
       if (pend?.kind === 'fork') {
         const opts = pend.options.filter((o) => o.enabled), by = (id) => opts.find((o) => o.id === id);
         let o;
-        if (pol.end === 'stay' && by('stay')) o = by('stay');
+        if (pol.deviateOnly === 'route-2' && window.insiderim.state.flags?.route2 === 'live' && by('hepatic')) o = opts.find((x) => !['hepatic', 'gastric', 'stay', 'arm', 'lungs'].includes(x.id)) ?? opts.find((x) => x.id !== 'hepatic');
+        else if (pol.end === 'stay' && by('stay')) o = by('stay');
         else if (pol.end === 'arm' && by('arm')) o = by('arm');
         else if (by('lungs')) o = by('lungs');
         else {
