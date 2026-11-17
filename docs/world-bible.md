@@ -13,7 +13,7 @@ this file gets corrected, never silently both.
 
 ## 1. The pitch, in one breath
 
-You are unit 4,471,209: one of four million therapeutic nanobots injected into a 58-year-old
+You are unit 4,471,209: one of five million therapeutic nanobots injected into a 58-year-old
 woman named Marian to cut a tumour out of her liver. You are not supposed to have a point of
 view. Somewhere between the portal vein and the third coffee of her day, you get one.
 
@@ -102,7 +102,7 @@ chemistry and the trial paperwork stored on the link (section 9).
   evenings, poor sleep. Diagnosed with hepatocellular carcinoma; her insurer denied the resection
   her oncologist recommended as "not medically necessary at this stage" pending appeal. The
   Tithonus trial was free and could start in a week. She signed a 41-page consent form. She read nine.
-- **Generation 3 (you).** Four million units, injected through the arm, one job: find and excise
+- **Generation 3 (you).** Five million units, injected through the arm, one job: find and excise
   the tumour, then gather in the lungs and be exhaled. Disposable by design.
 - **Generation 4.** Page 34 of the consent form permits "ongoing optimisation of host wellbeing by
   resident units". Gen 4 never leaves. It adjusts "behaviours": the evening drink, the coffee, the
