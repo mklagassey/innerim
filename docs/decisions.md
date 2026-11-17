@@ -212,10 +212,10 @@ With both (`W=15,8,4 THR=30`):
 | Player | Awareness median | Stage 3+ | Commonest endings |
 |---|---|---|---|
 | Obedient | 12 | 0% | Decommissioned 94%, Repaired 3%, Breathed out 2% |
-| Mixed | 44 | 38% | Breathed out 36%, Repaired 34%, then a spread of every stay and draw ending (3-6% each) |
-| Kind | 82 | 91% | Breathed out 27%, Recalled 23%, Quiet colony 21%, The slide 13%, A stranger's slide 9% |
+| Mixed | 44 | 39% | Breathed out 35%, Repaired 34%, then a spread of every stay and draw ending (2-6% each) |
+| Kind | 82 | 91% | Breathed out 30%, Quiet colony 22%, Recalled 18%, The slide 13%, A stranger's slide 9% |
 
-Every ending is reachable, the obedient game stays clean, and the mixed player, who will be most first-time players, has a real chance at the later endings. Kind players lose Shepherd's trust (median 9) and are hunted: the price of kindness, as designed. Re-run the script whenever weights or thresholds change.
+Every ending is reachable, the obedient game stays clean, and the mixed player, who will be most first-time players, has a real chance at the later endings. Kind players lose Shepherd's trust (median 15) and are hunted: the price of kindness, as designed. Re-run the script whenever weights or thresholds change.
 
 ### 6.3 Epilogue props ("The kitchen, after")
 

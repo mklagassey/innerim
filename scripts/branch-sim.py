@@ -27,7 +27,7 @@ def game(pdefy, rng, final_pref):
     else: ob(6)
     # liver 1 sibling at step 5 (stage 0 options unless already flickered)
     if rng.random()<pdefy:
-        if stage(aware)>=1: defy('salvage',M); kin+=1; trust-=10
+        if stage(aware)>=1: defy('salvage',M); kin+=1; trust-=8
         else: defy('salvage',L)
     else: ob(5)
     # ch2 slip
@@ -37,7 +37,7 @@ def game(pdefy, rng, final_pref):
     # lamp sibling
     r=rng.random()
     if r<pdefy:
-        if stage(aware)>=1 or rng.random()<0.6: defy('salvage',M if stage(aware)>=1 else S); kin+=1; trust-=10
+        if stage(aware)>=1 or rng.random()<0.6: defy('salvage',M if stage(aware)>=1 else S); kin+=1; trust-=8
         else: defy('salvage',L)
     else: ob(5)
     # first-fright-transit m1 (50% met)
@@ -62,7 +62,7 @@ def game(pdefy, rng, final_pref):
         if rng.random()<pdefy*0.7: defy('levers',S)
     # liver 2 sibling (always) + liver1 sibling handled after tutorial
     for _ in range(1):
-        if rng.random()<pdefy and stage(aware)>=1: defy('salvage',M); kin+=1; trust-=10
+        if rng.random()<pdefy and stage(aware)>=1: defy('salvage',M); kin+=1; trust-=8
         elif rng.random()<pdefy: defy('salvage',L)
         else: ob(5)
     # minor decisions: about 4 met
@@ -72,7 +72,7 @@ def game(pdefy, rng, final_pref):
     # vessel siblings ~ 2 vessels * 0.4
     for _ in range(2):
         if rng.random()<0.4:
-            if rng.random()<pdefy and stage(aware)>=1: defy('salvage',M); kin+=1; trust-=10
+            if rng.random()<pdefy and stage(aware)>=1: defy('salvage',M); kin+=1; trust-=8
             elif rng.random()<pdefy: defy('salvage',L)
             else: ob(5)
     # liver2: neutralise, quota-2, ethanol, minor
