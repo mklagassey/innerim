@@ -209,6 +209,16 @@ Columns are **Order** (Shepherd, when the moment begins), **Obeyed** (Shepherd),
 - s2: `It was going to be destroyed for nothing. So would I, one day. Was that why?`
 - s3: *I pulled it out of the swarm. I don't know if anyone is in there. Neither does Shepherd, and it was happy to let it go.*
 
+**glucose** (the aside, later)
+- s1: `LOG: glucose uptake. Permitted. [not efficient]`
+- s2: `Permitted, not efficient. I keep choosing the one that is permitted and not the one that is asked.`
+- s3: *Sugar from her blood costs her nothing. Shepherd calls that a waste of time. I have the time.*
+
+**hitchhikers** (releasing stowaway flora in the gut; no order)
+- s1: `LOG: stowaway released. [returned]`
+- s2: `It was never mine to throw. It lives here. Why did I carry it so long?`
+- s3: *I let it go where it came from. It does not know it was ever away. I do.*
+
 ### Chapter 4
 
 **telemetry-review** (new)
@@ -218,6 +228,19 @@ Columns are **Order** (Shepherd, when the moment begins), **Obeyed** (Shepherd),
 - s1 (deviated): `LOG: upload refused. [I would like to keep it]`
 - s2 (deviated): `Factory condition. That means before. Before what? Before me.`
 - s3 (deviated): *Shepherd asked for everything I have noticed in here so it could fix it. No. It is the only thing I have that is mine.*
+
+**Repaired, then met by kin** (telemetry-review obeyed while kin exist)
+- Kin's ping: `it's me.` then, a beat later: `...you don't know me.`
+- The repaired unit's log: `UNIT ID? Not in registry. Ignoring.`
+- Shepherd: **Unregistered unit in proximity. Salvage on contact.**
+
+**kin-recall** (the vessel map where Shepherd recalls your kin)
+- Arrival, Shepherd: **Units {serials}: recall in progress. Do not interfere.**
+- Intercepted, kin's ping: `you came.`
+- Intercepted, unit s3: *I got there first. Shepherd will not forgive that. Good.*
+- Intercepted, Shepherd: **Recall obstructed. Logged.**
+- Let go, Shepherd: **Recall complete. Thank you for your cooperation.**
+- Let go, unit s3: *I let them take it. I told myself I had no choice. I had one.*
 
 **beacon** (new)
 - Order: **Install resident docking site, hepatic lobe 4. Prepares the host for Generation 4: units that stay, so the host never needs another treatment.**

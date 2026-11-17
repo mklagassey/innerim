@@ -104,35 +104,10 @@ What makes it subtle rather than a trope:
   was it garbled, or did I just want it to say that?
 - The unit's first bracket arrives right after, and it is about the **choice**, not the link.
 
-### The three garbled orders (one per game, chosen by where the fright happens)
+### The three garbled orders
 
-**G1 · In a vessel on the return leg: which vein**
-- Garbled: `PROCEED TO ████IC VEIN`
-- The two exits on that map are marked on the automap as **HEPATIC VEIN** and **CYSTIC VEIN**
-  (the cystic vein drains the gallbladder; real). Both end in "-IC VEIN".
-- Reading A: *Hepatic vein* (the assigned route home, shorter, escorted).
-- Reading B: *Cystic vein* (a detour past the gallbladder).
-- If meant A, taken B: *"Order was hepatic vein. Deviation logged. Link quality was within tolerance."*
-- If meant B, taken A: *"Order was cystic vein. Gallbladder survey cancelled. Deviation logged. Link quality was within tolerance."*
-- Obeyed either way: *"Order executed."*
-- Note for systems: the cystic vein leads to a short, optional gallbladder map (bile salts dissolve
-  hull like a gentler acid). It can be a one-room survey if a full map is too much.
-
-**G2 · In liver 2, at a strip prompt: now or none**
-- Garbled: `STRIP N██ · HEPATOCYTE CLUSTER 4`
-- Reading A: *Strip now.*
-- Reading B: *Strip none.*
-- If meant "now", didn't strip within 20 s: *"Order was: strip now. Yield deficit logged. Link quality was within tolerance."*
-- If meant "none", stripped: *"Order was: strip none. Cluster 4 was reserved for imaging. Deviation logged. Link quality was within tolerance."*
-- Obeyed: *"Order executed."*
-
-**G3 · In a vessel during a fright: engage or disengage**
-- Garbled: `██ENGAGE NEUTROPHIL`
-- Reading A: *Engage.*
-- Reading B: *Disengage.*
-- If meant engage, player fled: *"Order was: engage. Contact survived. Deviation logged. Link quality was within tolerance."*
-- If meant disengage, player fought: *"Order was: disengage. Unnecessary inflammation logged. Deviation logged. Link quality was within tolerance."*
-- Obeyed: *"Order executed."*
+Superseded: the three slips are now systems design's **Hold / Harvest**, **The lamp** and
+**The fork** (docs/decisions.md section 4). Their text is in docs/decisions-text.md section 2.
 
 ### The first bracket, after a slip (replaces the s21 first bracket for this one event)
 - `LOG: order misread. [misread?]`
