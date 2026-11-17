@@ -690,3 +690,5 @@ All five are within the ±8 host and ±1 hour target.
 pain-damp and beacon could not be measured. Almost every refusal of a hold mark was judged *lapsed*, because the "pressed" test counted any enemy cell within 4 tiles at any moment.
 
 Fix in unit-17.3: a hold mark counts as lapsed only if the unit was engulfed, in contact, or a hunter's target for at least half the time the order stood (`pressedShare` 0.5).
+
+**Escort pair (simulation, Typical, 40 seeds). Accepted as is.** Declining the escort costs 2.7 hull per leg for the attack bot and 1.5 for the stealth bot, and it roughly doubles patrols. A sneaky player loses less by refusing the leash, which suits the theme.
