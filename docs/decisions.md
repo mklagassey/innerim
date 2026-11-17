@@ -635,3 +635,12 @@ Targets are now relative to the bots, since they overstate deaths on every level
 - Vigilant stealth: no worse than Typical attack (about 20%).
 
 The gap between the attack and stealth bots on Vigilant must stay large. That gap is what answers Mick's "go in swinging".
+
+**v78 re-run.** Vigilant deaths: attack 90%, stealth 55%, still about double the targets.
+
+Suspected cause: the bots never patch by hand, and Vigilant has no auto-patch.
+
+Changes:
+- QA bots now patch by hand when hull drops below 40%.
+- Breaking free from an engulf no longer scales with difficulty.
+- Vigilant starting energy: 6 → 7.
