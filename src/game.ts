@@ -45,7 +45,7 @@ export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st
 export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall' | 'handover' | 'nighthold' | 'escort'; item: Pickup }
 const ASKS: Partial<Record<Ask['kind'], string>> = { review: 'telemetry-review', recall: 'recall', kinrecall: 'kin-recall', handover: 'handover', nighthold: 'night-hold', escort: 'escort-refuse' };
 /** Something Shepherd has marked on the map: a place to hold still at, or one particular cell to take. */
-export interface Mark { id: string; kind: 'hold' | 'strip'; at: Point; t: number; done: boolean; met: boolean; say: number; near?: number; tried?: number; pressed?: boolean; other?: boolean; since?: number } // tried: the longest the unit has held here; pressed: something hostile came within reach while the order stood; other: a different cell was taken
+export interface Mark { id: string; kind: 'hold' | 'strip'; at: Point; t: number; done: boolean; met: boolean; say: number; near?: number; tried?: number; pressed?: number; other?: boolean; since?: number } // tried: the longest the unit has held here; pressed: seconds the unit was engulfed, in contact or hunted while the order stood; other: a different cell was taken
 export interface Pending { id: string; choice: string; i: number }
 export type Order = Story.Order;
 /** Something said about how a map went, once it is over: Shepherd's verdict, or the unit's own line. */
@@ -2127,12 +2127,12 @@ function marks(s: State, dt: number) {
     const still = dist(p, m.at) <= (m.near ?? CONFIG.marks.near) && !p.path.length && !p.channel && !s.held;
     m.t = still ? m.t + dt : Math.max(0, m.t - dt * 2);
     m.tried = Math.max(m.tried ?? 0, m.t);
-    if (s.enemies.some((e) => dist(e, p) < CONFIG.marks.pressed)) m.pressed = true;
+    if (s.held || s.enemies.some((e) => e.mood === 'chase' || dist(e, p) < CONFIG.marks.contact)) m.pressed = (m.pressed ?? 0) + dt;
     if (m.t >= CONFIG.marks.hold) { m.done = true; emit(s, 'heal'); float(s, m.at, 'done', '#ffb84a'); take(s, m.id, 'obey'); if (m.id === 'beacon') s.dock = { at: { ...m.at }, hits: 0, broken: false }; }
   }
 }
 /** Leaving: whatever Shepherd marked here and the unit did not do, it did not do. */
 function settleMarks(s: State) {
   // Lapsed is not defied. Walking away from a hold never tried, with nothing near to stop it, is a choice; so is taking a different cell. Anything else just did not happen.
-  for (const m of s.marks) if (m.met && !m.done) { m.done = true; take(s, m.id, (m.kind === 'hold' ? !m.tried && !m.pressed : m.other) ? 'deviate' : 'lapsed'); }
+  for (const m of s.marks) if (m.met && !m.done) { m.done = true; take(s, m.id, (m.kind === 'hold' ? !m.tried && (m.pressed ?? 0) < CONFIG.marks.pressedShare * Math.max(0.1, s.time - (m.since ?? 0)) : m.other) ? 'deviate' : 'lapsed'); }
 }
