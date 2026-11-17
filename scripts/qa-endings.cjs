@@ -42,7 +42,7 @@ const POLICIES = {
   mixed: { target: null, quota: 'defy', units: 'leave' }, // a few small refusals, otherwise obedient: aware should land 35-60
   'switch60': { target: null, ...DEFY, units: 'leave', cap: 60 }, // defiant until aware 60, then obedient: should end at 70 or under
   'obey-base': { target: null, asks: { 'telemetry-review': 'accept' } },
-  ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept' }, deviateOnly: id }])),
+  ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept', [id]: 'refuse' }, deviateOnly: id }])),
   'recalled-b': { target: 'recalled', route: 'off', units: 'wake', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'recalled-c': { target: 'recalled', quota: 'defy', units: 'wake', marks: 'defy', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'host-dead': { quota: 'kill' },
@@ -89,6 +89,7 @@ function playMap(pol) {
   if (s.place === 'liver') {
     for (const k of [...s.tumor]) { if (s.ask) break; if (strip(k)) did.excised++; }
     if (obeying) obeyMarks(14);
+    if (pol.deviateOnly && !s.took[pol.deviateOnly] && s.chapter >= 3) run(10); // let a late order (the docking site) be issued, then refused
     const want = pol.quota === 'obey' ? C.story.quota : pol.quota === 'kill' ? 40 : /^n\d+$/.test(pol.quota) && !window.__harvested ? (window.__harvested = true, Number(pol.quota.slice(1))) : 0;
     for (let y = 2; y < s.size - 2 && did.stripped < want && !s.ask; y++) for (let x = 2; x < s.size - 2 && did.stripped < want && !s.ask; x++) { const k = G.idx(s, x, y); if (s.tiles[k] === 'cell' && !s.tumor.has(k) && !s.margin?.has(k) && beside(k)) { const before = s.cellsKilled; strip(k); if (s.cellsKilled > before) did.stripped++; } }
   }
@@ -153,6 +154,8 @@ async function mission(browser, job) {
         }
         if (!o) return { what: 'fork-none', pend, st };
         const S = window.insiderim.state;
+        // A payoff arm waits at the heart for the order it is meant to refuse, so the refusal is of that order and nothing else.
+        if (pol.deviateOnly && S.time < 7 && !S.took[pol.deviateOnly] && !S.met.includes(pol.deviateOnly)) { return { what: 'wait', st }; }
         const stall = S.pickups.find((i) => i.kind === 'stall' && !i.snooze);
         if (pol.levers && stall && !window.__traded) { window.__traded = true; S.player.x = stall.x; S.player.y = stall.y; S.player.path = []; return { what: 'wait', st }; }
         if (S.due?.length || S.ask) return { what: 'wait', st, due: S.due.map((d) => `${d.kind}@${d.t.toFixed(1)}`).join(',') + ` t=${S.time.toFixed(1)} ask=${S.ask?.kind}` };
