@@ -577,6 +577,7 @@ function hud() {
   const order = G.tutorialOrder(s);
   if ($('order').hidden === !!order) $('order').hidden = !order;
   if (order) set('order', 'text', `Shepherd: ${order}`);
+  $('goal').classList.toggle('yield', !!order && (s.tutorial?.step ?? 5) < 5);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);

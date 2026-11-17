@@ -194,6 +194,7 @@
   #world-map .place.is-stomach circle:first-child, #world-map .place.is-gut circle:first-child { animation: organ-churn 6s ease-in-out infinite; }
   @media (prefers-reduced-motion: reduce) { #world-map .place circle:first-child { animation: none !important; } }
   @media (prefers-reduced-motion: reduce) { .gauge i u, .orb u { transition: none; } #alert.losing b, #alert.losing i { animation: none; } }
+  @media (max-width: 560px) { #goal.yield { display: none; } }
   @media (max-width: 359px) { .tools { left: 6px; right: 6px; gap: 3px; } .tools button { padding: 6px 1px; font-size: 10px; letter-spacing: 0; min-width: 0; } }
 </style>
 <div class="stage">
