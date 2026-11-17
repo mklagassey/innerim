@@ -18,6 +18,7 @@ export interface Layout {
   acid?: Uint8Array; // stomach only: 1 = mucus, 2 = open acid
   rich?: Point[]; // stomach only: parietal cells worth stripping
   tumor?: Point[]; // liver only: a nodule of tumor cells
+  mouths?: Point[]; // a junction only: the far end of each vessel that leaves it
 }
 
 export function mulberry32(seed: number): () => number {
@@ -170,6 +171,40 @@ export function generateVessel(seed: number, patrol: number): Layout {
     if (open(p) && neutrophils.every((q) => q.x !== p.x || q.y !== p.y)) neutrophils.push(p);
   }
   return { size: N, wall, vein, portals: [start], start, glucose: nooks.slice(0, 3), kupffer: [], neutrophils, caches: [], patches: nooks.slice(3, 4), calms: [] };
+}
+
+/** A junction: a chamber the blood pools in for a beat before it is thrown out down one of
+ *  several vessels. You come in on one side; each way out is a mouth in the far wall, and the
+ *  one you steer into is the road you take. There is no patrol in here. */
+export function generateChamber(seed: number, exits: number): Layout {
+  const rng = mulberry32(seed);
+  const N = CONFIG.map.size, mid = Math.floor(N / 2);
+  const wall = new Uint8Array(N * N).fill(1);
+  const clear = (cx: number, cy: number, r: number) => {
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+      for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++)
+        if (x >= 2 && y >= 2 && x < N - 2 && y < N - 2 && Math.hypot(x - cx, y - cy) <= r + 0.3) wall[y * N + x] = 0;
+  };
+  const p1 = rng() * 6.28, p2 = rng() * 6.28, rx = 6, ry = 5.5;
+  const edge = (a: number) => 1 + 0.1 * Math.sin(a * 3 + p1) + 0.06 * Math.sin(a * 5 + p2);
+  for (let y = 3; y < N - 3; y++)
+    for (let x = 3; x < N - 3; x++) {
+      const dx = (x - mid) / rx, dy = (y - mid) / ry;
+      if (Math.hypot(dx, dy) <= edge(Math.atan2(dy, dx))) wall[y * N + x] = 0;
+    }
+  // The way in: a short stub of the vessel that brought you, on the near side.
+  for (let x = mid - rx - 3; x <= mid - rx + 2; x++) clear(x, mid, 1.3);
+  const start = { x: mid - rx - 2, y: mid };
+  // The ways out fan across the far wall, each a little different in width so they can be told apart.
+  const mouths: Point[] = [], spread = exits > 1 ? Math.min(2.2, 0.7 * (exits - 1)) : 0;
+  for (let k = 0; k < exits; k++) {
+    const a = exits > 1 ? -spread / 2 + (spread * k) / (exits - 1) : 0, len = 5, wide = 1.1 + 0.35 * ((k * 2 + 1) % 3) / 2;
+    let x = mid + Math.cos(a) * (rx - 1), y = mid + Math.sin(a) * (ry - 1);
+    for (let i = 0; i < len; i++) { x += Math.cos(a); y += Math.sin(a); clear(Math.round(x), Math.round(y), wide); }
+    mouths.push({ x: Math.round(x), y: Math.round(y) });
+  }
+  const glucose = [{ x: mid - 2, y: mid - 3 }, { x: mid - 2, y: mid + 3 }];
+  return { size: N, wall, vein: start, portals: [], start, glucose, kupffer: [], neutrophils: [], caches: [], patches: [], calms: [], mouths };
 }
 
 /** A patch of stomach lining: a wide lake of acid, a rim of mucus round its shore, and narrow

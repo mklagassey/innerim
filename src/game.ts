@@ -2,7 +2,7 @@
 // APIs in here, so the whole game can be run and tested from plain code.
 import { DIFFICULTY, Difficulty, EVENTS, HostEvent, CONFIG, UPGRADES, UpgradeId } from './config';
 import * as Story from './story';
-import { generate, generateStomach, generateVessel, mulberry32, Point } from './map';
+import { generate, generateChamber, generateStomach, generateVessel, mulberry32, Point } from './map';
 
 export type { Point };
 export type Tile = 'cell' | 'dead' | 'floor';
@@ -32,7 +32,11 @@ export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
-export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling' | 'kin'; snooze?: boolean }
+export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling' | 'kin' | 'stall'; snooze?: boolean }
+/** One way out of a junction. `to` is a place on the circulation, or 'stay'. */
+export interface Exit { to: string; label: string; note: string; assigned: boolean; known: boolean; tint: string; sense?: string; sensed?: boolean; at: Point } // sense: what the unit makes of this mouth the first time it comes near
+export interface Junction { kind: 'heart' | 'gut'; exits: Exit[]; chose: number | null }
+export type JunctionPlan = { kind: Junction['kind']; exits: Omit<Exit, 'at'>[] };
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number } // st: how awake the unit was when it said it
 export interface Ask { kind: 'sibling'; item: Pickup }
 export type Order = Story.Order;
@@ -88,6 +92,8 @@ export interface State {
   defied: number; // standing orders ignored so far
   aware: number; // 0..100: how far this unit has woken up
   kin: number; // other units you have woken
+  junction: Junction | null; // a chamber with several ways out: no patrol, no way back, and the mouth you enter is the road you take
+  market: boolean; // the ship has just come alongside the gut's bacteria: main.ts opens the exchange and clears this
   thoughts: Thought[]; // what the unit and its controller say, in the order they should be shown
   noticed: Set<string>; // what has already been remarked on here
   ask: Ask | null; // a decision waiting to be made; the world holds still meanwhile
@@ -155,6 +161,12 @@ export const stewardship = (l: Ledger, excised: number) => ({
 export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if (c.hostHealth < 80) l.leversForHer++; else l.leversForMe++; }
 export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty; event?: HostEvent | null; tumorCost?: number }
 export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger, defied: { ...s.ledger.defied }, obeyed: { ...s.ledger.obeyed } }, difficulty: s.difficulty, event: s.event, tumorCost: s.tumorCost });
+/** Writes back what was changed while the map stood still: the exchange in the gut works on a copy of what you carry. */
+export function adopt(s: State, c: Carry) {
+  s.player.hp = c.hp; s.player.energy = c.energy; s.upgrades = { ...s.upgrades, ...c.upgrades }; s.patches = c.patches; s.hostHealth = c.hostHealth;
+  s.memory = c.memory; s.host.nap = c.nap; s.host.snack = c.snack; s.flora = c.flora ?? 0; s.aware = c.aware ?? s.aware; s.defied = c.defied ?? s.defied;
+  if (c.ledger) s.ledger = { ...c.ledger, defied: { ...c.ledger.defied }, obeyed: { ...c.ledger.obeyed } };
+}
 export const hard = (s: State) => DIFFICULTY[s.difficulty];
 /** Time passing between maps: the tumor takes its share of the host there too. */
 /** Host health the tumor costs per host hour right now: in step with how much of it is still in. */
@@ -207,8 +219,9 @@ export const acidAt = (s: State, p: Point) => s.acid?.[idx(s, Math.floor(p.x), M
 /** Hull lost per second in open acid right now. */
 export const burnRate = (s: State) => CONFIG.stomach.burn * acidLevel(s) * Math.max(0.1, 1 - CONFIG.stomach.mucinPerLevel * s.upgrades.mucin);
 
-export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3, vessel: Vessel = 'artery', tutorial = false): State {
-  const m = place === 'vessel' ? generateVessel(seed, patrol) : place === 'lung' ? generateVessel(seed, CONFIG.lung.macrophages) : place === 'stomach' ? generateStomach(seed) : generate(seed);
+export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liver', patrol = 3, vessel: Vessel = 'artery', tutorial = false, junction?: JunctionPlan): State {
+  if (junction) place = 'vessel';
+  const m = junction ? generateChamber(seed, junction.exits.length) : place === 'vessel' ? generateVessel(seed, patrol) : place === 'lung' ? generateVessel(seed, CONFIG.lung.macrophages) : place === 'stomach' ? generateStomach(seed) : generate(seed);
   if (place === 'lung') { m.kupffer = m.neutrophils; m.neutrophils = []; } // the lung keeps its own macrophages, not a patrol
   const N = m.size;
   const s: State = {
@@ -232,6 +245,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     search: null, zoneTime: 0,
     drainHere: 0, tumorCost: carry?.tumorCost ?? 0,
     verdict: '', defied: carry?.defied ?? 0, spots: 0, defiance: {}, obeyedHere: new Set(), defiedNow: [], rulings: [], tutorial: null,
+    junction: junction ? { kind: junction.kind, exits: junction.exits.map((e, i) => ({ ...e, at: m.mouths![i] })), chose: null } : null, market: false,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
     decoys: [],
@@ -281,18 +295,18 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   const [lo, hi] = CONFIG.host.surge.first;
   s.host.nextSurge = lo + s.rng() * (hi - lo);
   // Antibodies drift wherever blood runs. Stomach acid takes them apart.
-  if (place !== 'stomach')
+  if (place !== 'stomach' && !junction)
     for (let n = Math.round(s.memory * CONFIG.memory.most * (place === 'vessel' ? 0.5 : 1) * (s.event === 'cold' ? EVENTS.cold.antibodies : 1)), tries = 0; s.antibodies.length < n && tries < 4000; tries++) {
       const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 9) s.antibodies.push({ x: x + 0.5, y: y + 0.5, seed: s.rng() * 100 });
     }
-  if (place !== 'stomach')
+  if (place !== 'stomach' && !junction)
     for (let n = CONFIG.memory.tcells.filter((m) => s.memory >= m).length, tries = 0; n > 0 && tries < 4000; tries++) {
       const x = 2 + Math.floor(s.rng() * (N - 4)), y = 2 + Math.floor(s.rng() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 16) { spawn(s, 'tcell', { x, y }); n--; }
     }
   // Other units of the swarm that have gone dark, adrift where the blood left them.
-  const lost = mulberry32(seed ^ 0x51b1), odds = place === 'liver' ? CONFIG.story.sibling.liver : place === 'vessel' ? CONFIG.story.sibling.vessel : 0;
+  const lost = mulberry32(seed ^ 0x51b1), odds = junction ? 0 : place === 'liver' ? CONFIG.story.sibling.liver : place === 'vessel' ? CONFIG.story.sibling.vessel : 0;
   if (lost() < odds)
     for (let tries = 0; tries < 4000; tries++) {
       const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4));
@@ -310,7 +324,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     }
   }
   // Once Shepherd has flagged you for recall, it sends your own kind after you.
-  if (place === 'liver' || place === 'vessel')
+  if ((place === 'liver' || place === 'vessel') && !junction)
     for (let n = CONFIG.story.warden.from.filter((a) => s.aware >= a).length, tries = 0; n > 0 && tries < 4000; tries++) {
       const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 14) { spawn(s, 'warden', { x, y }); n--; }
@@ -318,8 +332,9 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   // The controller speaks first, for as long as it can still hear you, and then you do.
   // Shepherd's first liver: one order at a time, and nothing on the map to distract from them until the last.
   if (tutorial && place === 'liver') s.tutorial = { step: 1, t: 0, repeated: false, moved: 0, last: { x: s.player.x, y: s.player.y }, held: [], aside: false, excised: s.excised, reached: 1 };
-  if (stage(s) < 4 && Story.ORDERS[place]) s.thoughts.push({ text: s.tutorial ? tutorialOrder(s) : Story.ORDERS[place], who: 'shepherd', t: 1.5 });
-  notice(s, 'enter', place);
+  if (stage(s) < 4 && Story.ORDERS[place] && !junction) s.thoughts.push({ text: s.tutorial ? tutorialOrder(s) : Story.ORDERS[place], who: 'shepherd', t: 1.5 });
+  if (!junction) notice(s, 'enter', place);
+  if (junction?.kind === 'gut') s.pickups.push({ x: Math.floor(N / 2) + 2.5, y: Math.floor(N / 2) + 0.5, kind: 'stall' });
   // Units you have woken turn up where you are going, lamps on, with sugar they have saved for you.
   if (place !== 'lung' && place !== 'stomach')
     for (let n = Math.min(s.kin, CONFIG.story.kin.most), tries = 0; n > 0 && tries < 4000; tries++) {
@@ -329,9 +344,10 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   m.kupffer.forEach((p) => spawn(s, 'kupffer', p));
   // With a cold, some of the liver's neutrophils have been called away to the airways.
   m.neutrophils.slice(0, Math.max(1, m.neutrophils.length + (place === 'liver' && s.event === 'cold' ? EVENTS.cold.neutrophils : 0))).forEach((p) => spawn(s, 'neutrophil', p));
-  say(s, place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
+  say(s, junction ? (junction.kind === 'heart' ? 'The heart. Blood from the whole body pours in around you and pauses, for half a beat, before the valve. Every opening in the far wall is a vessel out.' : 'The gut. Trillions of bacteria, and almost nothing of the immune system. The portal vein drains it to the liver.') : place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
   if (s.event) say(s, outside(s, [...EVENTS[s.event].lines]));
   s.host.fever = fever(s);
+  if (junction) s.explored.fill(1); // the swarm has charted the junctions: the chamber is known before you light it
   if (s.tutorial) { s.tutorial.held = s.pickups.filter((i) => i.kind === 'cache' || i.kind === 'sibling'); s.pickups = s.pickups.filter((i) => !s.tutorial!.held.includes(i)); }
   look(s);
   return s;
@@ -498,6 +514,7 @@ export const trailLife = (s: State) => CONFIG.scent.trailLife * scentScale(s);
 
 /** Which way the blood is running at a spot, as a unit vector (or nothing, in a still corner). */
 export function currentAt(s: State, at: Point): Point {
+  if (s.junction) return { x: 0, y: 0 }; // the blood pools here between beats
   if (s.place === 'lung' && !breathingOut(s)) { const out = flowAt(s, at); return { x: -out.x, y: -out.y }; }
   return flowAt(s, at);
 }
@@ -767,7 +784,7 @@ function follow(s: State, b: Point & { path: Point[] }, speed: number, dt: numbe
 // ---------- what the player can do ----------
 
 export const glucoseHere = (s: State) => s.glucose.get(idx(s, Math.floor(s.player.x), Math.floor(s.player.y))) ?? 0;
-export const atVein = (s: State) => dist(s.player, mid(s.vein)) < 1.6;
+export const atVein = (s: State) => !s.junction && dist(s.player, mid(s.vein)) < 1.6;
 /** Out of a liver you pay the fare in energy. Along a vessel the current simply takes you. */
 export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.player.energy >= CONFIG.energy.quota + CONFIG.energy.quotaKeep);
 
@@ -1257,7 +1274,14 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, digesting(s.host.hour, s.host.snack, s.event) > 0.4 ? `${s.host.hour < 10 ? 'Breakfast' : s.host.hour < 16 ? 'Lunch' : 'Dinner'}. The acid rose while you were in it.` : 'The acid eats through the hull.'); return; }
   }
 
+  if (s.junction) for (const ex of s.junction.exits) if (ex.sense && !ex.sensed && dist(p, mid(ex.at)) < 5.5) { ex.sensed = true; say(s, ex.sense); }
+  if (s.junction) for (const [i, ex] of s.junction.exits.entries()) if (dist(p, mid(ex.at)) < 1.4) { s.junction.chose = i; s.status = 'won'; emit(s, 'win'); return; }
   for (const item of [...s.pickups]) {
+    if (item.kind === 'stall') {
+      if (dist(item, p) > 2.6) item.snooze = false;
+      else if (dist(item, p) <= 1.2 && !item.snooze) { item.snooze = true; s.market = true; stop(s); }
+      continue;
+    }
     if (item.kind === 'sibling') {
       if (dist(item, p) > 2.2) item.snooze = false;
       else if (dist(item, p) <= 0.9 && !item.snooze) { if (!s.noticed.has('sibling')) shepherd(s, Story.STANDING.salvage.arrival); notice(s, 'sibling'); s.ask = { kind: 'sibling', item }; stop(s); }

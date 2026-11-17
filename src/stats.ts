@@ -3,7 +3,7 @@
 import { CONFIG } from './config';
 import * as G from './game';
 
-export const BUILD = 'unit-11'; // bump when rules change so reports can be compared fairly
+export const BUILD = 'unit-12a'; // bump when rules change so reports can be compared fairly
 
 const COUNTED = ['strip', 'skim', 'swing', 'shot', 'hit', 'hurt', 'spot', 'surge', 'net', 'sniff', 'cloak', 'heal', 'calm', 'pickup', 'cache', 'upgrade', 'alarm', 'burn', 'tag', 'excise', 'slam', 'board'];
 
