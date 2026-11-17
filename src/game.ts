@@ -56,14 +56,17 @@ export interface State {
   sinceHurt: number; // seconds since the hull last took damage
   ledger: Ledger;
   difficulty: Difficulty;
+  niche: Set<number>; // liver only: floor tiles tucked into the space of Disse, where innate cells cannot follow
+  hiding: boolean;
+  nicheTime: number; // seconds spent tucked in; past the limit the hull starts to foul
   silent: boolean; // running silent: slow, no footprints, half the plume
   held: { id: number; t: number; hits: number } | null; // engulfed by a macrophage
-  tally: { silent: number; firstStrikes: number; grabs: number }; // for the run report
+  tally: { silent: number; firstStrikes: number; grabs: number; niches: number }; // for the run report
   starved: boolean; // the ship died of an empty tank, not of anything that caught it
   drained: number; // fractions of host health the tumor has taken, not yet a whole point
   cloakOffered: boolean; // the first liver cache always offers the cloak, once
   arrived: { energy: number; hp: number }; acidTime: number; // for the run report
-  search: (Point & { r: number }) | null; // where they last had you, and how far the hunt has spread from there
+  search: (Point & { r: number; dropped?: boolean }) | null; // where they last had you, and how far the hunt has spread from there
   zoneTime: number; // seconds spent inside it
   verdict: '' | 'obeyed' | 'defied'; // what Shepherd made of your harvest when you left the liver
   defied: number; // standing orders ignored so far
@@ -201,7 +204,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
-    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, tally: { silent: 0, firstStrikes: 0, grabs: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
@@ -271,6 +274,17 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
       const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4));
       if (open(s, x, y) && dist(s.player, { x, y }) > 12 && !s.tumor.has(idx(s, x, y))) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'sibling' }); break; }
     }
+  // Hiding places: nooks in the wall with liver cells on at least two sides, spread through the lobule.
+  if (place === 'liver') {
+    const spots: Point[] = [];
+    for (let tries = 0; tries < 6000 && spots.length < CONFIG.niche.count; tries++) {
+      const x = 3 + Math.floor(lost() * (N - 6)), y = 3 + Math.floor(lost() * (N - 6)), i = idx(s, x, y);
+      if (!open(s, x, y) || s.glucose.has(i) || dist(s.player, { x, y }) < 5 || dist(mid(s.vein), { x, y }) < 4) continue;
+      const walls = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => s.tiles[idx(s, x + dx, y + dy)] === 'cell' && !s.tumor.has(idx(s, x + dx, y + dy))).length;
+      if (walls < 2 || walls > 3 || spots.some((q) => dist(q, { x, y }) < CONFIG.niche.apart)) continue;
+      spots.push({ x, y }); s.niche.add(i);
+    }
+  }
   // Once Shepherd has flagged you for recall, it sends your own kind after you.
   if (place === 'liver' || place === 'vessel')
     for (let n = CONFIG.story.warden.from.filter((a) => s.aware >= a).length, tries = 0; n > 0 && tries < 4000; tries++) {
@@ -910,7 +924,9 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind | 'hunger') {
 
 /** True once the immune cells have lost you for long enough that the alert is draining fast. */
 /** Inside the area the immune system is combing. Acid and mucus hide you even there: nothing can taste you in them. */
-export const inSearch = (s: State) => !!s.search && dist(s.player, s.search) <= s.search.r && !acidAt(s, s.player);
+/** Tucked into the wall, out of the blood: nothing innate can smell you or reach you there. */
+export const inNiche = (s: State) => s.niche.has(idx(s, Math.floor(s.player.x), Math.floor(s.player.y))) && !riding(s);
+export const inSearch = (s: State) => !!s.search && dist(s.player, s.search) <= s.search.r && !acidAt(s, s.player) && !inNiche(s);
 export const losingThem = (s: State) => s.alert > 0 && s.unseen >= CONFIG.alert.loseAfter && !inSearch(s);
 
 export function alertTier(s: State) {
@@ -964,6 +980,15 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (rode && !riding(s)) { s.riding = 0; emit(s, 'kill'); say(s, 'The neutrophil comes apart around you.'); }
   s.sinceHurt += dt;
   if (s.silent) s.tally.silent += dt;
+  // In a niche: safe from the innate cells, but it is a breather and not a base. Stay too long and the hull fouls.
+  if (inNiche(s)) {
+    if (!s.hiding) { s.hiding = true; s.tally.niches++; say(s, 'You slip through the wall into the gap behind it. Nothing in the blood can follow you here.'); emit(s, 'pickup'); }
+    if ((s.nicheTime += dt) > CONFIG.niche.holds) {
+      if (s.nicheTime - dt <= CONFIG.niche.holds) say(s, 'The gap is silting up around you. The hull is starting to foul.');
+      p.hp -= CONFIG.niche.foul * dt; s.sinceHurt = 0;
+      if (p.hp <= 0) { hurtPlayer(s, 0, 'hunger'); return; }
+    }
+  } else { s.hiding = false; s.nicheTime = Math.max(0, s.nicheTime - dt); }
   if (s.held) {
     // Engulfed: the macrophage has you, and is digesting. Strike it to break free.
     const by = s.enemies.find((e) => e.id === s.held!.id);
@@ -1086,7 +1111,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
   // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.
   const stepped = dist(before, p);
-  if (stepped > 0 && !cloaked(s) && !s.silent && acidAt(s, p) !== 2) {
+  if (stepped > 0 && !cloaked(s) && !s.silent && !inNiche(s) && acidAt(s, p) !== 2) {
     s.strideLeft -= stepped;
     if (s.strideLeft <= 0) {
       // A print laid across the current is washed out sooner, and one laid against it sooner still.
@@ -1209,6 +1234,8 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   const z = CONFIG.alert.search;
   if (seen) s.search = { x: p.x, y: p.y, r: z.start };
   else if (s.search) {
+    // Slip through a junction on a quiet motor and the plume is mixed away behind you: the hunt shrinks to the junction itself, and a few tiles on you are out of it.
+    if (s.silent && !s.search.dropped && s.unseen > 1 && [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => open(s, Math.floor(p.x) + dx, Math.floor(p.y) + dy)).length >= 3 && s.search.r > z.start + 2) { s.search = { x: Math.floor(p.x) + 0.5, y: Math.floor(p.y) + 0.5, r: z.start, dropped: true }; say(s, 'The junction mixes your trace away. The hunt closes in on this spot: move on.'); }
     s.search.r = Math.min(z.most * (s.suppressed > 0 ? z.cortisol : 1), s.search.r + z.grow * dt);
     if (s.alert <= 0) s.search = null;
   }
@@ -1277,9 +1304,11 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   // A warden has a lamp and eyes instead: a clear line to you is all it needs, cloak or no cloak. Only a borrowed body hides you.
   const eyed = machine && !riding(s) && d <= CONFIG.story.warden.sight && sees(s, tileOf(e), tileOf(p));
   const through = eyed || (cloaked(s) && e.kind === 'tcell' && d <= CONFIG.memory.tcellSight && sees(s, tileOf(e), tileOf(p)));
-  const whiff = through ? 1 : cloaked(s) || machine ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)] * (s.suppressed > 0 ? CONFIG.cortisol.nose : 1));
-  const found = through || (!machine && !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact * hard(s).detection * (s.silent ? CONFIG.scent.silent.plume : 1) || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
-  const print = cloaked(s) || machine ? null : freshPrint(s, e);
+  // Tucked into the wall you are out of the blood: innate cells get no scent and cannot reach in. T cells go into tissue, and wardens can see.
+  const tucked = inNiche(s) && !machine && e.kind !== 'tcell';
+  const whiff = through ? 1 : cloaked(s) || machine || tucked ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)] * (s.suppressed > 0 ? CONFIG.cortisol.nose : 1));
+  const found = through || (!machine && !cloaked(s) && !tucked && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact * hard(s).detection * (s.silent ? CONFIG.scent.silent.plume : 1) || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
+  const print = cloaked(s) || machine || tucked ? null : freshPrint(s, e);
   e.nosed = whiff > 0 || found || print ? 0 : (e.nosed ?? 99) + dt;
   // Finding you is not instant: it takes a moment of steady contact to be sure, and that moment is your chance to slip away.
   if (!found) e.onto = 0;
@@ -1332,7 +1361,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
     e.windup -= dt;
     if (e.windup < 0) {
       e.cooldown = c.cooldown;
-      if (d <= c.reach + 0.35) {
+      if (d <= c.reach + 0.35 && !tucked) {
         hurtPlayer(s, Math.max(1, Math.round(roll(s, c.min, c.max) * hard(s).damage * (primed ? CONFIG.fight.primed.damage : 1))), e.kind);
         // A macrophage that lands a blow starts to engulf you.
         if (e.kind === 'kupffer' && s.status === 'playing' && !s.held && !riding(s)) { s.held = { id: e.id, t: CONFIG.fight.hold.time, hits: 0 }; s.tally.grabs++; float(s, p, 'Engulfed', '#ff9a5a'); say(s, 'The macrophage closes around you. Strike it to break free.'); emit(s, 'net'); }

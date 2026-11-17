@@ -5,7 +5,7 @@
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
 import { atmosphere } from './atmosphere';
-import { Enemy, Point, State, inSearch, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -657,6 +657,15 @@ export function draw(ctx: Ctx, s: State, v: View) {
     }
     ctx.globalAlpha = 1;
   } });
+  // Hiding places: a dark slit in the wall with a faint cool rim. Readability bend: the real gap is far too thin to see.
+  for (const k of s.niche) {
+    if (!s.explored[k]) continue;
+    const q = project((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5), lit = s.visible[k] === 1, mine = inNiche(s) && idx(s, Math.floor(s.player.x), Math.floor(s.player.y)) === k;
+    ctx.globalAlpha = lit ? 1 : 0.45;
+    ctx.fillStyle = 'rgba(6,10,14,0.72)'; oval(ctx, q.x, q.y, TW * 0.34, TH * 0.34); ctx.fill();
+    ctx.strokeStyle = mine ? 'rgba(120,240,225,0.85)' : 'rgba(120,200,215,0.4)'; ctx.lineWidth = mine ? 2 : 1.2; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   if (s.search && s.alert > 0) {
     // The search area: a soft ring on the floor that breathes slowly. Inside it they are still looking.
     const z = s.search, slow = v.still ? 0.5 : 0.5 + 0.5 * Math.sin(v.time * 1.1), inside = inSearch(s);
@@ -669,6 +678,14 @@ export function draw(ctx: Ctx, s: State, v: View) {
   things.sort((a, b) => a.depth - b.depth);
   for (const t of things) t.draw();
 
+  // A hiding place is usually tucked behind a cell from where you are looking, so each one in view also carries a small steady mark above the wall.
+  for (const k of s.niche) {
+    if (!s.visible[k]) continue;
+    const q = project((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5), y = q.y - 46;
+    ctx.fillStyle = 'rgba(8,14,18,0.6)'; ctx.beginPath(); ctx.moveTo(q.x, y - 7); ctx.lineTo(q.x + 6, y); ctx.lineTo(q.x, y + 7); ctx.lineTo(q.x - 6, y); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,220,225,0.8)'; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,220,225,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(q.x, y + 7); ctx.lineTo(q.x, q.y - 4); ctx.stroke();
+  }
   for (const shot of s.shots) {
     const c = project(shot.x, shot.y), tail = project(shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);
     ctx.globalCompositeOperation = 'lighter';
@@ -1125,6 +1142,7 @@ function automap(ctx: Ctx, s: State, v: View) {
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');
   for (const item of s.pickups) if (s.explored[idx(s, Math.floor(item.x), Math.floor(item.y))]) dot(item.x, item.y, u * 0.6, item.kind === 'sibling' || item.kind === 'kin' ? '#96e1ff' : item.kind === 'cortisol' ? '#ffc878' : item.kind === 'cache' ? '#78f0e1' : item.kind === 'calm' ? '#b9a4ff' : '#7be08a');
+  for (const k of s.niche) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.6, '#78c8d7');
   if (s.explored[idx(s, s.vein.x, s.vein.y)]) dot(s.vein.x + 0.5, s.vein.y + 0.5, u * 1.3, '#5680ff');
   for (const e of s.enemies) if (s.visible[idx(s, Math.floor(e.x), Math.floor(e.y))]) dot(e.x, e.y, u * 0.6, '#ff5a4d');
   for (const a of s.antibodies) if (s.visible[idx(s, Math.floor(a.x), Math.floor(a.y))]) dot(a.x, a.y, u * 0.35, '#b8c8ff');
@@ -1137,7 +1155,7 @@ function automap(ctx: Ctx, s: State, v: View) {
   }
   dot(p.x, p.y, u * 0.8, '#ffffff');
   // What the dots mean.
-  const key: [string, string][] = [['#ffffff', 'You'], ['#5680ff', 'Vein out'], ['#ecb42e', 'Glucose'], ['#ff5a4d', 'Immune cell'], ...(s.place === 'liver' ? [['#8a5cf0', 'Tumor cell'], ['#e23a30', 'Portal inflow']] as [string, string][] : []), ...(s.search && s.alert > 0 ? [['#d65ca0', 'Being searched']] as [string, string][] : [])];
+  const key: [string, string][] = [['#ffffff', 'You'], ['#5680ff', 'Vein out'], ['#ecb42e', 'Glucose'], ['#ff5a4d', 'Immune cell'], ...(s.place === 'liver' ? [['#8a5cf0', 'Tumor cell'], ['#e23a30', 'Portal inflow'], ['#78c8d7', 'Hiding place']] as [string, string][] : []), ...(s.search && s.alert > 0 ? [['#d65ca0', 'Being searched']] as [string, string][] : [])];
   ctx.font = '500 11px ui-monospace, monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   const kx = 16, ky = v.h - 110 - key.length * 16;
   key.forEach(([color, name], k) => {

@@ -128,6 +128,8 @@ export const CONFIG = {
     tcells: [0.5, 0.85], // memory at which the first and second killer T cell join each map
     tcellSight: 1.3, // how close one must be to know you through the cloak: contact, not sight
   },
+  // The space of Disse: the gap between a liver cell and the sinusoid wall. Small enough for you, too small for a phagocyte.
+  niche: { count: 10, apart: 6, holds: 20, foul: 1 },
   fight: {
     swarm: 8, sooner: 5, // a kill draws innate cells within this many tiles, and brings the next arrivals this many seconds sooner
     primed: { from: 50, damage: 1.5, windup: 0.8 }, // neutrophils at Alarmed and above

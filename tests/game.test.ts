@@ -1102,3 +1102,25 @@ test('unit-8 fights: a kill draws the neighbours and difficulty scales the enemy
   assert.ok(hpOf(hard) > hpOf(easy));
   assert.equal(G.hard(hard).autoPatch, false);
 });
+
+test('unit-8b: a niche in the liver wall hides you from innate cells, for a while', () => {
+  const s = G.createGame(21); s.host.nextSurge = 999;
+  assert.equal(s.niche.size, CONFIG.niche.count);
+  s.enemies = []; s.pickups = [];
+  const k = [...s.niche][0];
+  put(s, { x: k % s.size, y: Math.floor(k / s.size) });
+  assert.ok(G.inNiche(s));
+  const e = foe(s, 0.9, 0);
+  const hp = s.player.hp;
+  run(s, 4);
+  assert.notEqual(e.mood, 'chase', 'it cannot find you');
+  assert.equal(s.player.hp, hp, 'or reach you');
+  assert.equal(s.tally.niches, 1);
+  const t = foe(s, 0.9, 0, 'tcell'); s.enemies = [t];
+  run(s, 2);
+  assert.equal(t.mood, 'chase', 'a T cell follows you in');
+  s.enemies = []; s.player.hp = hp;
+  run(s, CONFIG.niche.holds);
+  assert.ok(s.player.hp < hp, 'and it is no place to stay');
+  assert.equal(G.createGame(3, undefined, 'stomach').niche.size, 0, 'liver only');
+});
