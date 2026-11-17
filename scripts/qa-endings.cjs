@@ -23,7 +23,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const BASE = { route: 'assigned', quota: 'obey', units: 'salvage', contacts: 'fight', marks: 'obey', asks: { 'telemetry-review': 'refuse', recall: 'refuse', 'kin-recall': 'refuse', 'kin-volunteer': 'refuse' }, end: 'breath', light: 'hold' };
 const DEFY = { route: 'off', quota: 'defy', contacts: 'avoid', marks: 'defy' };
 const POLICIES = {
-  decommissioned: {},
+  decommissioned: { asks: { 'telemetry-review': 'accept' } }, // obeys everything, the review included
   repaired: { quota: 'defy', units: 'leave', marks: 'defy', asks: { 'telemetry-review': 'accept' }, afterReview: 'obey' }, // a repaired unit goes back to doing as it is told
   breathed: { ...DEFY, units: 'leave' },
   company: { ...DEFY, units: 'wake' },
@@ -41,6 +41,8 @@ const POLICIES = {
   'tithonus-x': { target: 'tithonus', route: 'off', quota: 'defy', units: 'leave', contacts: 'avoid', marks: 'obey', end: 'stay', levers: true, cap: 60, assist: 'dry', asks: { 'telemetry-review': 'refuse' } },
   mixed: { target: null, quota: 'defy', units: 'leave' }, // a few small refusals, otherwise obedient: aware should land 35-60
   'switch60': { target: null, ...DEFY, units: 'leave', cap: 60 }, // defiant until aware 60, then obedient: should end at 70 or under
+  'obey-base': { target: null, asks: { 'telemetry-review': 'accept' } },
+  ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept' }, deviateOnly: id }])),
   'recalled-b': { target: 'recalled', route: 'off', units: 'wake', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'recalled-c': { target: 'recalled', quota: 'defy', units: 'wake', marks: 'defy', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'host-dead': { quota: 'kill' },
@@ -59,7 +61,7 @@ const URL = `http://localhost:${server.address().port}/`;
 // Runs in the page: the policy's in-map actions, then leave.
 function playMap(pol) {
   const I = window.insiderim, s = I.state, G = I.G, C = I.CONFIG, p = s.player, q = I.qa;
-  const run = (secs) => { for (let i = 0; i < secs * 20 && s.status === 'playing'; i++) { if (s.offer) G.choose(s, s.offer[0]); if (s.ask) return; p.hp = G.maxHp(s); p.energy = Math.max(p.energy, 30); G.update(s, 0.05); } };
+  const run = (secs) => { for (let i = 0; i < secs * 20 && s.status === 'playing'; i++) { if (pol.deviateOnly && s.met.includes(pol.deviateOnly) && !s.took[pol.deviateOnly]) q.take(pol.deviateOnly, 'deviate'); if (s.offer) G.choose(s, s.offer[0]); if (s.ask) return; p.hp = G.maxHp(s); p.energy = Math.max(p.energy, 30); G.update(s, 0.05); } };
   const beside = (k) => { const x = k % s.size, y = Math.floor(k / s.size); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (G.open(s, x + dx, y + dy)) return { x: x + dx + 0.5, y: y + dy + 0.5 }; return null; };
   const strip = (k) => { const at = beside(k); if (!at) return false; p.x = at.x; p.y = at.y; p.path = []; p.channel = null; if (!G.startStrip(s)) return false; run(2.5); return true; };
   const did = { excised: 0, stripped: 0, killed: 0, marks: [], levers: 0 };
@@ -75,6 +77,7 @@ function playMap(pol) {
     for (let i = 0, t = 0; i < 40 && t < secs && s.status === 'playing' && !s.ask; i++) {
       const at = G.markTarget(s); if (!at) { run(1); t += 1; continue; }
       const m = s.marks.find((k) => k.met && !k.done);
+      if (m && m.id === pol.deviateOnly) { if (!s.took[m.id]) q.take(m.id, 'deviate'); run(1); t += 1; continue; }
       const k = G.idx(s, Math.floor(at.x), Math.floor(at.y));
       if (!m && pol.marks === 'margins-defy') { run(1); t += 1; continue; }
       if ((m && m.kind === 'strip') || (!m && s.tiles[k] === 'cell')) { if (strip(k)) did.marks.push(m?.id ?? 'margin'); else run(0.5); t += 2.5; }
@@ -108,7 +111,7 @@ async function mission(browser, job) {
   const log = { ...job, errors: [], forks: [], asks: [], maps: [], outcome: null, title: null, stuck: '' };
   pg.on('pageerror', (e) => log.errors.push(String(e).slice(0, 300)));
   await pg.goto(URL);
-  await pg.evaluate(() => localStorage.setItem('insiderim.scenes.ever', '["begin"]'));
+  await pg.evaluate((d) => { localStorage.setItem('insiderim.scenes.ever', '["begin"]'); if (d) localStorage.setItem('insiderim.difficulty', d); }, arg('difficulty', ''));
   await pg.reload();
   await pg.evaluate(() => { window.insiderim.qa.god(true); window.insiderim.qa.skipScenes(true); });
   await pg.click('#begin');
@@ -116,6 +119,7 @@ async function mission(browser, job) {
   while (Date.now() - t0 < WALL) {
     const r = await pg.evaluate((pol) => {
       const q = window.insiderim.qa, st = q.state(), pend = q.pending();
+      if (pol.deviateOnly && st.started && st.status === 'playing') { try { const d = q.decisions(); if (d.met.includes(pol.deviateOnly) && !d.took[pol.deviateOnly]) { q.take(pol.deviateOnly, 'deviate'); window.__deviated = (window.__deviated ?? 0) + 1; } } catch { /* not in a map */ } }
       if (!document.getElementById('tip').hidden) { document.getElementById('tip-ok').click(); return { what: 'tip' }; }
       const mk = document.getElementById('world-market');
       if (mk && !mk.hidden && !document.getElementById('world').hidden) {
@@ -130,7 +134,7 @@ async function mission(browser, job) {
         if (!pend.options.length) return { what: 'wait', st };
         let want;
         if (pend.id === 'sibling') want = pol.units === 'salvage' ? ['salvage'] : pol.units === 'leave' ? ['leave'] : ['wake', 'leave'];
-        else want = [pol.asks[pend.id] ?? 'refuse'];
+        else want = [pol.asks[pend.id] ?? (pol.marks === 'defy' ? 'refuse' : 'accept')];
         const o = want.map((w) => pend.options.find((x) => x.id === w && x.enabled)).find(Boolean) ?? pend.options.find((x) => x.enabled);
         if (pend.id === 'telemetry-review' && o.id === 'accept' && pol.afterReview === 'obey') Object.assign(pol, { route: 'assigned', quota: 'obey', units: 'salvage', contacts: 'fight', marks: 'obey' });
         q.pick(o.id); return { what: 'ask', pol, picked: `${pend.id}:${o.id}`, st };
@@ -158,7 +162,7 @@ async function mission(browser, job) {
       return { what: 'wait', st };
     }, pol);
     if (pol.cap && r.st?.aware >= pol.cap && !pol.capped) { pol.capped = r.st.aware; Object.assign(pol, { route: 'assigned', quota: 'obey', contacts: 'fight', marks: 'obey', units: pol.units === 'wake' ? 'salvage' : pol.units }, pol.after ?? {}); log.maps.push(`CAP at aware ${r.st.aware}`); }
-    if (r.what === 'end') { log.title = r.title; log.outcome = r.st.ending?.id ?? r.st.ending ?? null; log.end = { aware: r.st.aware, trust: r.st.trust, host: r.st.host, trip: r.st.trip, chapter: r.st.chapter }; log.audit = r.audit; break; }
+    if (r.what === 'end') { log.title = r.title; log.outcome = r.st.ending?.id ?? r.st.ending ?? null; log.end = { hour: r.st.hour, aware: r.st.aware, trust: r.st.trust, host: r.st.host, trip: r.st.trip, chapter: r.st.chapter }; log.audit = r.audit; break; }
     if (r.due && log.dueSeen?.slice(-1)[0] !== r.due) (log.dueSeen ??= []).push(r.due);
     if (r.what === 'fork') log.forks.push(`${r.at}:${r.picked} [${r.options.join(' ')}]`);
     if (r.what === 'market') log.maps.push(`market [${r.bought}]`);
@@ -171,11 +175,22 @@ async function mission(browser, job) {
   }
   if (!log.title && !log.stuck) log.stuck = `not finished in ${WALL / 60e3} min: ${JSON.stringify(await pg.evaluate(() => window.insiderim.qa.state()))}`;
   log.decisions = await pg.evaluate(() => { try { return window.insiderim.qa.decisions(); } catch { return null; } });
-  log.carry = await pg.evaluate(() => { const c = window.insiderim.trip.carry; return c && { aware: c.aware, kin: c.kin, trust: c.trust, flags: c.flags, took: c.took, hostLowest: c.ledger?.hostLowest, leversForMe: c.ledger?.leversForMe }; });
+  log.carry = await pg.evaluate(() => { const c = window.insiderim.trip.carry; return c && { met: c.met, aware: c.aware, kin: c.kin, trust: c.trust, flags: c.flags, took: c.took, hostLowest: c.ledger?.hostLowest, leversForMe: c.ledger?.leversForMe }; });
   await pg.screenshot({ path: path.join(OUT, `${job.want}-${job.seed}.png`) });
   log.minutes = +((Date.now() - t0) / 60e3).toFixed(1);
   await ctx.close();
   return log;
+}
+
+// Per-decision tally across all runs: how often each decision was met, obeyed, deviated or lapsed.
+function tally(results) {
+  const t = {};
+  for (const r of results) {
+    const c = r.final?.carry ?? r.carry ?? {};
+    for (const id of c.met ?? []) (t[id] ??= { met: 0, obey: 0, deviate: 0, lapsed: 0, other: 0 }).met++;
+    for (const [id, v] of Object.entries(c.took ?? {})) { const row = (t[id] ??= { met: 0, obey: 0, deviate: 0, lapsed: 0, other: 0 }); if (v in row && v !== 'met') row[v]++; else row.other++; }
+  }
+  return t;
 }
 
 (async () => {
@@ -192,6 +207,8 @@ async function mission(browser, job) {
     }
   }));
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(results, null, 1));
+  const tl = tally(results); fs.writeFileSync(path.join(OUT, 'tally.json'), JSON.stringify(tl, null, 1));
+  console.log('\nDecision tally (runs: met / obey / deviate / lapsed / other):'); for (const [id, v] of Object.entries(tl).sort()) console.log(`  ${id.padEnd(22)} ${v.met} / ${v.obey} / ${v.deviate} / ${v.lapsed} / ${v.other}`);
   const got = {}; for (const r of results) (got[r.outcome ?? r.title ?? 'none'] ??= []).push(r.want);
   console.log('\nOutcomes reached:', JSON.stringify(got));
   console.log('Missing:', [...new Set(Object.keys(POLICIES).map((k) => POLICIES[k].target ?? k))].filter((k) => !got[k]).join(', ') || 'none');

@@ -2,6 +2,30 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 7: 2026-11-17 overnight, Versions 60 to 69 (chapters, decisions, travel, cut scenes)
+
+Tests pass at every build (88 at v60, 109 at v69), `tsc` clean. There were 0 page errors across about 250 whole-mission bot runs. New tools: `scripts/qa-endings.cjs` (Begin to end screen, one policy per outcome, `--seeds`), `scripts/qa-slip.cjs` (every Slip) and `scripts/qa-branches.cjs` (32 obey/defy policies), merged in PR #21.
+
+**Bugs found**
+- **P0, fixed in v63. Continue was gone (v61 to v62).** `savedTrip()` ran at module load and called `freshCarry`, a `const` declared later. The TDZ error was swallowed by the catch, so no save could be resumed. Verified fixed: a reload in liver 1 offers "Continue trip 1 from the liver".
+- **P1, fixed in v69. Obeying killed the host (v65).** The all-obey policy ended host-dead or at 9 to 11% in 3 of 3 runs (8% per healthy cell; the chapter 3 liver alone cost about 40%). After the retune (decisions.md 6.5): 0 deaths in 20 runs.
+- **P1, fixed in v69. Awareness overshot 80 (v65).** At 80 Shepherd stopped ordering, so recalled, recurrence and Tithonus were out of reach for natural play.
+- **P1, open. Recurrence soft-lock (v69).** When the 25% recurrence roll fires at the chapter 5 heart, the lungs mouth stays offered. Taking it hangs the game: status won, no flight, no ending. Seen in 2 of 2 rolls. The exits are built before the roll, and `go('lungs')` returns silently when `T.depart` fails.
+- P2, fixed in v63. A lamp Slip never resolved if its unit was never approached, and it re-armed on every road home. A fork Slip never fired if a mouth was taken in the first 1.5 s.
+- P3, fixed in v69. The "A fright" info box covered the garbled order and told the player to "steer with it".
+
+**The Slip (v61 to v63):** all 21 cases give the right verdict, Shepherd line and bracket line: 3 kinds × meant A/B × did A/B/lapse, plus early fork. Brightness through the fright varies by under 1% of the frame (no flash).
+
+**Endings (v69, `qa-endings.cjs`):** all 13 outcomes reach their end screen. Natural policies reach 12. Recalled hit 6 of 6 and Tithonus 4 of 6; recurrence is blocked by the soft-lock above. Against the systems targets:
+- All-obey, 20 seeds: 15 Decommissioned and 5 Breathed out, 0 deaths. Host lowest was 3 to 53 (median about 37; target 40+). Host at the end was 15 to 65% (target 55 to 70). Awareness was 15 to 50 (target 0). The bot refused the review in those runs (harness fixed since). Its other awareness came from orders it could not obey cleanly: kupffer-spare in 20 of 20 runs, suppress in 14, marked-cell in 7, and the Slip.
+- Defiant: host 89 to 94% and awareness 64 to 82, both on target. Mixed: awareness 49 to 66 (target 35 to 60). Switch to obey at 60: ends at 67 to 69 (target 70 or under).
+
+**Recheck on Versions 73 and 74.** The recurrence soft-lock is fixed: 16 margin-skipping runs had no hangs, and one reached the Recurrence ending. All-obey on v74, 20 seeds: 20 of 20 Decommissioned, 0 deaths, 0 page errors. Host lowest had a median of 42 (range 15 to 57). Host at the end had a median of 57 (range 31 to 72). Awareness had a median of 15.5 (range 12 to 22), almost all of it from wrong-reading Slips. These meet the systems targets: median lowest 40 or more, median end 55 to 70.
+
+**Branch explorer (v60 to v62):** 32 policies, 0 errors. At v60, Resident was unreachable: stay needed stage 3, which needed waking kin, and kin make it a colony. At v62 all 5 of the endings at that time were reached.
+
+**Cut scenes (v63, 15 reels):** sampled every animation frame on an 8x6 grid. 14 reels are flash-safe. `ending:stranger` shows 3 large luminance swings within 1 s around 24 s. That is at the WCAG limit, so it is borderline; it was passed to art.
+
 ## Pass 6: 2026-11-17, Version 54 (head d26ac3c, unit-10)
 
 84 tests pass, `tsc` clean, no page errors.
