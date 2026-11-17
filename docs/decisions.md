@@ -672,3 +672,21 @@ First payoff pairs (8 seeds per arm, against an all-obey base):
 - suppress: host health −3, finishing 3 host hours sooner.
 
 At 8 seeds the time measure is too noisy to judge. Rerunning at 20 seeds per arm.
+
+### 11.10 Payoff pairs, Version 81
+
+20 seeds per arm. Each result is the change in host health and ending hour against the all-obey run.
+
+| Decision | Host | Ending hour | Notes |
+|---|---|---|---|
+| first-fright-transit | −3.1 | −0.2 h | |
+| route-2 | 0 | −0.2 h | |
+| escort-refuse | 0 | 0 h | Its cost is hull, not host or time; QA to report hull lost on the leg |
+| suppress | +5.1 | −0.2 h | |
+| fever-damp | +4 | −0.2 h | Only 5 runs met it, so this needs a rerun with more |
+
+All five are within the ±8 host and ±1 hour target.
+
+pain-damp and beacon could not be measured. Almost every refusal of a hold mark was judged *lapsed*, because the "pressed" test counted any enemy cell within 4 tiles at any moment.
+
+Fix in unit-17.3: a hold mark counts as lapsed only if the unit was engulfed, in contact, or a hunter's target for at least half the time the order stood (`pressedShare` 0.5).
