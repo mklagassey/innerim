@@ -1561,7 +1561,8 @@ test('chapter 4: suppression stands her immune cells down, and cutting without i
   s.player.x = m.at.x; s.player.y = m.at.y; s.player.path = []; run(s, CONFIG.marks.hold + 0.3);
   assert.equal(s.took.suppress, 'obey'); assert.ok(s.stood); assert.ok(s.flags['prop:shingles']);
   const before = s.alert; exciseAll(s); assert.equal(s.alert, before, 'nothing answers the excision');
-  const no = lastLiver(); run(no, 9); const cells = no.enemies.filter((e) => e.kind === 'kupffer').length;
+  const quick = lastLiver(); run(quick, 8.5); exciseAll(quick); assert.equal(quick.took.suppress, undefined, 'an order that had no time to be read cannot be defied');
+  const no = lastLiver(); run(no, 9 + CONFIG.marks.notice); const cells = no.enemies.filter((e) => e.kind === 'kupffer').length;
   exciseAll(no);
   assert.equal(no.took.suppress, 'deviate'); assert.equal(no.enemies.filter((e) => e.kind === 'kupffer').length, cells + 2);
 });
