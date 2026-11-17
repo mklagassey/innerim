@@ -429,3 +429,10 @@ Changes:
 Change: offer ethanol-correction at the first chapter 3+ liver visit if she has had a drink at any point in the game. Every host has one evening drink in the first two host days, so this is effectively guaranteed. While she has a drink in her blood, its hold mark still has priority (10.8a).
 
 **Branch sim note.** `scripts/branch-sim.py` modelled awareness and trust but not host health, which is why it missed finding 1. QA's whole-mission bot is now the reference for endings; the branch sim stays for quick weight checks.
+
+**As built (unit-15.3, Version 69), accepted:**
+- **Harm from ordered strips.** It is scaled by `CONFIG.marks.orderedHarm` (0.5), on top of the drink multiplier. In a liver, a strip counts as ordered if it is one of the first `quota` healthy cells on that map, a margin cell, or the marked cell.
+- **Regeneration.** `G.night` runs on each return home, using `CONFIG.mend` (3 per cell, 12 per night, cap 90).
+- **Awareness gain.** `G.roused` is used for every gain. Awareness is now fractional internally.
+- **Stage 4.** All stage-4 gates on orders are removed.
+- **Drinking.** `flags.drank` is set at nightly homecomings unless she is dry, which makes ethanol-correction effectively always on offer in chapter 3.
