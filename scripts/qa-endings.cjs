@@ -43,6 +43,7 @@ const POLICIES = {
   'switch60': { target: null, ...DEFY, units: 'leave', cap: 60 }, // defiant until aware 60, then obedient: should end at 70 or under
   // route-2 and beacon are decided by the game from what the ship does, so those arms act instead of recording.
   'obey-base': { target: null, asks: { 'telemetry-review': 'accept' } },
+  'obey-wait': { target: null, asks: { 'telemetry-review': 'accept' }, deviateOnly: 'none' }, // the control for the payoff arms: same waits, refuses nothing
   ...Object.fromEntries(['first-fright-transit', 'route-2', 'pain-damp', 'fever-damp', 'escort-refuse', 'suppress', 'beacon'].map((id) => [`only:${id}`, { target: null, asks: { 'telemetry-review': 'accept', [id]: 'refuse' }, deviateOnly: id }])),
   'recalled-b': { target: 'recalled', route: 'off', units: 'wake', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'recalled-c': { target: 'recalled', quota: 'defy', units: 'wake', marks: 'defy', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
