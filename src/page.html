@@ -141,6 +141,7 @@
   #scene-line.on { opacity: 1; }
   #scene-skip { position: absolute; right: 16px; bottom: 16px; opacity: 0.55; font-size: 11px; }
   @media (prefers-reduced-motion: reduce) { #scene, #scene-line, #scene-light { transition: none; } }
+  #difficulty { display: flex; gap: 8px; flex-wrap: wrap; } #difficulty button[aria-checked="true"] { border-color: var(--amber); color: var(--amber); }
   #world-goal { border-left: 2px solid var(--amber); padding: 2px 0 2px 10px; margin: 6px 0 10px; color: var(--amber); }
   #world-market { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 10px 0; }
   #world-market[hidden] { display: none; }
@@ -188,7 +189,7 @@
     <div id="ribbon" aria-label="The host's next two hours"><i class="now"></i></div>
     <div id="ribbon-note"></div>
   </div>
-  <div class="hud tools"><button id="pause" type="button" aria-pressed="false" aria-label="Pause (P)" title="Pause (P)">&#10073;&#10073;</button><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="turn-l" type="button" aria-label="Turn the view left (Z)" title="Turn the view left (Z)">&#10226; Z</button><button id="turn-r" type="button" aria-label="Turn the view right (X)" title="Turn the view right (X)">X &#10227;</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
+  <div class="hud tools"><button id="pause" type="button" aria-pressed="false" aria-label="Pause (P)" title="Pause (P)">&#10073;&#10073;</button><button id="sound" type="button" aria-pressed="true">Sound on</button><button id="silent" type="button" aria-pressed="false" title="Run silent (hold Shift)">Silent</button><button id="turn-l" type="button" aria-label="Turn the view left (Z)" title="Turn the view left (Z)">&#10226; Z</button><button id="turn-r" type="button" aria-label="Turn the view right (X)" title="Turn the view right (X)">X &#10227;</button><button id="map" type="button" aria-pressed="false">Map (Tab)</button></div>
   <div class="hud orb" id="hp"><u id="hp-fill"></u><b><span id="hp-val"></span><small>Hull</small></b></div>
   <div class="hud orb" id="energy"><u id="energy-fill"></u><b><span id="energy-val"></span><small>Energy</small></b></div>
   <div class="hud belt">
@@ -217,10 +218,13 @@
         <dt>E</dt><dd>Skim glucose while standing on it. At the vein, leave.</dd>
         <dt>F</dt><dd>Strip the nearest living cell. It dies and leaves a gap you can walk through.</dd>
         <dt>Pickups</dt><dd>Fibrin patches repair the hull by themselves when it runs low. Glowing vesicles hold upgrades.</dd>
-        <dt>Scent</dt><dd>Nothing in here has eyes. They smell you: your scent drifts downstream, and your wake lingers.</dd>
+        <dt>Scent</dt><dd>Nothing in here has eyes. They smell you: your scent drifts downstream, and your wake lingers. A cell that finds you needs a moment to be sure: a ring fills over it, and if you get clear before it closes, it loses you.</dd>
+        <dt>Shift</dt><dd>Run silent while held (or the Silent button): half speed, no wake, half the scent. Strike a cell that has no trace of you and it takes three times the damage.</dd>
         <dt>Z / X</dt><dd>Turn the view a quarter turn, to look behind the cells.</dd>
         <dt>Tab</dt><dd>Overlay map of everywhere you have been.</dd>
       </dl>
+      <div id="difficulty" role="radiogroup" aria-label="Her immune system"></div>
+      <p class="fine" id="difficulty-what"></p>
       <button id="begin" type="button">Begin</button>
       <button id="prologue" type="button" hidden>Prologue</button>
       <button id="resume" type="button" hidden>Continue</button>

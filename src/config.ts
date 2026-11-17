@@ -1,4 +1,11 @@
 // Every number worth arguing about lives here. Distances are in tiles, times in seconds.
+/** How hard the host's immune system works. Multipliers only: balance is done on Typical. */
+export const DIFFICULTY = {
+  suppressed: { name: 'Suppressed', what: 'Her immune system is running low. It is easier to slip past, and slower to learn you.', damage: 0.6, hp: 0.8, spawns: 0.7, healing: 1.3, energy: 12, detection: 0.8, autoPatch: true },
+  typical: { name: 'Typical', what: 'A healthy 58-year-old\'s defences, doing their job.', damage: 1, hp: 1, spawns: 1, healing: 1, energy: 8, detection: 1, autoPatch: true },
+  vigilant: { name: 'Vigilant', what: 'Her immune system is quick, thorough and unforgiving. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false },
+} as const;
+export type Difficulty = keyof typeof DIFFICULTY;
 export const CONFIG = {
   map: { size: 84, channels: 56, pull: 0.57, pools: 0.07, portalRing: 34, glucosePatches: 12, kupffer: 5, neutrophils: 8 },
   player: {
@@ -19,7 +26,7 @@ export const CONFIG = {
     patchRegen: 22,
     metabolism: 14, // seconds per unit burned
     starveDamage: 1,
-    clotPause: 3, // seconds after any damage before clotting starts to seal again
+    clotPause: 6, // seconds after any damage before clotting starts to seal again
     quotaKeep: 4, // what the vein insists you keep for the road, on top of the fare
   },
   // The host is a person getting on with their day. Their body changes around you.
@@ -84,7 +91,11 @@ export const CONFIG = {
   scent: {
     reach: 8, // how far the plume carries, in cost units (one tile downstream costs `down`)
     down: 1, across: 1.7, up: 3.2,
-    contact: 2.5, // within this much plume, a cell knows exactly where you are
+    contact: 1.5, // within this much plume, a cell knows exactly where you are
+    hold: 0.35, // a chasing cell needs at least this strong a trace to stay locked on
+    lock: 1.2, // seconds of continuous contact before a cell that has found you commits to the chase
+    silent: { speed: 0.5, plume: 0.5 }, // running silent: the motor idles, so less is shed and nothing is stirred
+    printAcross: 0.5, printUpstream: 0.25, // how long a print lasts when laid across the current, or against it
     touch: 1.3, // or this close in tiles, whichever way the blood is running
     every: 0.2, // seconds between plume updates
     trailLife: 12, // seconds a footprint lasts
@@ -108,6 +119,7 @@ export const CONFIG = {
   memory: {
     perAlert: 0.15, // learned from one map whose alert peaked at 100
     perKill: 0.005,
+    quiet: 25, // a map whose alert never passed this teaches the host nothing
     most: 18, // antibodies adrift in a map when the host knows you completely
     tagTime: 9, // seconds one stays stuck to you
     tagScent: 1.7, // how much further your scent carries while tagged
@@ -115,6 +127,12 @@ export const CONFIG = {
     reach: 0.55, drift: 0.7, pull: 3, homing: 0.9,
     tcells: [0.5, 0.85], // memory at which the first and second killer T cell join each map
     tcellSight: 1.3, // how close one must be to know you through the cloak: contact, not sight
+  },
+  fight: {
+    swarm: 8, sooner: 5, // a kill draws innate cells within this many tiles, and brings the next arrivals this many seconds sooner
+    primed: { from: 50, damage: 1.5, windup: 0.8 }, // neutrophils at Alarmed and above
+    hold: { time: 2, burn: 2, breaks: 2 }, // a macrophage that lands a blow holds you; this many strikes break free
+    first: { quiet: 3, times: 3 }, // a strike on a cell that has had no trace of you for this long
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
   tumor: { cells: 9, goal: 20, gain: 1, heal: 0, alert: 2, time: 1.4, drain: 2 }, // drain: host health lost per host hour with the whole tumor in; it falls in step with what is left
@@ -132,7 +150,7 @@ export const CONFIG = {
   vessel: { chaseBoost: 1.22, cooldown: 0.75, net: { range: 4.5, slow: 0.4, time: 1.6, every: 5 } }, // patrols on the road are faster and busier than the ones at home in tissue
   cloak: { energy: 2, base: 3, perLevel: 2, cooldown: 10, confusion: 2.5 },
   enemies: {
-    neutrophil: { hp: 8, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
+    neutrophil: { hp: 10, speed: 3.2, chaseSpeed: 3.9, radius: 0.3, nose: 1, reach: 0.95, windup: 0.35, cooldown: 1.1, min: 1, max: 3, forget: 4 },
     // Adaptive immunity's cytotoxic cell, made to match you. Only turns up once the host knows you, and the CD47 cloak means nothing to it.
     warden: { hp: 12, speed: 2.4, chaseSpeed: 4, radius: 0.3, nose: 0, reach: 1, windup: 0.55, cooldown: 1.5, min: 3, max: 5, forget: 4 }, // one of your own, sent to bring you in: eyes, no nose
     tcell: { hp: 14, speed: 3, chaseSpeed: 4.5, radius: 0.3, nose: 1.7, reach: 1, windup: 0.6, cooldown: 1.6, min: 6, max: 9, forget: 7 },
@@ -146,9 +164,9 @@ export interface Upgrade { name: string; track: Track; max: number; per: number;
 // No classes: a build is whatever mix of these the player picks. Each is a real thing
 // with one liberty taken, which is that you can carry it off and use it.
 export const UPGRADES = {
-  glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 12, what: '+12 maximum hull, and repairs that much now.',
+  glycocalyx: { name: 'Glycocalyx plating', track: 'Tank', max: 3, per: 8, what: '+8 maximum hull, and repairs that much now.',
     real: 'The sugar coat that shields the lining of every blood vessel.' },
-  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.2, what: 'Slowly seals breaches in the hull, once you have gone 3 seconds without taking damage.',
+  clotting: { name: 'Clotting cascade', track: 'Tank', max: 3, per: 0.15, what: 'Slowly seals breaches in the hull, once you have gone 6 seconds without taking damage.',
     real: 'The liver makes most of the proteins that clot blood.' },
   elastase: { name: 'Elastase edge', track: 'Warrior', max: 3, per: 2, what: '+2 strike damage.',
     real: 'The enzyme neutrophils use to cut through tissue.' },

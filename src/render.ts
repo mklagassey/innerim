@@ -769,6 +769,15 @@ function blob(ctx: Ctx, x: number, y: number, r: number, time: number, seed: num
 
 function enemy(ctx: Ctx, e: Enemy, v: View) {
   enemyBody(ctx, e, v);
+  // It has found something and is making sure: a ring closes over it. Get clear before it closes and it loses you.
+  const onto = e.mood === 'chase' ? 0 : e.onto ?? 0;
+  if (onto > 0.02) {
+    const q = project(e.x, e.y), top = q.y - (e.kind === 'kupffer' ? 44 : 32);
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(20,10,8,${0.5 * Math.min(1, onto * 4)})`; ctx.beginPath(); ctx.arc(q.x, top, 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,${Math.round(211 - 120 * onto)},90,${Math.min(1, onto * 4)})`;
+    ctx.beginPath(); ctx.arc(q.x, top, 7, -Math.PI / 2, -Math.PI / 2 + onto * Math.PI * 2); ctx.stroke();
+  }
   // A hit used to turn the whole cell white for a few frames. Now it is a warm glow that fades
   // as quickly as it came: the same information, without the strobe (art direction, section 3).
   const hot = Math.max(0, Math.min(1, e.flash / 0.15));

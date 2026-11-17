@@ -1,6 +1,6 @@
 // The rules of the liver prototype, simulated in real time. No drawing and no browser
 // APIs in here, so the whole game can be run and tested from plain code.
-import { CONFIG, UPGRADES, UpgradeId } from './config';
+import { DIFFICULTY, Difficulty, CONFIG, UPGRADES, UpgradeId } from './config';
 import * as Story from './story';
 import { generate, generateStomach, generateVessel, mulberry32, Point } from './map';
 
@@ -24,6 +24,8 @@ export interface Enemy extends Point { sated?: number; face?: Point;
   unseen: number; // seconds since it last saw the player
   flash: number;
   net: number; // seconds until it can throw another net
+  onto?: number; // 0 to 1: how sure it is that it has found you; at 1 it commits to the chase
+  nosed?: number; // seconds since it last had any trace of you
 }
 export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
@@ -53,6 +55,10 @@ export interface State {
   antibodies: Antibody[];
   sinceHurt: number; // seconds since the hull last took damage
   ledger: Ledger;
+  difficulty: Difficulty;
+  silent: boolean; // running silent: slow, no footprints, half the plume
+  held: { id: number; t: number; hits: number } | null; // engulfed by a macrophage
+  tally: { silent: number; firstStrikes: number; grabs: number }; // for the run report
   starved: boolean; // the ship died of an empty tank, not of anything that caught it
   drained: number; // fractions of host health the tumor has taken, not yet a whole point
   cloakOffered: boolean; // the first liver cache always offers the cloak, once
@@ -128,8 +134,9 @@ export const stewardship = (l: Ledger, excised: number) => ({
 });
 /** A lever pulled while the host is under 80% is for her; otherwise it is for you. */
 export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if (c.hostHealth < 80) l.leversForHer++; else l.leversForMe++; }
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger } });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger }, difficulty: s.difficulty });
+export const hard = (s: State) => DIFFICULTY[s.difficulty];
 /** Time passing between maps: the tumor takes its share of the host there too. */
 /** Host health the tumor costs per host hour right now: in step with how much of it is still in. */
 export const tumorDrain = (excised: number) => CONFIG.tumor.drain * Math.max(0, CONFIG.tumor.goal - excised) / CONFIG.tumor.goal;
@@ -141,7 +148,7 @@ export function tumorToll(c: Carry, hours: number) {
   if (c.ledger) c.ledger.hostLowest = Math.min(c.ledger.hostLowest, c.hostHealth);
 }
 /** What the host will remember of you once you leave this map. */
-export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
+export const memoryAfter = (s: State) => s.peak < CONFIG.memory.quiet ? s.memory : Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
 export type Place = 'liver' | 'vessel' | 'stomach' | 'lung';
 export type Vessel = 'artery' | 'vein';
@@ -194,7 +201,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
-    starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, tally: { silent: 0, firstStrikes: 0, grabs: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
@@ -288,7 +295,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
 
 function spawn(s: State, kind: EnemyKind, tile: Point): Enemy {
   const e: Enemy = {
-    id: s.nextId++, kind, ...mid(tile), hp: CONFIG.enemies[kind].hp, mood: 'patrol', goal: null, home: { ...tile },
+    id: s.nextId++, kind, ...mid(tile), hp: Math.round(CONFIG.enemies[kind].hp * hard(s).hp), mood: 'patrol', goal: null, home: { ...tile },
     path: [], repath: 0, cooldown: s.rng(), windup: -1, idle: s.rng() * 2, unseen: 99, flash: 0, net: 1 + s.rng() * 2,
   };
   s.enemies.push(e);
@@ -354,7 +361,7 @@ const bonus = (s: State, id: UpgradeId) => s.upgrades[id] * UPGRADES[id].per;
 export const maxHp = (s: State) => CONFIG.player.maxHp + bonus(s, 'glycocalyx');
 export const vision = (s: State) => CONFIG.player.vision + bonus(s, 'retinol') + (stage(s) >= 2 ? CONFIG.story.sight : 0);
 export const riding = (s: State) => s.riding > 0 && s.cloak > 0;
-export const speed = (s: State) => CONFIG.player.speed * (riding(s) ? CONFIG.board.speed : 1) * (1 + bonus(s, 'atp')) * (s.snare > 0 ? CONFIG.vessel.net.slow : 1) * (acidAt(s, s.player) === 1 ? CONFIG.stomach.mucusSpeed : 1);
+export const speed = (s: State) => CONFIG.player.speed * (riding(s) ? CONFIG.board.speed : 1) * (1 + bonus(s, 'atp')) * (s.snare > 0 ? CONFIG.vessel.net.slow : 1) * (acidAt(s, s.player) === 1 ? CONFIG.stomach.mucusSpeed : 1) * (s.silent && !riding(s) ? CONFIG.scent.silent.speed : 1);
 export const cloakTime = (s: State) => CONFIG.cloak.base + bonus(s, 'cd47');
 export const cloaked = (s: State) => s.cloak > 0;
 
@@ -442,7 +449,7 @@ function spreadScent(s: State) {
 export function scentAt(s: State, p: Point, nose = 1): number {
   const t = tileOf(p);
   if (!inside(s, t.x, t.y)) return 0;
-  const reach = CONFIG.scent.reach * scentScale(s) * nose;
+  const reach = CONFIG.scent.reach * scentScale(s) * nose * hard(s).detection * (s.silent ? CONFIG.scent.silent.plume : 1);
   return Math.max(0, 1 - s.scent[idx(s, t.x, t.y)] / reach);
 }
 
@@ -451,7 +458,7 @@ function freshPrint(s: State, at: Point): Print | null {
   const life = trailLife(s);
   for (let k = s.trail.length - 1; k >= 0; k--) {
     const f = s.trail[k];
-    if (s.time - f.born > life) break;
+    if (s.time - f.born > life) continue; // prints laid across or against the current age faster, so they are not in order
     if (dist(f, at) <= CONFIG.scent.sniff && sees(s, tileOf(at), tileOf(f))) return f;
   }
   return null;
@@ -482,7 +489,7 @@ export function usePatch(s: State): boolean {
   s.patches--;
   emit(s, 'heal');
   const before = s.player.hp;
-  s.player.hp = Math.min(maxHp(s), before + CONFIG.items.patchHeal);
+  s.player.hp = Math.min(maxHp(s), before + Math.round(CONFIG.items.patchHeal * hard(s).healing));
   float(s, s.player, `+${Math.round(s.player.hp - before)}`, '#7be08a');
   return true;
 }
@@ -737,7 +744,10 @@ export function strike(s: State, toward?: Point): boolean {
     const d = dist(e, p);
     if (d > c.reach + CONFIG.enemies[e.kind].radius) continue;
     if (d > 0.3 && ((e.x - p.x) * p.face.x + (e.y - p.y) * p.face.y) / d < c.arc) continue;
-    hurtEnemy(s, e, roll(s, c.min, c.max) + bonus(s, 'elastase'));
+    // A cell that has had no trace of you is not braced for it.
+    const first = e.mood === 'patrol' && (e.nosed ?? 99) >= CONFIG.fight.first.quiet && e.kind !== 'warden';
+    if (first) { float(s, e, 'unaware', '#78f0e1'); s.tally.firstStrikes++; }
+    hurtEnemy(s, e, (roll(s, c.min, c.max) + bonus(s, 'elastase')) * (first ? CONFIG.fight.first.times : 1));
   }
   return true;
 }
@@ -839,6 +849,7 @@ function finishChannel(s: State, ch: Channel) {
 
 function hurtEnemy(s: State, e: Enemy, dmg: number) {
   e.hp -= dmg;
+  if (dmg && s.held?.id === e.id && ++s.held.hits >= CONFIG.fight.hold.breaks) { s.held = null; e.cooldown = Math.max(e.cooldown, 1.5); float(s, s.player, 'free', '#7be08a'); }
   e.flash = 0.15;
   const machine = e.kind === 'warden';
   // Hurt badly enough, a warden drops its link to Shepherd and goes dark: a sibling you can salvage, or wake.
@@ -867,7 +878,12 @@ function hurtEnemy(s: State, e: Enemy, dmg: number) {
     if (e.kind === 'kupffer') s.pickups.push({ x: e.x, y: e.y, kind: 'cache' });
     else if (s.rng() < CONFIG.items.patchDrop) s.pickups.push({ x: e.x, y: e.y, kind: 'patch' });
     if (s.player.attackId === e.id) s.player.attackId = null;
+    if (s.held?.id === e.id) s.held = null;
     raiseAlert(s, CONFIG.alert.perKill);
+    // A dying immune cell spills signals that draw the others in, and hurry the next ones along.
+    const site = tileOf(e);
+    for (const o of s.enemies) if ((o.kind === 'neutrophil' || o.kind === 'kupffer') && o.mood !== 'chase' && dist(o, e) <= CONFIG.fight.swarm) { o.mood = 'investigate'; o.goal = site; o.repath = 0; o.idle = 0; }
+    s.spawnClock += CONFIG.fight.sooner;
     return;
   }
   e.mood = 'chase';
@@ -882,7 +898,7 @@ function hurtPlayer(s: State, dmg: number, by: EnemyKind | 'hunger') {
   emit(s, 'hurt');
   float(s, p, `-${dmg}`, '#ff5a4d');
   // A patch seals a bad wound without being asked.
-  if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
+  if (hard(s).autoPatch && p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
   if (p.hp <= 0) {
     p.hp = 0;
     s.status = 'dead';
@@ -947,8 +963,16 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.riding = Math.max(0, s.riding - dt); s.suppressed = Math.max(0, s.suppressed - dt);
   if (rode && !riding(s)) { s.riding = 0; emit(s, 'kill'); say(s, 'The neutrophil comes apart around you.'); }
   s.sinceHurt += dt;
+  if (s.silent) s.tally.silent += dt;
+  if (s.held) {
+    // Engulfed: the macrophage has you, and is digesting. Strike it to break free.
+    const by = s.enemies.find((e) => e.id === s.held!.id);
+    s.held.t -= dt;
+    if (!by || s.held.t <= 0) s.held = null;
+    else { dir = null; p.path = []; p.hp -= CONFIG.fight.hold.burn * hard(s).damage * dt; s.sinceHurt = 0; p.hurt = 0.25; if (p.hp <= 0) { hurtPlayer(s, 0, 'kupffer'); return; } }
+  }
   s.ledger.hostLowest = Math.min(s.ledger.hostLowest, s.hostHealth);
-  if (s.upgrades.clotting && p.hp < maxHp(s) && s.sinceHurt >= CONFIG.energy.clotPause) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
+  if (s.upgrades.clotting && p.hp < maxHp(s) && s.sinceHurt >= CONFIG.energy.clotPause) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * hard(s).healing * dt);
 
   const before = { x: p.x, y: p.y };
   // Walking: held keys win over a clicked route, and a chosen enemy is hunted down.
@@ -993,7 +1017,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
       p.hp -= CONFIG.host.slam.damage; p.hurt = 0.25; s.sinceHurt = 0;
       float(s, p, `-${CONFIG.host.slam.damage}`, '#ff5a4d');
       emit(s, 'slam');
-      if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
+      if (hard(s).autoPatch && p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
       if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, 'The current dashes the ship against the vessel wall.'); return; }
     }
   }
@@ -1036,7 +1060,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.host.habit = habit;
   }
   // Sleep is when the host mends.
-  if (was === 'asleep' && s.hostHealth < h.maxHealth && (s.host.mend += dt) >= h.sleepHeals) { s.host.mend = 0; s.hostHealth++; }
+  if (was === 'asleep' && s.hostHealth < h.maxHealth && (s.host.mend += dt * hard(s).healing) >= h.sleepHeals) { s.host.mend = 0; s.hostHealth++; }
   if (fever(s) !== s.host.fever) {
     say(s, fever(s) > s.host.fever ? `The host's temperature is climbing: ${h.fever.degrees[fever(s)]}\u00b0. Immune cells quicken.` : fever(s) ? 'The fever eases a little.' : 'The fever breaks.');
     if (fever(s) > s.host.fever) emit(s, 'fever');
@@ -1062,9 +1086,14 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
   // Footprints: one every stride, unless the cloak is hiding you. Old ones fade away.
   const stepped = dist(before, p);
-  if (stepped > 0 && !cloaked(s) && acidAt(s, p) !== 2) {
+  if (stepped > 0 && !cloaked(s) && !s.silent && acidAt(s, p) !== 2) {
     s.strideLeft -= stepped;
-    if (s.strideLeft <= 0) { s.strideLeft = CONFIG.scent.stride; s.trail.push({ x: p.x, y: p.y, dx: p.face.x, dy: p.face.y, born: s.time }); }
+    if (s.strideLeft <= 0) {
+      // A print laid across the current is washed out sooner, and one laid against it sooner still.
+      const f = currentAt(s, p), fl = Math.hypot(f.x, f.y), along = fl > 0.01 ? ((p.x - before.x) * f.x + (p.y - before.y) * f.y) / (stepped * fl) : 1;
+      const keep = along < -0.5 ? CONFIG.scent.printUpstream : along < 0.5 ? CONFIG.scent.printAcross : 1;
+      s.strideLeft = CONFIG.scent.stride; s.trail.push({ x: p.x, y: p.y, dx: p.face.x, dy: p.face.y, born: s.time - trailLife(s) * (1 - keep) });
+    }
   }
   while (s.trail.length && s.time - s.trail[0].born > trailLife(s)) s.trail.shift();
   s.scentClock -= dt;
@@ -1083,7 +1112,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     const lost = burnRate(s) * dt;
     p.hp -= lost; s.sizzle += lost; s.sinceHurt = 0; s.acidTime += dt;
     if (s.sizzle >= 1) { float(s, p, `-${Math.floor(s.sizzle)}`, '#c8f05a'); s.sizzle -= Math.floor(s.sizzle); p.hurt = 0.2; emit(s, 'burn'); }
-    if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
+    if (hard(s).autoPatch && p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
     if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, digesting(s.host.hour, s.host.snack) > 0.4 ? `${s.host.hour < 10 ? 'Breakfast' : s.host.hour < 16 ? 'Lunch' : 'Dinner'}. The acid rose while you were in it.` : 'The acid eats through the hull.'); return; }
   }
 
@@ -1204,7 +1233,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     }
   }
   const tier = alertTier(s);
-  s.spawnClock = tier.spawnEvery ? s.spawnClock + dt : 0;
+  s.spawnClock = tier.spawnEvery ? s.spawnClock + dt * hard(s).spawns : 0;
   if (tier.spawnEvery && s.spawnClock >= tier.spawnEvery) { s.spawnClock = 0; arrive(s, tier.spawnCount); }
 
   for (const f of s.floats) f.age += dt;
@@ -1249,10 +1278,14 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   const eyed = machine && !riding(s) && d <= CONFIG.story.warden.sight && sees(s, tileOf(e), tileOf(p));
   const through = eyed || (cloaked(s) && e.kind === 'tcell' && d <= CONFIG.memory.tcellSight && sees(s, tileOf(e), tileOf(p)));
   const whiff = through ? 1 : cloaked(s) || machine ? 0 : scentAt(s, e, c.nose * CONFIG.host.nose[hostState(s)] * (s.suppressed > 0 ? CONFIG.cortisol.nose : 1));
-  const found = through || (!machine && !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
+  const found = through || (!machine && !cloaked(s) && (s.scent[idx(s, Math.floor(e.x), Math.floor(e.y))] <= CONFIG.scent.contact * hard(s).detection * (s.silent ? CONFIG.scent.silent.plume : 1) || (d <= CONFIG.scent.touch && sees(s, tileOf(e), tileOf(p)))));
   const print = cloaked(s) || machine ? null : freshPrint(s, e);
-  // Once it is after you, any trace of scent keeps it on you.
-  const saw = found || (e.mood === 'chase' && whiff > 0);
+  e.nosed = whiff > 0 || found || print ? 0 : (e.nosed ?? 99) + dt;
+  // Finding you is not instant: it takes a moment of steady contact to be sure, and that moment is your chance to slip away.
+  if (!found) e.onto = 0;
+  const sure = found && (through || e.mood === 'chase' || (e.onto = Math.min(1, (e.onto ?? 0) + dt / CONFIG.scent.lock)) >= 1);
+  // Once it is after you, a real trace of scent keeps it on you; a faint one does not.
+  const saw = sure || (e.mood === 'chase' && whiff > CONFIG.scent.hold);
   if (machine && saw) notice(s, 'warden');
   if (saw) {
     // The cloak answers a first sighting on its own, if it is ready and you can pay for it.
@@ -1269,7 +1302,7 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   } else {
     e.unseen += dt;
     const goTo = (t: Point) => { if (!e.goal || e.goal.x !== t.x || e.goal.y !== t.y) { e.goal = t; e.repath = Math.min(e.repath, 0.25); } };
-    if (whiff > 0 && e.mood !== 'chase') {
+    if ((whiff > 0 || found) && e.mood !== 'chase') {
       // A trace on the current: it turns upstream to find out what is shedding it.
       if (e.mood !== 'investigate') { float(s, e, '?', '#ffd35a'); emit(s, 'sniff'); }
       e.mood = 'investigate';
@@ -1292,16 +1325,22 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
     emit(s, 'net');
   }
 
+  // Inflammation primes neutrophils: once the alarm is up they hit harder and sooner.
+  const primed = e.kind === 'neutrophil' && s.alert >= CONFIG.fight.primed.from;
   // A blow in progress lands or whiffs depending on whether you got out of the way.
   if (e.windup >= 0) {
     e.windup -= dt;
     if (e.windup < 0) {
       e.cooldown = c.cooldown;
-      if (d <= c.reach + 0.35) hurtPlayer(s, roll(s, c.min, c.max), e.kind);
+      if (d <= c.reach + 0.35) {
+        hurtPlayer(s, Math.max(1, Math.round(roll(s, c.min, c.max) * hard(s).damage * (primed ? CONFIG.fight.primed.damage : 1))), e.kind);
+        // A macrophage that lands a blow starts to engulf you.
+        if (e.kind === 'kupffer' && s.status === 'playing' && !s.held && !riding(s)) { s.held = { id: e.id, t: CONFIG.fight.hold.time, hits: 0 }; s.tally.grabs++; float(s, p, 'Engulfed', '#ff9a5a'); say(s, 'The macrophage closes around you. Strike it to break free.'); emit(s, 'net'); }
+      }
     }
     return saw;
   }
-  if (saw && d <= c.reach && e.cooldown <= 0) { e.windup = c.windup; return saw; }
+  if (saw && d <= c.reach && e.cooldown <= 0) { e.windup = c.windup * (primed ? CONFIG.fight.primed.windup : 1); return saw; }
 
   if (e.mood === 'chase' && e.unseen > c.forget && (!e.goal || dist(e, mid(e.goal)) < 0.8)) { e.mood = 'patrol'; e.goal = null; e.idle = 1; }
   if (e.mood === 'investigate' && e.goal && dist(e, mid(e.goal)) < 1.8 && !print && whiff <= 0) { e.mood = 'patrol'; e.goal = null; e.idle = 1.5; e.home = tileOf(e); }
@@ -1323,6 +1362,6 @@ function enemyActs(s: State, e: Enemy, dt: number): boolean {
   if (saw && d < 1.6) {
     // The last stretch is a straight lunge rather than a tile-by-tile walk.
     shift(s, e, ((p.x - e.x) / d) * c.chaseSpeed * dt, ((p.y - e.y) / d) * c.chaseSpeed * dt, c.radius);
-  } else follow(s, e, e.mood === 'patrol' ? c.speed : c.chaseSpeed, dt, c.radius);
+  } else follow(s, e, e.mood === 'patrol' ? c.speed : e.mood === 'investigate' ? c.speed * 1.15 : c.chaseSpeed, dt, c.radius); // only a cell that is sure of you runs
   return saw;
 }

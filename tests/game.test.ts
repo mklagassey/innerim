@@ -188,7 +188,7 @@ test('upgrades change what the character can do', () => {
   const s = quiet(13);
   const base = { hp: G.maxHp(s), see: G.vision(s), run: G.speed(s) };
   s.upgrades.glycocalyx = 2; s.upgrades.retinol = 1; s.upgrades.atp = 3;
-  assert.equal(G.maxHp(s), base.hp + 24);
+  assert.equal(G.maxHp(s), base.hp + 16);
   assert.equal(G.vision(s), base.see + 1.5);
   assert.ok(G.speed(s) > base.run * 1.25);
   s.upgrades.elastase = 3;
@@ -244,7 +244,9 @@ test('the cloak deploys by itself when you are first spotted, and confuses the h
   const s = quiet(21);
   s.upgrades.cd47 = 1;
   const e = foe(s, 1.1, 0);
-  run(s, 0.2);
+  run(s, 0.6);
+  assert.equal(G.cloaked(s), false, 'not at the first touch: it takes a moment to be sure');
+  run(s, 0.75);
   assert.equal(G.cloaked(s), true);
   assert.equal(s.player.energy, CONFIG.player.startEnergy - CONFIG.cloak.energy);
   assert.equal(e.mood, 'patrol');
@@ -252,7 +254,7 @@ test('the cloak deploys by itself when you are first spotted, and confuses the h
   assert.equal(s.player.hp, G.maxHp(s));
   const plain = quiet(21);
   const e2 = foe(plain, 1.1, 0);
-  run(plain, 0.2);
+  run(plain, 1.4);
   assert.equal(e2.mood, 'chase', 'without the upgrade it just hunts you');
 });
 
@@ -779,10 +781,10 @@ test('levers: a nap puts the host to sleep until a fright, a snack starts digest
 
 test('stowaways: a gut bacterium goes overboard when you are found, and the innate cells take it', () => {
   const s = quiet(4); s.host.nextSurge = 999; s.flora = 2;
-  const e = foe(s, 2, 0), health = s.hostHealth;
-  run(s, 0.2);
+  const e = foe(s, 1.2, 0), health = s.hostHealth;
+  run(s, 1.4);
   assert.equal(s.flora, 1);
-  assert.equal(s.decoys.length, 1);
+  assert.ok(s.decoys.length <= 1); // it may already have been engulfed
   assert.equal(s.hostHealth, health - CONFIG.flora.hostDamage, 'the host pays');
   assert.notEqual(e.mood, 'chase');
   const hp = s.player.hp;
@@ -791,8 +793,8 @@ test('stowaways: a gut bacterium goes overboard when you are found, and the inna
   assert.equal(s.player.hp, hp, 'and you are left alone while they digest');
   assert.equal(G.carryOf(s).flora, 1);
   const t = quiet(4); t.host.nextSurge = 999; t.flora = 1;
-  const k = foe(t, 2, 0, 'tcell');
-  run(t, 0.3);
+  const k = foe(t, 1.1, 0, 'tcell');
+  run(t, 1.4);
   assert.equal(t.flora, 1, 'a T cell is after you, not bacteria');
   assert.equal(k.mood, 'chase');
 });
@@ -923,7 +925,7 @@ test('unit-3: reinforcements never head for the player tile, slams are capped pe
 
 test('unit-4: the hunt is an area; inside it the alert holds, outside it drains, and arrivals go into it but never to you', () => {
   const s = quiet(4); s.host.nextSurge = 999; s.alert = 40; s.scent.fill(999);
-  const e = foe(s, 1, 0); run(s, 0.1);
+  const e = foe(s, 1, 0); run(s, 1.4);
   assert.ok(s.search, 'contact marks the spot');
   s.enemies = []; s.trail = [];
   const held = s.alert;
@@ -958,7 +960,7 @@ test('clotting waits a moment after a hit before it mends', () => {
   run(s, CONFIG.energy.clotPause - 0.5);
   assert.equal(s.player.hp, 10, 'nothing yet');
   run(s, 5.5);
-  assert.ok(Math.abs(s.player.hp - 11) < 0.05, 'then 0.2 a second');
+  assert.ok(Math.abs(s.player.hp - (10 + 5 * 0.15)) < 0.05, 'then 0.15 a second');
 });
 
 test('the first liver cache always offers the cloak, once', () => {
@@ -1041,4 +1043,62 @@ test('in the fog, repeated clicks on the stomach exit get there without wading',
     assert.equal(s.status, 'won', 'seed ' + seed + ' reaches the vein');
     assert.ok(wet <= 3, 'seed ' + seed + ' stays dry bar a clipped corner, was ' + wet + ' frames');
   }
+});
+
+test('unit-8 stealth: a cell needs a moment of contact to be sure, and running silent sheds less', () => {
+  const s = quiet(21); s.host.nextSurge = 999;
+  const e = foe(s, 1.1, 0);
+  run(s, 0.6);
+  assert.ok(e.onto! > 0.3 && e.onto! < 1, 'the ring is filling');
+  assert.notEqual(e.mood, 'chase');
+  s.scent.fill(999); e.x += 6; // out of contact before it is sure
+  run(s, 0.1);
+  assert.equal(e.onto, 0, 'and it drops when contact is lost');
+  const loud = G.scentAt(s, { x: s.player.x + 2, y: s.player.y }), pace = G.speed(s);
+  s.silent = true;
+  assert.equal(G.speed(s), pace * CONFIG.scent.silent.speed);
+  assert.ok(G.scentAt(s, { x: s.player.x + 2, y: s.player.y }) <= loud);
+  s.enemies = []; s.trail = [];
+  run(s, 2, { x: 1, y: 0 });
+  assert.equal(s.trail.length, 0, 'no footprints while silent');
+});
+
+test('unit-8 stealth: an unaware cell takes a first strike three times as hard, and a quiet map teaches nothing', () => {
+  const s = quiet(21); s.host.nextSurge = 999; s.scent.fill(999);
+  const e = foe(s, 0.8, 0); e.nosed = 99; e.mood = 'patrol';
+  const hp = e.hp;
+  G.strike(s, e);
+  const lost = hp - Math.max(0, e.hp);
+  assert.ok(lost >= Math.min(hp, CONFIG.player.strike.min * 3), 'lost ' + lost);
+  assert.equal(s.tally.firstStrikes, 1);
+  const q = quiet(4); q.peak = 20; q.kills = 3; q.memory = 0.2;
+  assert.equal(G.memoryAfter(q), 0.2);
+  q.peak = 40;
+  assert.ok(G.memoryAfter(q) > 0.2);
+});
+
+test('unit-8 fights: a macrophage that lands a blow holds you until you strike it twice', () => {
+  const s = quiet(21); s.host.nextSurge = 999; s.scent.fill(999);
+  const k = foe(s, 0.8, 0); k.kind = 'kupffer'; k.hp = 999;
+  s.held = { id: k.id, t: CONFIG.fight.hold.time, hits: 0 };
+  const at = { x: s.player.x, y: s.player.y }, hp = s.player.hp;
+  run(s, 0.5, { x: -1, y: 0 });
+  assert.ok(G.dist(at, s.player) < 0.05, 'cannot move');
+  assert.ok(s.player.hp < hp, 'and it is digesting you');
+  G.strike(s, k); s.player.swingCd = 0; G.strike(s, k);
+  assert.equal(s.held, null, 'two strikes break free');
+});
+
+test('unit-8 fights: a kill draws the neighbours and difficulty scales the enemy', () => {
+  const s = quiet(21); s.host.nextSurge = 999; s.scent.fill(999);
+  const a = foe(s, 0.8, 0), b = foe(s, 5, 0);
+  a.hp = 1; a.mood = 'chase';
+  G.strike(s, a);
+  assert.equal(s.enemies.includes(a), false);
+  assert.equal(b.mood, 'investigate', 'the neighbour comes to look');
+  const hard = G.createGame(21, { ...G.carryOf(s), difficulty: 'vigilant' });
+  const easy = G.createGame(21, { ...G.carryOf(s), difficulty: 'suppressed' });
+  const hpOf = (g: G.State) => g.enemies.find((e) => e.kind === 'neutrophil')!.hp;
+  assert.ok(hpOf(hard) > hpOf(easy));
+  assert.equal(G.hard(hard).autoPatch, false);
 });

@@ -1,5 +1,5 @@
 // Input, the game loop and the heads-up display. All rules live in game.ts.
-import { CONFIG, UPGRADES, UpgradeId } from './config';
+import { CONFIG, DIFFICULTY, Difficulty, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
 import { breath, draw, nearestBloodCell, project, setSpin, TH, TW, unturn, View } from './render';
 import * as Tips from './tips';
@@ -115,8 +115,26 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'c') G.cloak(s);
   else if (k === 'b') G.board(s);
 });
-window.addEventListener('keyup', (ev) => keys.delete(ev.key.toLowerCase()));
-window.addEventListener('blur', () => { keys.clear(); release(); });
+window.addEventListener('keyup', (ev) => { keys.delete(ev.key.toLowerCase()); if (ev.key === 'Shift') silentKey = false; });
+window.addEventListener('keydown', (ev) => { if (ev.key === 'Shift') silentKey = true; });
+window.addEventListener('blur', () => { keys.clear(); release(); silentKey = false; });
+// Running silent: held on Shift, or toggled with the button on a touch screen.
+let silentKey = false, silentOn = false;
+$('silent').addEventListener('click', () => { silentOn = !silentOn; $('silent').setAttribute('aria-pressed', String(silentOn)); });
+// How hard her immune system works: chosen before a mission, fixed for the whole of it.
+const DIFF = 'insiderim.difficulty';
+let difficulty: Difficulty = 'typical';
+try { const d = localStorage.getItem(DIFF); if (d && d in DIFFICULTY) difficulty = d as Difficulty; } catch { /* typical */ }
+function showDifficulty() {
+  $('difficulty').replaceChildren(...(Object.keys(DIFFICULTY) as Difficulty[]).map((id) => {
+    const b = Object.assign(document.createElement('button'), { type: 'button', textContent: DIFFICULTY[id].name });
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(id === difficulty));
+    b.addEventListener('click', () => { difficulty = id; try { localStorage.setItem(DIFF, id); } catch { /* not kept */ } showDifficulty(); });
+    return b;
+  }));
+  $('difficulty-what').textContent = `Her immune system: ${DIFFICULTY[difficulty].what}`;
+}
+showDifficulty();
 
 $('act-e').addEventListener('click', useE);
 $('act-f').addEventListener('click', () => G.startStrip(s));
@@ -231,7 +249,7 @@ function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}) } } };
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}) }, difficulty: d.carry.difficulty ?? 'typical' } };
   } catch { return null; }
 }
 const kept = savedTrip();
@@ -327,7 +345,7 @@ function openWorld(title: string, text: string) {
 
 let stock: UpgradeId[] = [], said = '';
 /** What you carry before you have played a single map. */
-const freshCarry = (): G.Carry => ({ hp: CONFIG.player.maxHp, energy: CONFIG.player.startEnergy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: echo(), kin: 0 });
+const freshCarry = (): G.Carry => ({ difficulty, hp: CONFIG.player.maxHp, energy: DIFFICULTY[difficulty].energy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: echo(), kin: 0 });
 const ECHO = 'insiderim.echo';
 function echo(): number { try { return Math.min(40, Number(localStorage.getItem(ECHO)) || 0); } catch { return 0; } }
 function keepEcho(aware: number) { try { localStorage.setItem(ECHO, String(Math.max(echo(), Math.round(aware * CONFIG.story.echo)))); } catch { /* not kept */ } }
@@ -495,6 +513,7 @@ function set(id: string, prop: 'text' | 'height' | 'width' | 'hidden' | 'tier', 
 }
 
 function hud() {
+  s.silent = silentKey || silentOn;
   const p = s.player, pct = (v: number, max: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
   set('hp-fill', 'height', pct(p.hp, G.maxHp(s)));
   set('hp-val', 'text', String(Math.ceil(p.hp)));
@@ -509,7 +528,7 @@ function hud() {
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
-    : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}`);
+    : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}${s.silent ? ' \u00b7 running silent' : ''}`);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);
