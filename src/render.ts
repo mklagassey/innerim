@@ -663,7 +663,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
     } });
     else if (kind === 'sibling' || kind === 'kin') things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => {
       // A unit exactly like you, dark and slowly tumbling. Now and then its lamp tries to come on.
-      const c = project(item.x, item.y), y = c.y - 13 + Math.sin(v.time * 0.9 + item.x) * 2, lit = kind === 'kin', blink = lit ? 0.75 + 0.2 * Math.sin(v.time * 1.3 + item.x) : Math.max(0, Math.sin(v.time * 0.7 + item.y * 3)) ** 6;
+      const c = project(item.x, item.y), y = c.y - 13 + Math.sin(v.time * 0.9 + item.x) * 2, lit = kind === 'kin', blink = lit ? 0.75 + 0.2 * Math.sin(v.time * 1.3 + item.x) : item.lamp ? 0.45 + 0.12 * Math.sin(v.time * 0.9) : Math.max(0, Math.sin(v.time * 0.7 + item.y * 3)) ** 6;
       ctx.globalAlpha = seen ? 1 : 0.4;
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; oval(ctx, c.x, c.y, 12, 5); ctx.fill();
       ctx.save(); ctx.translate(c.x, y); ctx.rotate(0.5 + Math.sin(v.time * 0.35 + item.x) * 0.5); ctx.scale(1.25, 1.25);
@@ -689,6 +689,14 @@ export function draw(ctx: Ctx, s: State, v: View) {
         ctx.save(); ctx.translate(x, y); ctx.rotate(a * 1.7); oval(ctx, 0, 0, k % 2 ? 4.2 : 2.2, 1.8); ctx.fill(); ctx.restore();
       }
       ctx.globalAlpha = 1;
+    } });
+    else if (kind === 'drop') things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => {
+      // Shepherd's supply drop: a fibrin patch in a ring of its amber light.
+      const c = project(item.x, item.y), ease = v.still ? 0.8 : 0.7 + 0.3 * Math.sin(v.time * 1.6);
+      ctx.globalAlpha = seen ? 1 : 0.4;
+      ctx.strokeStyle = `rgba(240,170,90,${0.7 * ease})`; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.ellipse(c.x, c.y - 4, 20, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      pickup(ctx, item.x, item.y, 'patch', seen, v.time);
     } });
     else things.push({ depth: depthOf(item.x, item.y) - 0.01, draw: () => pickup(ctx, item.x, item.y, kind, seen, v.time) });
   }
@@ -1254,10 +1262,10 @@ function automap(ctx: Ctx, s: State, v: View) {
   for (let y = 0; y < s.size; y++)
     for (let x = 0; x < s.size; x++) {
       const i = idx(s, x, y);
-      if (!s.explored[i] || s.tiles[i] === 'cell') continue;
+      if ((!s.explored[i] && (s.scan !== 'full' || s.place !== 'liver')) || s.tiles[i] === 'cell') continue;
       const c = at(x + 0.5, y + 0.5);
       const sour = s.acid?.[i] === 2;
-      ctx.fillStyle = sour ? (s.visible[i] ? 'rgba(190,235,70,0.5)' : 'rgba(190,235,70,0.26)') : s.visible[i] ? 'rgba(255,226,190,0.5)' : 'rgba(255,226,190,0.26)';
+      ctx.fillStyle = !s.explored[i] ? 'rgba(232,162,90,0.13)' : sour ? (s.visible[i] ? 'rgba(190,235,70,0.5)' : 'rgba(190,235,70,0.26)') : s.visible[i] ? 'rgba(255,226,190,0.5)' : 'rgba(255,226,190,0.26)';
       ctx.beginPath(); ctx.moveTo(c.x, c.y - u * 0.5); ctx.lineTo(c.x + u, c.y); ctx.lineTo(c.x, c.y + u * 0.5); ctx.lineTo(c.x - u, c.y); ctx.closePath(); ctx.fill();
     }
   if (s.tumor.size) {
@@ -1266,7 +1274,7 @@ function automap(ctx: Ctx, s: State, v: View) {
     for (const k of s.tumor) { tx += (k % s.size) + 0.5; ty += Math.floor(k / s.size) + 0.5; if (s.explored[k]) { dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 1.05, 'rgba(235,225,255,0.9)'); dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.8, '#8a5cf0'); } }
     const c = at(tx / s.tumor.size, ty / s.tumor.size);
     ctx.strokeStyle = 'rgba(160,130,240,0.8)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.ellipse(c.x, c.y, u * 5, u * 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, u * 5, u * 2.5, 0, 0, Math.PI * 2); if (s.scan !== 'none') ctx.stroke(); ctx.setLineDash([]); // a unit Shepherd does not trust is not sent the scan
   }
   for (const [k, g] of s.glucose) if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.7, g > 0 ? '#ecb42e' : 'rgba(236,180,46,0.35)');
   for (const portal of s.portals) if (s.explored[idx(s, portal.x, portal.y)]) dot(portal.x + 0.5, portal.y + 0.5, u * 0.9, '#e23a30');

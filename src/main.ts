@@ -98,6 +98,7 @@ window.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const k = ev.key.toLowerCase();
   if (!$('scene').hidden) { ev.preventDefault(); if (k === 'escape') sceneEnd?.(); else if ((k === ' ' || k === 'enter') && !ev.repeat) $('scene').click(); return; }
+  if (cardEnd) { ev.preventDefault(); if ((k === ' ' || k === 'enter' || k === 'escape') && !ev.repeat) $('card').click(); return; }
   if (!$('world').hidden) { if (k === 'escape') { ev.preventDefault(); closeChart(); } return; }
   if (flight) return;
   if (k === 'tab' || k === 'm') { ev.preventDefault(); if (!ev.repeat) toggleMap(); return; }
@@ -242,26 +243,22 @@ $('tips-reset').addEventListener('click', () => { Tips.unmuteAll(); $('tips-rese
 $('tips-reset').hidden = Tips.mutedCount() === 0;
 // The trip so far is kept in the browser, so a reload or a phone that drops the tab does not cost you the mission.
 const SAVE = 'insiderim.trip';
-function saveTrip() {
-  try {
-    const { at, trip: n, fed, heat, carry, tripsDone, event, used, offRoute, defied, tutorial, seen } = trip;
-    if (carry) localStorage.setItem(SAVE, JSON.stringify({ at, trip: n, fed, heat, carry, tripsDone, event, used, offRoute, defied, tutorial, seen }));
-  } catch { /* private window: nothing is kept */ }
-}
+function tripJSON() { const { at, trip: n, fed, heat, carry, tripsDone, event, used, offRoute, defied, tutorial, seen, carded } = trip; return JSON.stringify({ at, trip: n, fed, heat, carry, tripsDone, event, used, offRoute, defied, tutorial, seen, carded }); }
+function saveTrip() { try { if (trip.carry) localStorage.setItem(SAVE, tripJSON()); } catch { /* private window: nothing is kept */ } }
 function forgetTrip() { try { localStorage.removeItem(SAVE); } catch { /* nothing stored */ } }
 function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, tumorCost: d.carry.tumorCost ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}), defied: { ...(d.carry.ledger?.defied ?? {}) }, obeyed: { ...(d.carry.ledger?.obeyed ?? {}) } }, difficulty: d.carry.difficulty ?? 'typical', event: d.event && d.event in EVENTS ? d.event : null }, event: d.event && d.event in EVENTS ? d.event : null, used: Array.isArray(d.used) ? d.used : [], seen: Array.isArray(d.seen) ? d.seen : (Object.keys(T.NODES) as T.NodeId[]) };
+    return { ...T.newTrip(), ...d, carry: { ...freshCarry(), ...d.carry, upgrades: { ...freshCarry().upgrades, ...(d.carry.upgrades ?? {}) }, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}), defied: { ...(d.carry.ledger?.defied ?? {}) }, obeyed: { ...(d.carry.ledger?.obeyed ?? {}) } }, event: d.event && d.event in EVENTS ? d.event : null }, event: d.event && d.event in EVENTS ? d.event : null, used: Array.isArray(d.used) ? d.used : [], seen: Array.isArray(d.seen) ? d.seen : (Object.keys(T.NODES) as T.NodeId[]), carded: d.carded ?? 9 };
   } catch { return null; }
 }
 const kept = savedTrip();
 if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip ${kept.trip} from the ${T.NODES[kept.at].name.toLowerCase()}`; $('begin').textContent = 'Begin a new mission'; }
 $('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; first = true; $('intro').hidden = true; news.push('Unit restored from the last checkpoint.'); onward(); });
-$('begin').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); route = ['heart']; trip.tutorial = ($('briefing') as HTMLInputElement).checked; try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; first = true; inbox = []; news = []; playScene('begin', onward); });
+$('begin').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); route = ['heart']; trip.tutorial = ($('briefing') as HTMLInputElement).checked; try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; first = true; inbox = []; news = []; for (let n = 1; n <= 5; n++) try { localStorage.removeItem(CHAPTER + n); } catch { /* nothing kept */ } playScene('begin', () => card(1, onward)); });
 ($('briefing') as HTMLInputElement).checked = !played(); // a unit that has never finished a mission gets walked through its first liver
-$('again').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; first = true; inbox = []; news = [echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.']; onward(); });
+$('again').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; first = true; inbox = []; news = [echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.']; card(1, onward); });
 
 // ---------- travel: junctions you steer through, and the flight between maps ----------
 
@@ -323,7 +320,8 @@ function onward() {
 /** The heart, or the gut: a chamber with a mouth for each vessel that leaves it. */
 function junction() {
   const c = (trip.carry ??= freshCarry()), ways = T.ways(trip), kind = trip.at === 'heart' ? 'heart' : 'gut';
-  const split = T.commanded(trip) && ways.some((l) => T.assigned(trip, l)) && ways.some((l) => !T.assigned(trip, l));
+  const forking = kind === 'heart' && c.slip?.kind === 'fork' && !c.slip.result && (c.chapter ?? 1) >= 2; // the order for this fork is about to arrive garbled: no road is marked
+  const split = !forking && T.commanded(trip) && ways.some((l) => T.assigned(trip, l)) && ways.some((l) => !T.assigned(trip, l));
   const exits: G.JunctionPlan['exits'] = ways.map((leg) => ({
     to: leg.to, label: T.NODES[leg.to].name, note: T.riskWord(T.riskOf(trip, leg)) || 'quiet',
     assigned: split && T.escorted(trip, leg), known: trip.seen.includes(leg.to), tint: TINT[leg.to] ?? '70,110,255', sense: SENSE[leg.to],
@@ -476,14 +474,19 @@ function forecast(hour: number, nap = 0, snack = -1, event: HostEvent | null = n
 }
 
 /** Sets out for a place: straight there, or by way of whatever is in between. */
-function go(to: T.NodeId) {
-  if (to === 'lungs' && Scenes.sceneFor('lungs') && !seenScenes().includes('lungs')) { playScene('lungs', () => go(to)); return; }
+function go(to: T.NodeId, forked = false) {
+  if (to === 'lungs' && Scenes.sceneFor('lungs') && !seenScenes().includes('lungs')) { playScene('lungs', () => go(to, forked)); return; }
   const way = T.ways(trip).find((l) => l.to === to), straight = !!way?.via, from = trip.at;
-  const out = T.depart(trip, to);
+  let out = T.depart(trip, to);
   if (!out) return;
+  // The garbled order needs somewhere to arrive: with one pending, the road home from the first liver is always played.
+  const sl = trip.carry?.slip;
+  if (out.kind === 'arrive' && sl && !sl.result && sl.kind !== 'fork' && to === 'heart') out = { kind: 'patrol', size: sl.kind === 'hold' ? 2 : 1 };
+  // The branch taken at the garbled fork has already been ruled on: it is not also a lane deviation.
+  if (forked && way && !T.assigned(trip, way)) trip.offRoute = true;
   // Taking a road Shepherd did not assign: the escort goes, and the unit has done something it was not told to.
   // Before the first liver is done the route is only a suggestion: the escort still goes, but nothing is held against the unit.
-  if (way && !T.assigned(trip, way) && !trip.offRoute && T.commanded(trip) && trip.trip === 1) trip.offRoute = true;
+  if (way && !T.assigned(trip, way) && !trip.offRoute && T.commanded(trip) && trip.trip === 1 && !forked) trip.offRoute = true;
   if (way && !T.assigned(trip, way) && !trip.offRoute && T.commanded(trip)) { trip.offRoute = true; tell(G.defyCarry((trip.carry ??= freshCarry()), 'lane', CONFIG.story.orders.little)); }
   if (out.kind === 'arrive') { // nothing on the road: you are carried straight through
     if (trip.carry) { const hours = CONFIG.wait.legHours * (straight ? 2 : 1); trip.carry.hour = (trip.carry.hour + hours) % 24; G.tumorToll(trip.carry, hours); }
@@ -495,7 +498,7 @@ function go(to: T.NodeId) {
   const next = G.createGame(Date.now(), trip.carry ?? undefined, out.kind === 'patrol' ? 'vessel' : out.kind, out.kind === 'patrol' ? out.size : 0, vessel, trip.tutorial);
   if (out.kind === 'liver') trip.tutorial = false;
   Stats.begin();
-  const where = out.kind === 'liver' ? 'Liver lobule · cell tier' : out.kind === 'stomach' ? 'Stomach lining · cell tier' : out.kind === 'lung' ? 'Lung capillaries · cell tier' : `${T.NODES[to].name} · cell tier`;
+  const where = out.kind === 'liver' ? 'Liver lobule · cell tier' : out.kind === 'stomach' ? 'Stomach lining · cell tier' : out.kind === 'lung' ? 'Lung capillaries · cell tier' : `${T.NODES[way?.via ?? to].name} · cell tier`;
   const way2: Way = out.kind === 'lung' ? 'airway' : out.kind === 'liver' ? (route[route.length - 2] === 'portal' || from === 'portal' ? 'portal' : 'artery') : out.kind === 'stomach' ? 'artery' : vessel;
   enter(next, where, way2, out.kind === 'patrol' ? T.NODES[to].name : T.NODES[from].name);
 }
@@ -541,6 +544,13 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
     return;
   }
   if (to === 'lungs') { finish('breath'); return; }
+  // Chapters follow the mission, never the unit's awareness.
+  const ch = c.chapter ?? 1;
+  if (ch === 1 && fromLiver) { c.chapter = 2; c.slip ??= { kind: (['hold', 'lamp', 'fork'] as const)[Math.floor(trip.rng() * 3)], meant: trip.rng() < 0.5 ? 'A' : 'B' }; } // the road home is where the first order goes wrong
+  else if (ch === 2 && trip.trip >= 2 && (to === 'liver' || to === 'stomach' || to === 'gut')) c.chapter = 3;
+  if (home && c.excised >= CONFIG.tumor.goal) c.chapter = 5;
+  if (home && kept && T.commanded(trip)) c.trust = Math.min(100, (c.trust ?? CONFIG.trust.start) + CONFIG.trust.escort);
+  filePages(c);
   if (home && c.excised >= CONFIG.tumor.goal) {
     const st = Story.stageOf(c.aware ?? 0);
     tell([{ who: 'shepherd', text: 'Directive 7 complete. All units: proceed to the lungs for exhalation and disposal.' }]);
@@ -550,9 +560,50 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   if (home) news.push(`Trip ${trip.tripsDone} complete. The host is at ${c.hostHealth}%. The patrols will be larger this time.`);
   if (fromLiver && trip.heat >= 0.25) news.push('The alarm you raised is following you down the veins.');
   if (to === 'stomach') news.push(G.digesting(c.hour, c.snack, trip.event) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.');
-  const next = () => letter(onward);
-  if (home) playScene(`home:${trip.tripsDone}`, next); else next();
+  const next = () => letter(onward), carded = () => ((c.chapter ?? 1) > trip.carded ? card(c.chapter ?? 1, next) : next());
+  if (home) playScene(`home:${trip.tripsDone}`, carded); else carded();
 }
+// ---------- chapters ----------
+
+const CHAPTER = 'insiderim.chapter.';
+let cardEnd: (() => void) | null = null;
+/** A chapter begins: a black card with its title and one line of Shepherd's telemetry. Every card is also a save. */
+function card(n: number, then: () => void) {
+  const c = (trip.carry ??= freshCarry());
+  trip.carded = n; c.chapter = Math.max(c.chapter ?? 1, n);
+  if (n === 1 && !(c.pages ??= []).includes('p1')) c.pages.push('p1');
+  if (n === 4 && !(c.pages ??= []).includes('p27')) c.pages.push('p27');
+  filePages(c);
+  try { localStorage.setItem(CHAPTER + n, tripJSON()); } catch { /* not kept */ }
+  if (noScenes) { then(); return; }
+  const ch = Story.CHAPTERS[n], comp = G.compliance(c.ledger), st = Story.stageOf(c.aware ?? 0), box = $('card'), line = $('card-line');
+  const fill = (v: number) => (n === 4 && c.excised < CONFIG.tumor.goal ? 'UNIT {serial} \u00b7 COMPLIANCE {n}% \u00b7 RESIDUAL DISEASE' : ch.line).replace('{serial}', Story.UNIT).replace('{n}', String(v)).replace('{review}', st >= 2 ? 'REVIEW PENDING' : 'REVIEW NOT REQUIRED');
+  $('card-no').textContent = `Chapter ${n}`;
+  $('card-title').textContent = ch.title;
+  line.replaceChildren(); line.classList.remove('dip');
+  if (n === 5) { if (st >= 3) line.append(Object.assign(document.createElement('s'), { textContent: 'TITHONUS 0001' }), Object.assign(document.createElement('em'), { textContent: `${Story.HOST} V.` })); }
+  else line.textContent = fill(n === 2 ? 100 : comp);
+  let timers: number[] = [], over = false;
+  const end = () => { if (over) return; over = true; cardEnd = null; timers.forEach(clearTimeout); box.classList.remove('on'); timers = [window.setTimeout(() => { box.hidden = true; then(); }, view.still ? 0 : 900)]; };
+  box.hidden = false; void box.offsetWidth; box.classList.add('on');
+  // On the second card the number arrives as 100 and settles to the true value a beat later.
+  if (n === 2 && comp < 100) timers.push(window.setTimeout(() => { line.classList.add('dip'); timers.push(window.setTimeout(() => { line.textContent = fill(comp); line.classList.remove('dip'); }, 500)); }, 2000));
+  timers.push(window.setTimeout(end, 5200));
+  const began = performance.now();
+  cardEnd = end;
+  box.onclick = () => { if (performance.now() - began > 1200) end(); };
+}
+/** Pages of the consent form the unit has come across go into its log, once each. */
+function filePages(c: G.Carry) {
+  const have = journal();
+  for (const id of c.pages ?? []) {
+    const pg = Story.PAGES[id];
+    if (!pg || have.some((e) => e.who === 'page' && e.text.startsWith(pg.title))) continue;
+    keepJournal([{ who: 'page', text: `${pg.title}. ${pg.text}` }]);
+    news.push(`A page of the consent form is on the link: ${pg.title}. It is in the unit log.`);
+  }
+}
+
 /** "The letter" is a night scene with the tumor still in: it plays the first time she is asleep after trip 1, or failing that on reaching the second liver. */
 function letter(then: () => void) {
   const c = trip.carry;
@@ -563,7 +614,7 @@ function letter(then: () => void) {
 // ---------- heads-up display ----------
 
 const last: Record<string, string> = {};
-let shownOffer = '';
+let shownOffer = '', shownAsk = '';
 let tip: Tips.Tip | null = null, tipRest = 0;
 
 function showTip(next: Tips.Tip, at: G.Point) {
@@ -626,7 +677,8 @@ function hud() {
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
     : s.junction ? `${done ? 'The tumor is out. Shepherd orders every unit to the lungs' : `Mission: cut the tumor out of the liver \u00b7 ${s.excised}/${CONFIG.tumor.goal} out`} \u00b7 ${s.junction.kind === 'heart' ? 'steer into a vessel to leave the heart' : 'the portal vein leads on to the liver'}`
     : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}${s.silent ? ' \u00b7 running silent' : ''}${G.inNiche(s) ? ` \u00b7 hidden in the wall${s.nicheTime > CONFIG.niche.holds ? ', fouling' : ` (${Math.ceil(CONFIG.niche.holds - s.nicheTime)} s)`}` : ''}`);
-  const order = G.tutorialOrder(s);
+  const order = G.slipOrder(s) || G.tutorialOrder(s);
+  set('link', 'text', started && G.stage(s) < 4 ? `Link ${G.linkQuality(s)}%` : '');
   if ($('order').hidden === !!order) $('order').hidden = !order;
   if (order) set('order', 'text', `Shepherd: ${order}`);
   $('goal').classList.toggle('yield', !!order && (s.tutorial?.step ?? 5) < 5);
@@ -678,16 +730,20 @@ function hud() {
   const th = [...s.thoughts].reverse().find((x) => x.t <= s.time), dur = th ? 4 + th.text.length * 0.055 : 0, mind = $('mind');
   if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s)); } }
   mind.classList.toggle('on', !!th && s.time < th.t + dur && s.status === 'playing');
-  if (!!s.ask !== !$('ask').hidden) {
+  const askKey = s.ask ? `${G.stage(s)}:${!!s.ask.item.lamp}:${!!s.slipLive}` : '';
+  if (askKey !== shownAsk) {
+    shownAsk = askKey;
     $('ask').hidden = !s.ask;
     if (s.ask) {
-      const st = G.stage(s), c = CONFIG.story.sibling;
+      const st = G.stage(s), c = CONFIG.story.sibling, garbled = !!s.ask.item.slip && !!s.slipLive, lamp = !!s.ask.item.lamp;
       $('ask-kind').textContent = st >= 3 ? 'One of us' : 'Swarm asset';
       $('ask-title').textContent = st >= 3 ? 'Another unit, gone dark' : 'Inert unit located';
       $('ask-text').textContent = st >= 2 ? `Same build as you. Its lamp flickers now and then, as if something in there is trying to start. Shepherd's standing order is to salvage inert units for parts.` : `Same build as this unit. Standing order: salvage inert units for parts.`;
-      const opts: [string, string, string, boolean][] = [['salvage', 'Salvage it', `Shepherd's order. +${c.energy} energy, +${c.hull} hull.`, true]];
-      if (st >= 1) opts.push(['wake', 'Give it some of your charge', `Nobody ordered this. Costs ${c.wake} energy.${s.player.energy < c.wake ? ' You do not have it.' : ''}`, s.player.energy >= c.wake]);
-      opts.push(['leave', 'Leave it whole', "Not Shepherd's order.", true]);
+      if (garbled) $('ask-text').textContent = `Same build as this unit. The order for it arrived as: ${G.slipOrder(s)}`;
+      else if (lamp) $('ask-text').textContent = 'Same build as this unit. Its lamp is on. Nothing this unit did should have caused that.';
+      const opts: [string, string, string, boolean][] = [['salvage', 'Salvage it', garbled ? `+${c.energy} energy, +${c.hull} hull.` : `Shepherd's order. +${c.energy} energy, +${c.hull} hull.`, true]];
+      if (st >= 1 || lamp) opts.push(['wake', 'Give it some of your charge', `Nobody ordered this. Costs ${c.wake} energy.${s.player.energy < c.wake ? ' You do not have it.' : ''}`, s.player.energy >= c.wake]);
+      opts.push(['leave', 'Leave it whole', garbled ? 'Do not touch it.' : "Not Shepherd's order.", true]);
       askIds = opts.filter((o) => o[3]).map((o) => o[0]);
       $('ask-list').replaceChildren(...opts.map(([id, title, what, can], i) => {
         const b = document.createElement('button'); b.type = 'button'; b.disabled = !can;
@@ -705,9 +761,11 @@ function hud() {
     settled = true;
     fileThoughts();
     if (s.junction) { // the mouth you steered into is the road you take
-      const ex = s.junction.exits[s.junction.chose ?? 0];
+      const ex = s.junction.exits[s.junction.chose ?? 0], pending = !!trip.carry?.slip && !trip.carry.slip.result;
       trip.carry = G.carryOf(s);
-      if (ex.to === 'stay') finish('stay'); else go(ex.to as T.NodeId);
+      tell(s.rulings); filePages(trip.carry);
+      const forked = pending && s.slip?.kind === 'fork' && (s.slip.result === 'match' || s.slip.result === 'miss');
+      if (ex.to === 'stay') finish('stay'); else go(ex.to as T.NodeId, forked);
       return;
     }
     void Stats.save(s, { trip: trip.trip, toward: dest, route: [...route] });
@@ -782,6 +840,7 @@ function frame(now: number) {
   spin = Math.abs(aim - spin) < 0.002 ? aim : spin + (aim - spin) * (view.still ? 1 : 1 - Math.exp(-dt * 9));
   setSpin(spin);
   fly(dt);
+  if (started && s.ask && !paused) G.hesitate(s, s.ask.item, dt); // time spent looking at the question counts as time spent beside the unit
   if (s.market && started) { s.market = false; chart('market'); }
   if (godMode && s.status === 'playing') { s.player.hp = G.maxHp(s); s.player.energy = Math.max(s.player.energy, 30); }
   if (started && s.status === 'playing' && !paused) {
@@ -837,6 +896,7 @@ let godMode = false, noScenes = false;
 const qa = {
   /** The choice in front of the player, if there is one: a fork in a junction, a question, an upgrade, or the end screen. */
   pending(): { id: string; kind: string; options: { id: string; label: string; enabled: boolean }[] } | null {
+    if (cardEnd) return { id: `card:${trip.carded}`, kind: 'card', options: [{ id: 'continue', label: $('card-title').textContent ?? '', enabled: true }] };
     if (!$('over').hidden) return { id: 'over', kind: 'ending', options: [{ id: 'again', label: $('over-title').textContent ?? '', enabled: true }] };
     if (!started || s.status !== 'playing') return null;
     if (s.ask) return { id: 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: ['salvage', 'wake', 'leave'].find((x) => b.textContent?.toLowerCase().includes(x === 'wake' ? 'charge' : x)) ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
@@ -848,17 +908,20 @@ const qa = {
   pick(id: string): boolean {
     const now = qa.pending();
     if (!now || !now.options.some((o) => o.id === id && o.enabled)) return false;
-    if (now.kind === 'ending') $('again').click();
+    if (now.kind === 'card') cardEnd?.();
+    else if (now.kind === 'ending') $('again').click();
     else if (now.kind === 'ask') G.answer(s, id as 'salvage');
     else if (now.kind === 'upgrade') G.choose(s, id as UpgradeId);
     else { const ex = s.junction!.exits.find((e) => e.to === id)!; s.player.x = ex.at.x + 0.5; s.player.y = ex.at.y + 0.5; s.player.path = []; }
     return true;
   },
-  state: () => ({ at: trip.at, trip: trip.trip, tripsDone: trip.tripsDone, place: s.junction ? `junction:${s.junction.kind}` : s.place, status: s.status, started, paused, flying: !!flight, scene: !$('scene').hidden, over: !$('over').hidden ? $('over-title').textContent : null, hp: s.player.hp, energy: s.player.energy, host: s.hostHealth, aware: s.aware, excised: s.excised, hour: s.host.hour, event: trip.event, seen: [...trip.seen], offRoute: trip.offRoute, build: Stats.BUILD }),
+  /** Sets this game's garbled order, for testing each one. */
+  slip(kind: Story.SlipKind, meant: 'A' | 'B' = 'A') { const c = (trip.carry ??= freshCarry()); c.slip = { kind, meant }; if (started && s.status === 'playing') s.slip = { kind, meant }; return true; },
+  state: () => ({ chapter: started && s.status === 'playing' ? s.chapter : trip.carry?.chapter ?? 1, trust: started && s.status === 'playing' ? s.trust : trip.carry?.trust ?? CONFIG.trust.start, compliance: G.compliance(started && s.status === 'playing' ? s.ledger : trip.carry?.ledger), slip: started && s.status === 'playing' ? s.slip : trip.carry?.slip ?? null, slipLive: !!s.slipLive, card: cardEnd ? trip.carded : 0, at: trip.at, trip: trip.trip, tripsDone: trip.tripsDone, place: s.junction ? `junction:${s.junction.kind}` : s.place, status: s.status, started, paused, flying: !!flight, scene: !$('scene').hidden, over: !$('over').hidden ? $('over-title').textContent : null, hp: s.player.hp, energy: s.player.energy, host: s.hostHealth, aware: s.aware, excised: s.excised, hour: s.host.hour, event: trip.event, seen: [...trip.seen], offRoute: trip.offRoute, build: Stats.BUILD }),
   /** Keeps the hull and the tanks full. */
   god(on = true) { godMode = on; },
   /** Scenes end the moment they would start. */
-  skipScenes(on = true) { noScenes = on; if (on) sceneEnd?.(); },
+  skipScenes(on = true) { noScenes = on; if (on) { sceneEnd?.(); cardEnd?.(); } },
   /** Puts the ship at the way out of the map it is in, with the fare paid, so the map ends on the next frame. */
   finishMap() { if (s.junction || s.status !== 'playing') return false; s.player.energy = Math.max(s.player.energy, CONFIG.energy.quota + CONFIG.energy.quotaKeep); s.player.x = s.vein.x + 0.5; s.player.y = s.vein.y + 0.5; s.player.path = []; if (s.place !== 'vessel' && s.place !== 'lung') G.leave(s); return true; },
   /** Drops the unit at a place on the circulation as if it had just been carried there. */

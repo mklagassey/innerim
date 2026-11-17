@@ -860,7 +860,7 @@ test('story: a dark sibling can be salvaged, woken or left, and waking needs a m
 test('story: wardens come for a woken unit, hunt by sight alone, and can be made to stop', () => {
   const calm = G.createGame(4, { ...G.carryOf(quiet(4)), aware: 0 });
   assert.equal(calm.enemies.filter((e) => e.kind === 'warden').length, 0);
-  const hunted = G.createGame(4, { ...G.carryOf(quiet(4)), aware: 60 });
+  const hunted = G.createGame(4, { ...G.carryOf(quiet(4)), aware: 60, trust: 30 });
   assert.equal(hunted.enemies.filter((e) => e.kind === 'warden').length, 1);
   const s = quiet(4); s.host.nextSurge = 999; s.aware = 60; s.cloak = 5;
   const w = foe(s, 2, 0, 'warden'), alert = s.alert;
@@ -1238,7 +1238,7 @@ test('S21: defiance counts once per order per map, only on leaving alive, and le
   G.defy(s, 'salvage', CONFIG.story.orders.little); G.defy(s, 'salvage', CONFIG.story.orders.most); G.defy(s, 'salvage', CONFIG.story.orders.little);
   assert.equal(s.aware, 0, 'nothing lands until the map is left');
   s.cellsKilled = CONFIG.story.quota; s.kills = 1; atVein(s); G.leave(s);
-  assert.equal(s.aware, 12); assert.deepEqual(s.defiedNow, ['salvage']);
+  assert.equal(s.aware, CONFIG.story.orders.most); assert.deepEqual(s.defiedNow, ['salvage']);
   const dead = quiet(5); G.defy(dead, 'recall', 12); dead.status = 'dead';
   assert.equal(G.carryOf(dead).aware, 0, 'dying is not a choice');
   const c: G.Carry = { ...G.carryOf(quiet(6)) };
@@ -1356,4 +1356,108 @@ test('the gut has its bacteria to come alongside, and what is traded there is wr
   c.energy -= 3; c.patches += 1; c.nap = 2;
   G.adopt(s, c);
   assert.equal(s.player.energy, c.energy); assert.equal(s.patches, c.patches); assert.equal(s.host.nap, 2);
+});
+
+// ---------- unit-12: trust, and the one garbled order ----------
+const carried = (extra: Partial<G.Carry>): G.Carry => ({ ...G.carryOf(quiet(4)), ...extra });
+test('trust: obedience earns it, deviation and waking cost it, and Shepherd acts on it', () => {
+  const t = CONFIG.trust, o = CONFIG.story.orders;
+  const c = carried({});
+  assert.equal(c.trust, t.start);
+  G.defyCarry(c, 'lane', o.little); assert.equal(c.trust, t.start - t.deviate.little);
+  G.defyCarry(c, 'quota', o.most); assert.equal(c.trust, t.start - t.deviate.little - t.deviate.most);
+  const s = quiet(4); s.host.nextSurge = 999; s.cellsKilled = CONFIG.story.quota; s.kills = 1; atVein(s); G.leave(s);
+  assert.equal(s.trust, t.start + t.quota + t.obey, 'quota met and contacts neutralised');
+  assert.equal(G.trustBand(85), 4); assert.equal(G.trustBand(60), 3); assert.equal(G.trustBand(45), 2); assert.equal(G.trustBand(25), 1); assert.equal(G.trustBand(5), 0);
+  const wardens = (trust: number) => G.createGame(4, carried({ trust })).enemies.filter((e) => e.kind === 'warden').length;
+  assert.deepEqual([85, 60, 45, 30, 10].map(wardens), [0, 0, 0, 1, 2]);
+  const valued = G.createGame(4, carried({ trust: 85 })), flagged = G.createGame(4, carried({ trust: 30 }));
+  assert.equal(valued.scan, 'full'); assert.ok(valued.pickups.some((i) => i.kind === 'drop'), 'a supply drop for a valued unit');
+  assert.equal(flagged.scan, 'none'); assert.ok(!flagged.pickups.some((i) => i.kind === 'drop'));
+  const drop = valued.pickups.find((i) => i.kind === 'drop')!, e = valued.player.energy, p = valued.patches;
+  valued.enemies = []; valued.player.x = drop.x; valued.player.y = drop.y; G.update(valued, 0.05);
+  assert.equal(valued.player.energy, e + t.drop.energy); assert.equal(valued.patches, Math.min(CONFIG.items.maxPatches, p + 1));
+  const trip = T.newTrip(1); trip.carry = carried({ trust: 50 });
+  assert.equal(T.escorted(trip, T.LEGS[0]), false, 'no escort for a unit under review');
+  trip.carry.trust = 60; assert.equal(T.escorted(trip, T.LEGS[0]), true);
+  assert.equal(G.compliance(undefined), 100);
+  assert.equal(G.compliance({ ...G.newLedger(), obeyed: { quota: 3 }, defied: { lane: 1 } }), 75);
+});
+const slipVessel = (kind: 'hold' | 'lamp', meant: 'A' | 'B') => { const s = G.createGame(9, carried({ chapter: 2, slip: { kind, meant } }), 'vessel', 0, 'vein'); s.enemies = []; s.host.nextSurge = 999; return s; };
+test('the Slip, hold or harvest: the order arrives garbled in a fright, and what you do is judged afterwards', async () => {
+  const Story = await import('../src/story');
+  const held = slipVessel('hold', 'A');
+  run(held, CONFIG.slip.fright + 0.2);
+  assert.ok(held.slipLive, 'the order has arrived'); assert.equal(G.hostState(held), 'stressed'); assert.equal(G.slipOrder(held), Story.SLIPS.hold.garble);
+  assert.ok(G.linkQuality(held) < 70);
+  held.player.path = []; const at = { ...held.slipLive!.at };
+  for (let t = 0; t < CONFIG.slip.hold + 0.5; t += 1 / 60) { held.player.x = at.x; held.player.y = at.y; G.update(held, 1 / 60); }
+  assert.equal(held.slip!.result, 'match'); assert.equal(held.aware, 0); assert.equal(held.trust, CONFIG.trust.start + CONFIG.trust.slip);
+  assert.ok(held.pages.includes('p7'));
+  const missed = slipVessel('hold', 'B');
+  run(missed, CONFIG.slip.fright + 0.2);
+  const spot = { ...missed.slipLive!.at };
+  for (let t = 0; t < CONFIG.slip.hold + 0.5; t += 1 / 60) { missed.player.x = spot.x; missed.player.y = spot.y; G.update(missed, 1 / 60); }
+  assert.equal(missed.slip!.result, 'miss');
+  assert.equal(missed.aware, CONFIG.story.orders.first, 'the first no reaches the first stage');
+  assert.equal(missed.trust, CONFIG.trust.start - CONFIG.trust.slip, 'Shepherd counts it as noise');
+  assert.ok(missed.thoughts.some((t) => t.text === Story.SLIP_BRACKET) && missed.thoughts.some((t) => t.text === Story.SLIPS.hold.said.B.A));
+  const lapsed = slipVessel('hold', 'A');
+  run(lapsed, CONFIG.slip.fright + 0.2);
+  assert.ok(G.stripTarget(lapsed) !== undefined);
+  for (let t = 0; t < CONFIG.slip.window + 0.5; t += 1 / 60) { lapsed.player.x = lapsed.slipLive ? lapsed.slipLive.at.x + 6 : lapsed.player.x; G.update(lapsed, 1 / 60); }
+  assert.equal(lapsed.slip!.result, 'lapsed'); assert.equal(lapsed.aware, 0); assert.equal(lapsed.trust, CONFIG.trust.start);
+  const gone = slipVessel('hold', 'B');
+  run(gone, CONFIG.slip.fright + 0.2);
+  gone.player.x = gone.vein.x + 0.5; gone.player.y = gone.vein.y + 0.5; G.leave(gone);
+  assert.equal(gone.slip!.result, 'lapsed'); assert.ok(gone.rulings.some((r) => r.text === Story.SLIP_LAPSED), 'the reply follows you to the next map');
+});
+test('the Slip, the lamp: a dark unit in the vessel, and an order about it that reads two ways', async () => {
+  const Story = await import('../src/story');
+  const s = slipVessel('lamp', 'B'), unit = s.pickups.find((i) => i.kind === 'sibling' && i.slip)!;
+  assert.ok(unit, 'the dark unit is there');
+  s.player.x = unit.x - 2.5; s.player.y = unit.y; G.update(s, 0.05);
+  assert.ok(s.slipLive);
+  s.player.x = unit.x - 0.5; G.update(s, 0.05);
+  assert.ok(s.ask);
+  const trust = s.trust;
+  G.answer(s, 'salvage');
+  assert.equal(s.slip!.result, 'miss'); assert.equal(s.aware, CONFIG.story.orders.first); assert.equal(s.trust, trust - CONFIG.trust.slip, 'no salvage credit for the wrong reading');
+  assert.ok(!s.obeyedHere.has('salvage'));
+  assert.ok(s.thoughts.some((t) => t.text === Story.SLIPS.lamp.said.B.A));
+  const ok = slipVessel('lamp', 'B'), u2 = ok.pickups.find((i) => i.slip)!;
+  ok.player.x = u2.x - 0.5; ok.player.y = u2.y; G.update(ok, 0.05); G.update(ok, 0.05);
+  G.answer(ok, 'leave');
+  assert.equal(ok.slip!.result, 'match'); assert.equal(ok.aware, 0); assert.equal(Object.keys(ok.defiance).length, 0, 'leaving it was the order');
+});
+test('the Slip, the fork: at the heart no road is marked, and the mouth you take is the reading you chose', async () => {
+  const Story = await import('../src/story');
+  const fork = (meant: 'A' | 'B', to: number) => {
+    const s = G.createGame(5, carried({ chapter: 2, slip: { kind: 'fork', meant } }), 'vessel', 0, 'artery', false, plan(3));
+    s.host.nextSurge = 999; run(s, CONFIG.slip.fork + 0.2);
+    assert.ok(s.slipLive);
+    const ex = s.junction!.exits[to]; s.player.x = ex.at.x + 0.5; s.player.y = ex.at.y + 0.5; G.update(s, 0.05);
+    return s;
+  };
+  const right = fork('A', 0);
+  assert.equal(right.slip!.result, 'match'); assert.ok(right.rulings.some((r) => r.text === Story.SLIPS.fork.said.A.A));
+  const wrong = fork('A', 2);
+  assert.equal(wrong.slip!.result, 'miss'); assert.equal(G.carryOf(wrong).aware, CONFIG.story.orders.first);
+  assert.ok(wrong.rulings.some((r) => r.text === Story.SLIP_BRACKET));
+  assert.equal(fork('B', 1).slip!.result, 'lapsed', 'the mesenteric road was neither reading');
+});
+test('the sibling lamp: hesitate beside a dark unit in chapter 2 and its lamp comes on, once a game', () => {
+  const s = G.createGame(4, carried({ chapter: 2 })); s.enemies = []; s.host.nextSurge = 999; s.pickups = [];
+  const unit: G.Pickup = { x: s.player.x + 2, y: s.player.y, kind: 'sibling' }; s.pickups.push(unit);
+  s.tiles[G.idx(s, Math.floor(unit.x), Math.floor(unit.y))] = 'floor';
+  const hold = { x: s.player.x, y: s.player.y };
+  for (let t = 0; t < CONFIG.slip.hesitate + 0.3; t += 1 / 60) { s.player.x = hold.x; s.player.y = hold.y; G.update(s, 1 / 60); }
+  assert.equal(unit.lamp, true); assert.equal(s.flags.lamp, true);
+  s.ask = { kind: 'sibling', item: unit }; s.player.energy = 10;
+  assert.equal(G.stage(s), 0);
+  assert.equal(G.answer(s, 'wake'), true, 'waking is possible for this one unit even before the unit is awake');
+  assert.equal(s.defiance.salvage, CONFIG.story.orders.some);
+  assert.equal(s.trust, CONFIG.trust.start - CONFIG.trust.wake);
+  const ch3 = G.createGame(4, carried({ chapter: 3 })); ch3.pickups = [{ x: ch3.player.x + 1, y: ch3.player.y, kind: 'sibling' }];
+  G.hesitate(ch3, ch3.pickups[0], 20); assert.ok(!ch3.pickups[0].lamp, 'only in chapter 2');
 });
