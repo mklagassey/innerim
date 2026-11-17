@@ -12,7 +12,7 @@ export type RoomSound = 'spoon' | 'claws' | 'paper' | 'sigh' | 'set';
 export interface Beat { seen: string; print?: string; pic?: Picture; hold: number; light?: Light; sound?: RoomSound }
 export interface Scene { when: string; title: string; once: 'ever' | 'mission'; light: Light; beats: Beat[] }
 
-// `when` keys: 'begin' (the cold open), 'home:N' (back at the heart after trip N).
+// `when` keys: 'begin' (the cold open), 'home:N' (back at the heart after trip N), 'letter' (her first night after trip 1 with the tumor still in, or else on reaching the second liver).
 export const SCENES: Scene[] = [
   { when: 'begin', title: 'Injection', once: 'ever', light: 'clinic', beats: [
     { seen: 'A clinic, shot wide and high like a ceiling camera. A woman in a chair, sleeve rolled up. We never see her face.', pic: 'chair', hold: 5, light: 'clinic' },
@@ -25,7 +25,7 @@ export const SCENES: Scene[] = [
     { seen: 'A small plaster on her forearm. She scratches at it without noticing. The dog nudges the leash on its hook.', pic: 'plaster', sound: 'claws', hold: 5.5 },
     { seen: 'She lifts the mug. The artery surges.', pic: 'lift', hold: 4 },
   ] },
-  { when: 'home:2', title: 'The letter', once: 'mission', light: 'night', beats: [
+  { when: 'letter', title: 'The letter', once: 'mission', light: 'night', beats: [
     { seen: 'Night. The kitchen light is the only one on in the house. She takes the letter down from the fridge.', pic: 'fridge', sound: 'paper', hold: 5 },
     { seen: 'The letter, close enough to read at last.', print: '“…not medically necessary at this time.”', pic: 'letter', hold: 5.5 },
     { seen: 'She looks at the brochure still on the fridge, then pins them both back up, side by side.', print: 'TITHONUS. More mornings.', pic: 'fridge', hold: 5.5 },

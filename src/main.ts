@@ -161,8 +161,8 @@ function playScene(when: string, then: () => void, again = false) {
     timer = window.setTimeout(() => { box.hidden = true; then(); }, view.still ? 0 : 1200);
   };
   const next = () => {
+    if (over) return; // the scene is already fading out: its timer is the one that lets the game carry on
     clearTimeout(timer);
-    if (over) return;
     if (++k >= sc.beats.length) { end(); return; }
     const beat = sc.beats[k];
     line.classList.remove('on');
@@ -327,6 +327,7 @@ function openWorld(title: string, text: string) {
     if (slept) k.hostHealth = Math.min(h.maxHealth, k.hostHealth + Math.round((h.secondsPerHour / h.sleepHeals) * (trip.event === 'ibuprofen' ? EVENTS.ibuprofen.sleep : 1)));
     G.tumorToll(k, 1); // the tumor does not wait with you
     openWorld(here.name, slept ? 'You drift for an hour while the host sleeps and mends.' : 'You drift for an hour.');
+    letter();
   });
   const notes = document.createElement('button');
   notes.type = 'button'; notes.className = 'wait'; notes.textContent = 'Unit log and field notes';
@@ -463,6 +464,13 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
   if (home) openWorld(`Trip ${trip.tripsDone} complete`, `You are back in the heart, fed.${trip.carry ? ` The host is at ${trip.carry.hostHealth}%.` : ''} What you carry and what you did to the host both come with you. The patrols will be larger this time.`);
   else if (fromLiver) openWorld('Out of the liver', `${how}${trip.heat >= 0.25 ? ' The alarm you raised is following you down the veins: expect company on the way home.' : ' You left quietly, and the way home should be calm.'}`);
   else openWorld(T.NODES[to].name, how);
+  if (!home) letter();
+}
+/** "The letter" is a night scene with the tumor still in: it plays the first time she is asleep after trip 1, or failing that on reaching the second liver. */
+function letter() {
+  const c = trip.carry;
+  if (!c || sceneEnd || trip.tripsDone < 1 || c.excised >= CONFIG.tumor.goal) return;
+  if (c.nap > 0 || c.hour >= CONFIG.host.asleepFrom || c.hour < G.wakes(trip.event) || trip.at === 'liver') playScene('letter', () => {});
 }
 
 const pickWay = (ev: Event) => { const to = (ev.target as Element).closest<HTMLElement | SVGElement>('[data-to]')?.dataset.to as T.NodeId | undefined; if (to) go(to); };
