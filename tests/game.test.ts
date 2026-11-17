@@ -1303,3 +1303,13 @@ test('S21: Shepherd\'s first liver advances on its triggers, repeats an ignored 
   assert.equal(s.aware, 12);
   assert.equal(G.tutorialOrder(s), '');
 });
+
+test('a vessel\'s side branches can always be entered, and once the tumor is out only the lungs are assigned', async () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const m = generateVessel(seed, 2), N = m.size, seen = new Uint8Array(N * N), q = [m.start.y * N + m.start.x]; seen[q[0]] = 1;
+    while (q.length) { const k = q.pop()!; for (const d of [1, -1, N, -N]) { const j = k + d; if (j >= 0 && j < N * N && !seen[j] && !m.wall[j]) { seen[j] = 1; q.push(j); } } }
+    for (const g of [...m.glucose, ...m.patches]) assert.ok(seen[g.y * N + g.x], `seed ${seed}: something is walled off at ${g.x},${g.y}`);
+  }
+  const t = T.newTrip(1); t.carry = { ...G.carryOf(G.createGame(3)), excised: CONFIG.tumor.goal };
+  assert.deepEqual(T.ways(t).filter((l) => T.assigned(t, l)).map((l) => l.to), ['lungs']);
+});

@@ -152,7 +152,7 @@ export function generateVessel(seed: number, patrol: number): Layout {
   for (let k = 0; k < 4; k++) {
     const x0 = from + 10 + Math.floor(((to - from - 20) * (k + rng() * 0.7)) / 4), dir = rng() < 0.5 ? 1 : -1, len = 6 + Math.floor(rng() * 4);
     let x = x0, y = cy(x0);
-    for (let i = 0; i < len; i++) { y += dir; if (rng() < 0.35) x -= 1; clear(x, y, i === len - 1 ? 1.2 : 0.6); }
+    for (let i = 0; i < len; i++) { y += dir; clear(x, y, 0.6); if (rng() < 0.35) x -= 1; clear(x, y, i === len - 1 ? 1.2 : 0.6); } // cleared before and after each sidestep, so a branch never closes to a corner the ship cannot pass
     nooks.push({ x, y });
   }
   // Clumps of stacked red cells stand in the stream here and there; the blood parts round them.

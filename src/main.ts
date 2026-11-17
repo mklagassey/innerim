@@ -277,7 +277,7 @@ function openWorld(title: string, text: string) {
     ? `The tumor is out. To finish, go to the Heart and take the new road to the Lungs${Story.stageOf(c?.aware ?? 0) >= 3 ? ', or refuse the recall there and stay' : ''}.`
     : `Mission: cut out the tumor in the liver. ${out} of ${CONFIG.tumor.goal} cells are out, so about ${visits} more liver visit${visits === 1 ? '' : 's'}. When it is all out, a road opens from the Heart to the Lungs and you can leave. The mission fails if the ship is destroyed or the host's health reaches zero.`;
   // Shepherd's standing order for the road, for as long as it is still giving orders.
-  const ordered = T.commanded(trip) && ways.some((l) => l.ordered) && ways.some((l) => !l.ordered);
+  const ordered = T.commanded(trip) && ways.some((l) => T.assigned(trip, l)) && ways.some((l) => !T.assigned(trip, l));
   $('world-order').hidden = !ordered;
   $('world-order').textContent = ordered ? `Shepherd: ${trip.offRoute ? Story.STANDING.lane.defied[0] : Story.STANDING.lane.arrival}` : '';
   $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1, trip.event);
@@ -325,7 +325,7 @@ function openWorld(title: string, text: string) {
   $('world-ways').replaceChildren(...ways.map((leg) => {
     const b = document.createElement('button'), word = T.riskWord(T.riskOf(trip, leg));
     b.type = 'button'; b.dataset.to = leg.to;
-    if (T.escorted(trip, leg) && ways.some((l) => !l.ordered)) b.classList.add('ordered');
+    if (T.escorted(trip, leg) && ways.some((l) => !T.assigned(trip, l))) b.classList.add('ordered');
     b.textContent = T.NODES[leg.from].kind === 'organ' ? `Enter the ${T.NODES[leg.from].name.toLowerCase()}` : leg.via ? `Straight home to the ${T.NODES[leg.to].name.toLowerCase()}${word ? ` (${word})` : ''}` : `${T.NODES[leg.to].name}${word ? ` (${word})` : ''}`;
     return b;
   }));
@@ -429,7 +429,7 @@ function go(to: T.NodeId) {
   const out = T.depart(trip, to);
   if (!out) return;
   // Taking a road Shepherd did not assign: the escort goes, and the unit has done something it was not told to.
-  if (way && !way.ordered && !trip.offRoute && T.commanded(trip)) { trip.offRoute = true; keepRulings(G.defyCarry((trip.carry ??= freshCarry()), 'lane', CONFIG.story.orders.little)); }
+  if (way && !T.assigned(trip, way) && !trip.offRoute && T.commanded(trip)) { trip.offRoute = true; keepRulings(G.defyCarry((trip.carry ??= freshCarry()), 'lane', CONFIG.story.orders.little)); }
   if (out.kind === 'arrive') { if (trip.carry) { const hours = CONFIG.wait.legHours * (straight ? 2 : 1); trip.carry.hour = (trip.carry.hour + hours) % 24; G.tumorToll(trip.carry, hours); } land(to, null, 0, to === 'liver' ? 'The vessel narrows and branches. You are at the edge of the liver.' : to === 'gut' ? 'The artery opens into the wall of the gut. The immune system is quiet here.' : to === 'stomach' ? `The artery ends in the wall of the stomach. ${G.digesting(trip.carry?.hour ?? CONFIG.host.startHour, trip.carry?.snack ?? -1, trip.event) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.'}` : 'The vessel was quiet.'); return; }
   dest = to;
   const vessel: G.Vessel = T.NODES[to].kind === 'vein' || to === 'heart' ? 'vein' : 'artery';
