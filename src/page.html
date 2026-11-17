@@ -142,6 +142,9 @@
     .orb { width: 64px; height: 64px; } .belt { left: 12px; right: 12px; bottom: 88px; }
     #style, #build { display: none; }
   }
+  @keyframes starving { 0%, 100% { box-shadow: 0 0 0 0 rgba(236,180,46,0); } 50% { box-shadow: 0 0 18px 4px rgba(236,180,46,0.55); } }
+  #energy.empty { animation: starving 2.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { #energy.empty { animation: none; box-shadow: 0 0 12px 2px rgba(236,180,46,0.5); } }
   @keyframes organ-beat { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.09); } 30% { transform: scale(1); } 42% { transform: scale(1.05); } 60% { transform: scale(1); } }
   @keyframes organ-breathe { 0%, 100% { transform: scale(0.95); } 50% { transform: scale(1.08); } }
   @keyframes organ-churn { 0%, 100% { transform: scale(1.05, 0.96); } 50% { transform: scale(0.96, 1.05); } }

@@ -57,7 +57,7 @@ export const TIPS: Tip[] = [
   { id: 'warden', kind: 'The swarm', title: 'Warden unit',
     body: `One of your own build, still taking orders. Shepherd has flagged you for recall and this is how it collects. Unlike everything else in here it has a lamp and eyes: within ${CONFIG.story.warden.sight} tiles, a clear line to you is all it needs, and the cloak means nothing to a machine. It has no nose, so your scent and wake tell it nothing. Break its line of sight behind cells, or ride past inside a neutrophil. Hurt it to half and it drops its link to Shepherd and goes dark.` },
   { id: 'tcell', kind: 'Immune cell', title: 'Killer T cell',
-    body: 'The host knows you well enough now to send an assassin made for you. It is faster than your ship, it hits very hard, and within a few tiles the CD47 cloak does not fool it, because it reads what you are and not what you are wearing. It does wind up slowly before each blow, and it cannot follow you into acid. Kill it, or do not be found. Butyrate from the gut flora makes the host forget.' },
+    body: 'The host knows you well enough now to send an assassin made for you. It is faster than your ship, it hits very hard, and it follows your scent better than anything else in here. The CD47 cloak hides you from it until it touches you, and then it knows, because it reads what you are and not what you are wearing. It does wind up slowly before each blow, and it cannot follow you into acid. Kill it, or do not be found. Butyrate from the gut flora makes the host forget.' },
   { id: 'board', kind: 'Trick', title: 'Board it',
     body: `This neutrophil is hurt badly enough that you can force your way inside. Press B. For ${CONFIG.board.time} seconds you wear it: no scent, no wake, and antibodies slide off. Everything in the blood takes you for one of its own, except a killer T cell up close. You move a little slower, and striking or firing tears it open. Real pathogens do exactly this.` },
   { id: 'bait', kind: 'Ability', title: 'Stowaway overboard',
@@ -67,7 +67,7 @@ export const TIPS: Tip[] = [
   { id: 'antibody', kind: 'Danger', title: 'Antibody',
     body: `The host has met you before and remembers. These pale Y shapes were made to fit your hull exactly. They drift with the blood and lean toward you when you pass close. If one sticks, your scent carries much further for ${CONFIG.memory.tagTime} seconds and the cloak will not work. Steer round them, or clear them with a strike or a shot. The more alarm you raise on a trip, the more of them there will be on the next map.` },
   { id: 'vein', kind: 'Vessel', title: 'Central vein',
-    body: `Blood drains out of the liver here, and it is your way out too. Stand on it with ${CONFIG.energy.quota} energy and press E.` },
+    body: `Blood drains out of the liver here, and it is your way out too. The ride costs ${CONFIG.energy.quota} energy, and it will not take you unless you have ${CONFIG.energy.quotaKeep} more for the road, so you do not arrive starving. Stand on it and press E.` },
 ];
 
 const KEY = 'insiderim.tips.muted';

@@ -39,7 +39,7 @@ export interface Channel { kind: 'skim' | 'strip'; t: number; total: number; x: 
 export interface State {
   place: Place;
   vessel: Vessel | null; // which kind of vessel, when you are in one
-  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean; nap: number; snack: number; habit: string }; // nap: hours of induced sleep left; snack: hour of an induced meal, or -1 // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
+  host: { hour: number; surge: number; nextSurge: number; eating: boolean; fever: number; mend: number; out: boolean; nap: number; snack: number; habit: string; acid: number; soon: number; slams: number }; // nap: hours of induced sleep left; snack: hour of an induced meal, or -1 // time of the host's day, seconds of fright left, seconds to the next, and whether a meal is going down
   acid: Uint8Array | null; // stomach only, per tile: 1 = mucus, 2 = open acid
   rich: Set<number>; // tiles of cells worth more than the rest (parietal cells)
   riding: number; // seconds left inside a hijacked neutrophil
@@ -141,7 +141,7 @@ export function digesting(hour: number, snack = -1): number {
   return most;
 }
 /** How strong the stomach's acid is right now, from its resting trickle up to 1. */
-export const acidLevel = (s: State) => CONFIG.stomach.resting + (1 - CONFIG.stomach.resting) * digesting(s.host.hour, s.host.snack);
+export const acidLevel = (s: State) => CONFIG.stomach.resting + (1 - CONFIG.stomach.resting) * s.host.acid; // eases up after a meal starts; see update()
 /** What the ship is sitting in: nothing special, mucus or acid. */
 export const acidAt = (s: State, p: Point) => s.acid?.[idx(s, Math.floor(p.x), Math.floor(p.y))] ?? 0;
 /** Hull lost per second in open acid right now. */
@@ -154,7 +154,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   const s: State = {
     place,
     vessel: place === 'vessel' ? vessel : null,
-    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '' },
+    host: { hour: carry?.hour ?? CONFIG.host.startHour, surge: 0, nextSurge: 0, eating: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1) > 0, fever: CONFIG.host.fever.below.filter((h) => (carry?.hostHealth ?? 100) < h).length, mend: 0, out: false, nap: carry?.nap ?? 0, snack: carry?.snack ?? -1, habit: '', acid: digesting(carry?.hour ?? CONFIG.host.startHour, carry?.snack ?? -1), soon: -1, slams: 0 },
     acid: m.acid ?? null,
     rich: new Set((m.rich ?? []).map((p) => p.y * N + p.x)),
     riding: 0,
@@ -602,7 +602,7 @@ function follow(s: State, b: Point & { path: Point[] }, speed: number, dt: numbe
 export const glucoseHere = (s: State) => s.glucose.get(idx(s, Math.floor(s.player.x), Math.floor(s.player.y))) ?? 0;
 export const atVein = (s: State) => dist(s.player, mid(s.vein)) < 1.6;
 /** Out of a liver you pay the fare in energy. Along a vessel the current simply takes you. */
-export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.player.energy >= CONFIG.energy.quota);
+export const canLeave = (s: State) => atVein(s) && (s.place !== 'liver' || s.player.energy >= CONFIG.energy.quota + CONFIG.energy.quotaKeep);
 
 /** The nearest living hepatocyte within arm's reach, if any. */
 export function stripTarget(s: State): Point | null {
@@ -870,8 +870,8 @@ function arrive(s: State, count: number) {
     hidden.sort((a, b) => dist(mid(a), s.player) - dist(mid(b), s.player));
     // Mostly from the nearer vessels, so a response shows up while it still matters.
     const e = spawn(s, 'neutrophil', hidden[Math.floor(s.rng() * Math.min(3, hidden.length))]);
-    e.mood = 'investigate';
-    e.goal = s.lastDamageSite ? { ...s.lastDamageSite } : tileOf(s.player);
+    // They come to where the damage was. With none to go to, they have nothing to steer by and simply start to search.
+    if (s.lastDamageSite) { e.mood = 'investigate'; e.goal = { ...s.lastDamageSite }; }
     e.idle = 0;
   }
 }
@@ -927,7 +927,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     const c = { x: cx / len, y: cy / len }, want = pull * CONFIG.host.drag * dt, from = { x: p.x, y: p.y };
     shift(s, p, c.x * want, c.y * want, pc.radius);
     // Thrown against the wall: the blood wanted you to go somewhere the vessel does not.
-    if ((along.x || along.y) && (p.x - from.x) * c.x + (p.y - from.y) * c.y < want * 0.6 && s.slam <= 0) {
+    // A ship fighting the current is working for it; only one being carried gets thrown. And a single fright can only do so much.
+    const fighting = (!!dir || p.path.length > 0) && p.face.x * along.x + p.face.y * along.y < -0.2;
+    if ((along.x || along.y) && (p.x - from.x) * c.x + (p.y - from.y) * c.y < want * 0.6 && s.slam <= 0 && !fighting && s.host.slams < CONFIG.host.slam.perFright) {
+      s.host.slams += CONFIG.host.slam.damage;
       s.slam = CONFIG.host.slam.every;
       p.hp -= CONFIG.host.slam.damage; p.hurt = 0.25;
       float(s, p, `-${CONFIG.host.slam.damage}`, '#ff5a4d');
@@ -948,6 +951,14 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.host.nextSurge = h.surge.every[0] + s.rng() * (h.surge.every[1] - h.surge.every[0]);
   }
   if (s.place === 'lung' && breathingOut(s) !== s.host.out) { s.host.out = breathingOut(s); emit(s, s.host.out ? 'exhale' : 'inhale'); }
+  // Acid comes up over a little while, never all at once, and the host telegraphs a meal before it lands.
+  s.host.acid += (digesting(s.host.hour, s.host.snack) - s.host.acid) * Math.min(1, dt / CONFIG.stomach.rise);
+  const next = h.meals.find((m) => { const until = (m - s.host.hour + 24) % 24; return until > 0 && until <= CONFIG.stomach.warn; });
+  if (next !== undefined && s.host.soon !== next) {
+    s.host.soon = next;
+    if (s.place === 'stomach') say(s, 'The host is reaching for food. Acid will rise.');
+    emit(s, 'mealsoon');
+  }
   const eating = digesting(s.host.hour, s.host.snack) > 0;
   if (eating && !s.host.eating) {
     say(s, `${outside(s, s.host.hour < 10 ? ['Breakfast: toast, eaten standing up.', 'Breakfast, and the news.', 'Cereal, straight from the box.'] : s.host.hour < 16 ? ['Lunch at the desk again.', 'A sandwich in the car.', 'Lunch with someone who talks a lot.'] : ['Dinner. Seconds.', 'Takeaway on the sofa.', 'Dinner, late, and too much of it.'])} ${s.place === 'stomach' ? 'The stomach floods with acid.' : 'Sugar will be pouring into the blood for a while.'}`);
@@ -971,7 +982,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   const now = hostState(s);
   if (now !== was) {
     if (now === 'stressed') {
-      s.host.nap = 0;
+      s.host.nap = 0; s.host.slams = 0;
       say(s, `${was === 'asleep' ? outside(s, ['In the dream, she is falling.', 'A nightmare: her teeth are coming loose.', 'She dreams of being chased, and her legs will not move.', 'In the dream there is an exam, and she never studied.', 'She dreams of something small moving in her blood.']) : outside(s, ['A car horn, very close.', 'She missed a stair in the dark.', 'A phone rings at the wrong hour.', 'Someone said her name, sharply.', 'A dog, off its lead.', 'A door slammed somewhere in the house.'])} ${s.vessel === 'artery' ? 'The artery clenches and the blood tears through it.' : was === 'asleep' ? 'Her heart pounds, though she never wakes.' : 'Her heart is pounding.'}`);
       emit(s, 'surge');
       // Adrenaline first, cortisol after: droplets of it turn up in the blood around you.
@@ -1009,7 +1020,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     p.hp -= lost; s.sizzle += lost;
     if (s.sizzle >= 1) { float(s, p, `-${Math.floor(s.sizzle)}`, '#c8f05a'); s.sizzle -= Math.floor(s.sizzle); p.hurt = 0.2; emit(s, 'burn'); }
     if (p.hp > 0 && p.hp <= maxHp(s) * CONFIG.items.autoPatchBelow) usePatch(s);
-    if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, 'The acid eats through the hull.'); return; }
+    if (p.hp <= 0) { p.hp = 0; s.status = 'dead'; emit(s, 'dead'); say(s, digesting(s.host.hour, s.host.snack) > 0.4 ? `${s.host.hour < 10 ? 'Breakfast' : s.host.hour < 16 ? 'Lunch' : 'Dinner'}. The acid rose while you were in it.` : 'The acid eats through the hull.'); return; }
   }
 
   for (const item of [...s.pickups]) {
@@ -1112,9 +1123,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.metabolism += dt * (1 + CONFIG.host.fever.burn * fever(s));
   if (s.metabolism >= en.metabolism) {
     s.metabolism = 0;
-    if (p.energy > 0) p.energy--;
+    if (p.energy > 0) { p.energy--; if (p.energy === 0) say(s, 'Energy at zero. Find sugar, or the hull starts to go.'); }
     else {
       say(s, 'You are running on empty and starting to break down.');
+      emit(s, 'starve');
       hurtPlayer(s, en.starveDamage, 'neutrophil');
       if (s.status !== 'playing') return;
     }

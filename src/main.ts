@@ -438,14 +438,15 @@ function hud() {
   set('hp-val', 'text', String(Math.ceil(p.hp)));
   set('energy-fill', 'height', pct(p.energy, CONFIG.energy.quota));
   set('energy-val', 'text', `${p.energy}/${CONFIG.energy.quota}`);
+  $('energy').classList.toggle('empty', started && s.status === 'playing' && p.energy <= 0);
   set('host-fill', 'width', pct(s.hostHealth, CONFIG.host.maxHealth));
   set('host-val', 'text', `${s.hostHealth}%`);
   const mood = G.hostState(s);
   set('host-state', 'text', `${G.fever(s) ? `${CONFIG.host.fever.degrees[G.fever(s)]}\u00b0 \u00b7 ` : ''}${mood === 'stressed' ? 'frightened' : mood}${s.host.habit ? ` \u00b7 ${s.host.habit === 'drink' ? 'tipsy' : 'caffeinated'}` : ''}${s.place === 'lung' ? (G.breathingOut(s) ? ' \u00b7 breathing out' : ' \u00b7 breathing in') : G.digesting(s.host.hour, s.host.snack) > 0 ? ' \u00b7 digesting' : ''} \u00b7 ${clock(s.host.hour)}`);
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
-  const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota - p.energy), done = s.excised >= CONFIG.tumor.goal;
+  const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
-    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'}`} \u00b7 ${need ? `${need} more energy to leave` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
+    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'}`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
     : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} stowaway${s.flora > 1 ? 's' : ''}` : ''}`);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
