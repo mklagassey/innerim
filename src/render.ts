@@ -260,8 +260,10 @@ const FLOOR_W = TW * 1.6, FLOOR_H = TH * 1.6 + 6;
 /** What the floor between the walls is. liver: the sieve-plated lining of a sinusoid. vessel: endothelium, flat cells
  *  drawn out along the flow. heart: endocardium, smooth and glossy over the ridged muscle under it. stomach: mucosa,
  *  dimpled with gastric pits under a film of mucus. lung: the thin wall of an air space, a net of capillaries showing through. */
-type Ground = 'liver' | 'vessel' | 'heart' | 'stomach' | 'lung';
-const GROUND: Record<Ground, string> = { liver: '#7c2231', vessel: '#7a1c2a', heart: '#6e1826', stomach: '#7a3a3c', lung: '#8a3a46' };
+type Ground = 'liver' | 'vessel' | 'heart' | 'stomach' | 'lung' | 'glass' | 'edge';
+// glass: her blood smeared thin on a slide, the field pale and the red cells lying flat and apart. edge: the thick
+// rim of the smear, where cells pile up; it stands in for the chamber's walls, so there are no cells standing there.
+const GROUND: Record<Ground, string> = { liver: '#7c2231', vessel: '#7a1c2a', heart: '#6e1826', stomach: '#7a3a3c', lung: '#8a3a46', glass: '#94869a', edge: '#6e3450' };
 function paintFloor(c: Ctx, variant: number, dead: boolean, ground: Ground = 'liver') {
   const r = rand(variant * 17 + (dead ? 91 : 5)), ox = FLOOR_W / 2, oy = FLOOR_H / 2, base = GROUND[ground];
   // A feathered pool of colour a little bigger than the tile: neighbours overlap and no seam shows.
@@ -328,6 +330,20 @@ function groundOf(c: Ctx, r: () => number, ground: Ground, ox: number, oy: numbe
       c.strokeStyle = 'rgba(255,236,226,0.16)'; c.lineWidth = 0.8; oval(c, cx - 0.3, cy - 0.3, 3.4, 1.9); c.stroke();
     }
     c.fillStyle = 'rgba(255,240,230,0.05)'; oval(c, ox, oy, 26, 10); c.fill(); // mucus film
+  } else if (ground === 'glass' || ground === 'edge') {
+    // Red cells as a stained smear shows them: flat pink discs, paler in the middle where the cell is thinnest.
+    // Apart on the glass; heaped and overlapping at the edge. No current: they lie where the smear left them.
+    const n = ground === 'edge' ? 16 : 3 + Math.floor(r() * 3);
+    for (let k = 0; k < n; k++) {
+      const cx = ox + (r() - 0.5) * 56, cy = oy + (r() - 0.5) * 26, rr = 5 + r() * 1.2;
+      c.fillStyle = ground === 'edge' ? 'rgba(150,56,84,0.62)' : 'rgba(196,104,128,0.75)'; oval(c, cx, cy, rr, rr * 0.5); c.fill();
+      c.fillStyle = 'rgba(232,206,214,0.55)'; oval(c, cx - 0.4, cy - 0.2, rr * 0.42, rr * 0.2); c.fill();
+      c.strokeStyle = 'rgba(110,40,70,0.35)'; c.lineWidth = 0.6; oval(c, cx, cy, rr, rr * 0.5); c.stroke();
+    }
+    if (ground === 'glass' && r() < 0.12) { // now and then a platelet clump, small and violet
+      const cx = ox + (r() - 0.5) * 40, cy = oy + (r() - 0.5) * 18;
+      for (let k = 0; k < 4; k++) { c.fillStyle = 'rgba(110,70,150,0.6)'; oval(c, cx + (r() - 0.5) * 4, cy + (r() - 0.5) * 2, 1 + r() * 0.6, 0.6 + r() * 0.4); c.fill(); }
+    }
   } else if (ground === 'lung') {
     // A capillary net under a wall one cell thick.
     c.strokeStyle = 'rgba(170,30,50,0.22)'; c.lineWidth = 1;
@@ -504,7 +520,8 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
   const road = s.place === 'vessel', gut = s.place === 'stomach', heart = s.junction?.kind === 'heart';
-  const ground: Ground = heart ? 'heart' : road ? 'vessel' : gut ? 'stomach' : s.place === 'lung' ? 'lung' : 'liver';
+  const slide = s.junction?.kind === 'tube';
+  const ground: Ground = slide ? 'glass' : heart ? 'heart' : road ? 'vessel' : gut ? 'stomach' : s.place === 'lung' ? 'lung' : 'liver';
   if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); thin = new Float32Array(s.size * s.size); }
   // Whatever matters on screen: a cell standing in front of one of these goes glassy so you can see it.
   const behind: Point[] = [p, ...s.enemies.filter(seenAt), ...s.pickups.filter(seenAt), ...s.antibodies.filter(seenAt)].map((q) => project(q.x, q.y));
@@ -520,6 +537,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
       lit[i] = vis ? Math.min(1, lit[i] + dt / FADE_IN) : Math.max(0, lit[i] - dt / FADE_OUT);
       known[i] = Math.min(1, known[i] + dt / FADE_KNOWN);
       const glow = lit[i] * lit[i] * (3 - 2 * lit[i]), seen = known[i]; // smoothstep: eases in and out
+      if (t === 'cell' && slide) { floors.push({ x, y, i, c, vis }); continue; } // on the slide the walls are the smear's thick edge, lying flat
       if (t === 'cell') {
         const variant = Math.floor(hash(x, y) * CELL_VARIANTS);
         const hit = !!target && target.x === x && target.y === y;
@@ -574,7 +592,8 @@ export function draw(ctx: Ctx, s: State, v: View) {
   // Each tile's lit look is faded in over its remembered one, so light arrives and leaves gradually.
   const floorImg = (x: number, y: number, i: number, memory: boolean) => {
     const variant = Math.floor(hash(x, y) * 6), dead = s.tiles[i] === 'dead';
-    return sprite(`f${ground}${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, memory, (cx) => paintFloor(cx, variant, dead, ground));
+    const g: Ground = slide && s.tiles[i] === 'cell' ? 'edge' : ground;
+    return sprite(`f${g}${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, memory, (cx) => paintFloor(cx, variant, dead, g));
   };
   const ease = (i: number) => lit[i] * lit[i] * (3 - 2 * lit[i]);
   for (const { x, y, i, c } of floors) {
@@ -712,7 +731,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
     oval(ctx, c.x, c.y, TW * 0.3, TH * 0.3); ctx.stroke();
   }
 
-  for (const b of rbcs) if (b.x > 0 && seenAt(b) && !s.acid?.[idx(s, Math.floor(b.x), Math.floor(b.y))]) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
+  for (const b of rbcs) if (!slide && b.x > 0 && seenAt(b) && !s.acid?.[idx(s, Math.floor(b.x), Math.floor(b.y))]) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
   for (const e of s.enemies) if (seenAt(e)) things.push({ depth: depthOf(e.x, e.y), draw: () => enemy(ctx, e, v) });
   for (const a of s.antibodies) if (seenAt(a)) things.push({ depth: depthOf(a.x, a.y), draw: () => { const c = project(a.x, a.y); antibody(ctx, c.x, c.y - 14 + Math.sin(v.time * 1.7 + a.seed) * 3, v.time * 0.6 + a.seed, 1); } });
   if (s.tagged > 0) things.push({ depth: depthOf(p.x, p.y) + 0.02, draw: () => {
