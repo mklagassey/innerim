@@ -134,6 +134,7 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const f = (x: number) => (Number.isNaN(x) ? '-' : x.toFixed(0));
 const liver: Record<string, Record<Bot, { time: number; host: number }>> = {};
 for (const [name, route] of Object.entries(ROUTES)) {
+  if (process.env.ROUTE && name !== process.env.ROUTE) continue;
   for (const bot of (ONLY ? [ONLY] : ['skim', 'strip']) as Bot[]) {
     const runs = Array.from({ length: RUNS }, (_, i) => trip(bot, route, i + 1));
     const home = runs.filter((r) => r.home), reached = runs.filter((r) => r.liverTime && r.stops.hvein);

@@ -29,7 +29,7 @@ export const NODES: Record<NodeId, Node> = {
 /** One vessel between two places. `risk` is the chance a patrol is working it. */
 export interface Leg { from: NodeId; to: NodeId; risk: number; after?: number; via?: NodeId; ordered?: boolean } // via: passes through this place without stopping. ordered: on the route Shepherd assigns // after: only once this many tumor cells are out
 export const LEGS: Leg[] = [
-  { from: 'heart', to: 'hepatic', risk: 0.8, ordered: true },
+  { from: 'heart', to: 'hepatic', risk: 0.6, ordered: true },
   { from: 'heart', to: 'mesenteric', risk: 0.3 },
   { from: 'mesenteric', to: 'gut', risk: 0.25 },
   { from: 'gut', to: 'portal', risk: 0 },
@@ -89,7 +89,7 @@ export function depart(t: Trip, to: NodeId): Outcome | null {
   if (leg.from === 'liver' || leg.from === 'stomach') return { kind: leg.from };
   if (leg.to === 'lungs') return { kind: 'lung' };
   if (t.tutorial && escorted(t, leg)) return { kind: 'arrive' }; // nothing reaches a unit on its way to its first lesson
-  if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) };
+  if (t.rng() < riskOf(t, leg)) return { kind: 'patrol', size: Math.max(2, Math.min(6, 2 + t.trip + (leg.risk >= 0.6 ? 1 : 0)) - (escorted(t, leg) ? 1 : 0)) }; // an escorted unit meets a smaller patrol
   return { kind: 'arrive' };
 }
 

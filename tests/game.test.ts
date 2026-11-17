@@ -413,10 +413,10 @@ test('the circulation runs one way: out by an artery, home by the veins', () => 
 test('patrols turn up about as often as the map says, and grow with each trip', () => {
   let met = 0;
   for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); t.offRoute = true; if (T.depart(t, 'hepatic')!.kind === 'patrol') met++; }
-  assert.ok(met > 280 && met < 360, `hepatic artery patrols: ${met}/400`);
+  assert.ok(met > 200 && met < 280, `hepatic artery patrols: ${met}/400`);
   let escorted = 0;
   for (let seed = 1; seed <= 400; seed++) { const t = T.newTrip(seed); if (T.depart(t, 'hepatic')!.kind === 'patrol') escorted++; }
-  assert.ok(escorted > 180 && escorted < 260, `with Shepherd's escort: ${escorted}/400`);
+  assert.ok(escorted > 100 && escorted < 180, `with Shepherd's escort: ${escorted}/400`);
   const t = T.newTrip(2); t.rng = () => 0;
   const first = T.depart(t, 'hepatic') as { size: number };
   t.trip = 3;
