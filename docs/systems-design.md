@@ -415,6 +415,13 @@ Runs in the first liver of a game when the player has never finished a game (`lo
 
 **Done when.** Tests: a scripted obedient game ends at awareness 0; a game whose only defiance is one partial quota ends at 12; tutorial steps advance on their triggers and time out after 45 s twice; no awareness from meals, sleep or kills.
 
+## 3d. After Mick's second game (unit-10, 2026-11-17 04:06-04:39Z)
+
+- **Tumour drain too steep and invisible.** His first three maps took 142, 314 and 427 s (about 30 host hours), so the full-rate drain of 2/h took the host from 100 to 47 before the first nodule was out. He asked what he had done to damage her. Fix (`unit-11`): drain **0.75**/h × share left; live "Tumour: −N% on this map" by the host gauge with a soft pulse per point; running total on the world map; report field `tumourDrainThisMap`.
+- **Stealth works.** Livers: 14 and 28 sniffs, 0 spots, 9 and 4 niches used. Silent running barely used (21 s), 0 first strikes, 0 cloaks: watch these next game before changing anything.
+- **Power curve too steep.** 17 upgrade levels by the second liver; lowest hull 56/64 there. Fix: caches per liver 6 → **4**.
+- **First defiance came too early.** Taking the gastric road on trip 1 defied `lane` before the tutorial liver. Fix: `lane` counts only after the tutorial liver is done; on trip 1 the dashed route is a suggestion with escort.
+
 ## 4. Build order for the lead engineer
 
 1. **Build `unit-3`:** S1, S2, S3, S7 (small, mostly `config.ts` plus `generateStomach` and `arrive()`). Add tests: stomach rim glucose exists; reinforcements never target the player tile; slam cap per fright.
@@ -422,7 +429,7 @@ Runs in the first liver of a game when the player has never finished a game (`lo
 3. **Build `unit-5`:** S6 tumor drain, S10 rebalance, S12 report fields.
 4. **Then** S11 sim, S8 traits and S9 offers, and a balance pass from the sim plus Mick's runs.
 5. **Shipped as `unit-5` to `unit-7`:** S14, S15, S16 and post-playtest tuning.
-6. **`unit-8`:** S17, S18, S19 together (shipped; niches as `unit-8b`). **`unit-9`:** S20. **`unit-10`:** S21. Then S8 (Tank, Warrior and Scout traits only) and S9.
+6. **`unit-8`:** S17, S18, S19 together (shipped; niches as `unit-8b`). **`unit-9`:** S20. **`unit-10`:** S21. **`unit-11`:** section 3d tuning. Then S8 (Tank, Warrior and Scout traits only) and S9.
 
 Ask Mick to play after steps 1 and 2; those fix what killed him and add the alert loop he asked for.
 
