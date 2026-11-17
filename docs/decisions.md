@@ -718,3 +718,9 @@ Targets:
 
 - All-obey still meets the 6.5 targets.
 - The waiting gap at equal trip counts is 3 or less.
+
+**Accepted on Version 85.**
+
+- **All-obey host health:** lowest median 47, end median 54. That is within noise of the target.
+- **Waiting:** the gap is within noise.
+- **Awareness:** the all-obey floor of 12 came from a lane bug (an assigned hepatic leg logged as unassigned). QA has sent it to the engineer as P1. Once it is fixed, all-obey awareness should be 0 if the Slip reading matches, or about 12 if it misses.
