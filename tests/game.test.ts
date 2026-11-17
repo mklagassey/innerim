@@ -1609,3 +1609,21 @@ test('endings are checked in the design order, and every one of the thirteen can
   assert.equal(got.size, Story14.OUTCOMES.length);
   assert.equal(Story14.conclude({ ...base, aware: 10 }).last, 'ACK.'); assert.equal(Story14.conclude({ ...base, aware: 80 }).last, 'I was here.');
 });
+
+// ---------- unit-15: the draw ----------
+test('the draw: hold still in the light for ten seconds and the shape is whole; drift and the slide is read anyway', () => {
+  const tube = (kin: number) => { const s = G.createGame(7, carried({ chapter: 5, excised: CONFIG.tumor.goal, aware: 60, kin }), 'vessel', 0, 'vein', false, { kind: 'tube', exits: [] }); return s; };
+  const s = tube(2);
+  assert.ok(s.draw); assert.equal(s.enemies.length, 0); assert.equal(s.pickups.filter((i) => i.posed).length, 2);
+  run(s, 3); assert.equal(s.status, 'playing', 'nothing is read until the unit reaches the light');
+  s.player.x = s.draw!.disc.x; s.player.y = s.draw!.disc.y; s.player.path = [];
+  run(s, CONFIG.draw.hold + 0.5);
+  assert.equal(s.status, 'won'); assert.equal(s.flags.shape, 1); assert.equal(s.flags.ending, 'draw'); assert.equal(s.took.draw, 'held');
+  const [a, b] = s.pickups.filter((i) => i.posed);
+  assert.ok(Math.abs(G.dist(a, s.player) - CONFIG.draw.spacing) < 0.1 && Math.abs(G.dist(b, s.player) - CONFIG.draw.spacing) < 0.1, 'the woken units are evenly spaced beside you');
+  assert.ok(Number(s.flags.response) >= 0 && Number(s.flags.response) <= 100);
+  const m = tube(0); m.player.x = m.draw!.disc.x; m.player.y = m.draw!.disc.y;
+  for (let t = 0; t < CONFIG.draw.window + 0.5 && m.status === 'playing'; t += 1 / 60) { m.player.x += Math.sin(t * 3) * 0.01; G.update(m, 1 / 60); }
+  assert.equal(m.status, 'won'); assert.equal(m.flags.shape, 0.5); assert.equal(m.took.draw, 'moved');
+  s.hostHealth = 40; assert.equal(G.response(s, 1) - G.response(s, 0.5), 5);
+});

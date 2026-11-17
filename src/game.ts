@@ -34,12 +34,12 @@ export interface Shot extends Point { vx: number; vy: number; left: number }
 export interface Float extends Point { text: string; color: string; age: number }
 /** One footprint: where you stepped, which way you were heading, and when. */
 export interface Print extends Point { dx: number; dy: number; born: number }
-export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling' | 'kin' | 'stall' | 'drop'; snooze?: boolean; near?: number; lamp?: boolean; slip?: boolean; page?: string; beset?: number } // near: seconds spent hesitating beside a dark unit. lamp: its lamp came on by itself. slip: the garbled order is about this one
+export interface Pickup extends Point { kind: 'cache' | 'patch' | 'calm' | 'cortisol' | 'sibling' | 'kin' | 'stall' | 'drop'; snooze?: boolean; near?: number; lamp?: boolean; slip?: boolean; page?: string; beset?: number; posed?: boolean } // near: seconds spent hesitating beside a dark unit. lamp: its lamp came on by itself. slip: the garbled order is about this one
 /** The one garbled order of a game: which, which reading Shepherd meant, and how it came out. */
 export interface Slip { kind: Story.SlipKind; meant: 'A' | 'B'; result?: 'match' | 'miss' | 'lapsed' }
 /** One way out of a junction. `to` is a place on the circulation, or 'stay'. */
 export interface Exit { to: string; label: string; note: string; assigned: boolean; known: boolean; tint: string; sense?: string; sensed?: boolean; at: Point } // sense: what the unit makes of this mouth the first time it comes near
-export interface Junction { kind: 'heart' | 'gut'; exits: Exit[]; chose: number | null }
+export interface Junction { kind: 'heart' | 'gut' | 'tube'; exits: Exit[]; chose: number | null }
 export type JunctionPlan = { kind: Junction['kind']; exits: Omit<Exit, 'at'>[] };
 export interface Thought { text: string; who: 'unit' | 'shepherd'; t: number; st?: number; keep?: boolean } // keep: if the map ends before this is shown, it is said on the next one // st: how awake the unit was when it said it
 export interface Ask { kind: 'sibling' | 'volunteer' | 'review' | 'recall' | 'kinrecall'; item: Pickup }
@@ -114,6 +114,7 @@ export interface State {
   lane: { from: Point } | null; // where the ship was when Shepherd told it to hold its lane
   gap: number; // seconds out of Shepherd's sight, in the wall
   notes: string[]; // things that became true on the way out, to be read on the way in
+  draw: { disc: Point; t: number; held: number; shape: number; last: Point; said: boolean } | null; // the tube of her blood on the microscope stage: the lit disc, how long since the unit reached it, how long it has held still there
   due: { kind: Ask['kind']; t: number }[]; // what Shepherd means to put to the unit in this chamber, in order
   stood: boolean; // her immune cells here have been told to stand down
   margin: Set<number>; marginTaken: number; // the healthy cells ringing the last of the nodule, and how many have been taken
@@ -284,7 +285,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     drainHere: 0, tumorCost: carry?.tumorCost ?? 0,
     verdict: '', defied: carry?.defied ?? 0, spots: 0, defiance: {}, obeyedHere: new Set(), defiedNow: [], rulings: [], tutorial: null,
     trust: carry?.trust ?? CONFIG.trust.start, chapter: carry?.chapter ?? 1, slip: carry?.slip ? { ...carry.slip } : null, slipLive: null, slipAt: -1, took: { ...(carry?.took ?? {}) }, met: [...(carry?.met ?? [])], pages: [...(carry?.pages ?? [])], flags: { ...(carry?.flags ?? {}) }, scan: 'nodule', trustPaid: new Set(), selfTest: false,
-    marks: [], echoes: (carry?.echoes ?? []).map((e) => ({ ...e })), marked: false, grabber: null, lane: null, gap: 0, notes: [], due: [], stood: false, margin: new Set(), marginTaken: 0, site: null,
+    marks: [], echoes: (carry?.echoes ?? []).map((e) => ({ ...e })), marked: false, grabber: null, lane: null, gap: 0, notes: [], draw: null, due: [], stood: false, margin: new Set(), marginTaken: 0, site: null,
     junction: junction ? { kind: junction.kind, exits: junction.exits.map((e, i) => ({ ...e, at: m.mouths![i] })), chose: null } : null, market: false,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
@@ -393,10 +394,16 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   }
   if (!junction) notice(s, 'enter', place);
   if (carry && place === 'liver' && !s.tutorial && stage(s) < 4) s.thoughts.push({ text: Story.TRUST_LINES[trustBand(s.trust)].replace('{serial}', Story.UNIT), who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap });
+  if (junction?.kind === 'tube') { // a smear of her blood on glass: no way out, a lit disc in the middle, and any units you woke
+    const c = Math.floor(N / 2);
+    s.draw = { disc: { x: c + 0.5, y: c + 0.5 }, t: 0, held: 0, shape: 0.5, last: { x: s.player.x, y: s.player.y }, said: false };
+    s.pickups = []; s.glucose.clear();
+    for (let k = 0; k < Math.min(s.kin, 6); k++) s.pickups.push({ x: s.player.x + 0.4 + 0.5 * (k % 2), y: s.player.y - 1 + (k % 3), kind: 'kin', posed: true });
+  }
   if (junction?.kind === 'gut') s.pickups.push({ x: Math.floor(N / 2) + 2.5, y: Math.floor(N / 2) + 0.5, kind: 'stall' });
   // Units you have woken turn up where you are going, lamps on, with sugar they have saved for you.
   if (place !== 'lung' && place !== 'stomach')
-    for (let n = Math.min(s.kin, CONFIG.story.kin.most), tries = 0; n > 0 && tries < 4000; tries++) {
+    for (let n = junction?.kind === 'tube' ? 0 : Math.min(s.kin, CONFIG.story.kin.most), tries = 0; n > 0 && tries < 4000; tries++) {
       const x = Math.floor(s.player.x + (lost() - 0.5) * 30), y = Math.floor(s.player.y + (lost() - 0.5) * 30), d = dist(s.player, { x, y });
       if (open(s, x, y) && d > 5 && d < 15) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'kin' }); n--; }
     }
@@ -404,6 +411,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   // With a cold, some of the liver's neutrophils have been called away to the airways.
   m.neutrophils.slice(0, Math.max(1, m.neutrophils.length + (place === 'liver' && s.event === 'cold' ? EVENTS.cold.neutrophils : 0))).forEach((p) => spawn(s, 'neutrophil', p));
   if (place === 'liver' && s.scan === 'none') say(s, `No scan has been shared with this unit. The nodule is somewhere in this lobule. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
+  else if (junction?.kind === 'tube') say(s, 'The blood is still. The anticoagulant has stopped everything. No current, no patrols. A lamp comes on above you: the microscope\u2019s.');
   else say(s, junction ? (junction.kind === 'heart' ? 'The heart. Blood from the whole body pours in around you and pauses, for half a beat, before the valve. Every opening in the far wall is a vessel out.' : 'The gut. Trillions of bacteria, and almost nothing of the immune system. The portal vein drains it to the liver.') : place === 'vessel' ? 'A patrol is working this vessel. Get to the far end.' : place === 'lung' ? 'The lung. Each breath out carries you toward the air; each breath in drags you back.' : place === 'stomach' ? 'The stomach. Acid fills the middle; the way out is a vein on the far side.' : `The scan shows a tumor nodule in this lobule: it is ringed on your map. You need ${CONFIG.energy.quota + CONFIG.energy.quotaKeep} energy to leave by the central vein.`);
   if (s.event) say(s, outside(s, [...EVENTS[s.event].lines]));
   s.host.fever = fever(s);
@@ -1504,7 +1512,9 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     for (const th of s.thoughts) if (th.keep && th.t > s.time) s.rulings.push({ who: th.who, text: th.text, st: th.st });
     return;
   }
+  if (s.draw) smear(s, dt);
   for (const item of [...s.pickups]) {
+    if (item.posed) continue;
     if (item.kind === 'stall') {
       if (dist(item, p) > 2.6) item.snooze = false;
       else if (dist(item, p) <= 1.2 && !item.snooze) { item.snooze = true; s.market = true; stop(s); }
@@ -1849,7 +1859,7 @@ export function fire(s: State, id: string, choice: string) {
     if (e.when) s.echoes.push({ id, choice: name, i }); else applyEcho(s, e);
   });
 }
-const here = (s: State): Where => (s.junction ? s.junction.kind : s.place);
+const here = (s: State): Where => (s.junction ? (s.junction.kind === 'tube' ? 'vessel' : s.junction.kind) : s.place);
 /** On arriving: anything that was waiting for a place like this happens now. */
 function fireEchoes(s: State) {
   const rest: Pending[] = [];
@@ -1903,7 +1913,7 @@ function applyEcho(s: State, e: Echo) {
     case 'standDown': s.stood = true; s.alert = 0; for (const x of s.enemies) if (x.kind !== 'warden') { x.sated = 9999; x.mood = 'patrol'; x.goal = null; x.path = []; x.windup = -1; } note(s, 'Every immune cell in the lobule slows, and stops, and hangs where it is.'); break;
     case 'ambush': { const at = s.site ?? tileOf(s.player); s.alert = Math.min(CONFIG.alert.max, s.alert + 25); s.peak = Math.max(s.peak, s.alert); for (let n = 0, tries = 0; n < 2 && tries < 400; tries++) { const x = at.x + roll(s, -6, 6), y = at.y + roll(s, -6, 6); if (open(s, x, y) && dist(s.player, { x, y }) > 4) { spawn(s, 'kupffer', { x, y }); n++; } } note(s, 'Her immune system has found the residual site. Two macrophages are moving in on it.'); break; }
     case 'supply': s.player.energy += Number(e.arg) || 10; float(s, s.player, `+${Number(e.arg) || 10} energy`, '#ffd35a'); break;
-    case 'ending': s.flags.ending = String(e.arg); if (e.arg === 'recalled') { s.status = 'won'; emit(s, 'win'); } break;
+    case 'ending': if (!s.draw) s.flags.ending = String(e.arg); if (e.arg === 'recalled') { s.status = 'won'; emit(s, 'win'); } break;
     case 'recurrence': break; // decided at the heart, in main.ts, where the roads are drawn
     default: flagged(s, `e:${e.payload}`); // wired in a later build: remembered until then
   }
@@ -1937,6 +1947,34 @@ function placeMarks(s: State, r: () => number) {
       const d = Math.abs(dist(s.player, { x, y }) - 8); if (d < near) { near = d; best = { x, y }; }
     }
     if (best) s.marks.push({ id: 'marked-cell', kind: 'strip', at: mid(best), t: 0, done: false, met: false, say: hold ? 40 : 9 });
+  }
+}
+/** How she, or whoever reads her slide, will take what is on it (decisions.md 6.1). */
+export const response = (s: State, shape: number) => { const w = stewardship(s.ledger, s.excised); return Math.max(0, Math.min(100, Math.round(s.hostHealth - w.harm * 0.5 + w.care * 0.3 + s.pages.length * 5 - s.memory * 20 + shape * 10))); };
+/** The draw: steer into the microscope's light and hold still. The units you woke space themselves beside you. */
+function smear(s: State, dt: number) {
+  const d = s.draw!, p = s.player, c = CONFIG.draw, inLight = dist(p, d.disc) <= c.disc, still = dist(p, d.last) < 0.004 && !p.path.length;
+  d.last = { x: p.x, y: p.y };
+  const kin = s.pickups.filter((i) => i.posed), n = kin.length;
+  if (inLight && !d.said) {
+    d.said = true;
+    if (n) { if (stage(s) >= 3) tellNow(s, [['unit', 'Nothing in a blood smear is evenly spaced. So we will be.']], 0.5); }
+    else tellNow(s, [['unit', stage(s) >= 2 ? 'One speck. She has seen a million specks.' : 'LOG: stationary. [one speck]']], 0.5);
+  }
+  if (d.said) d.t += dt;
+  d.held = inLight && still ? d.held + dt : 0;
+  // Two stand in a line with you; three or more make a ring around you.
+  kin.forEach((k, i) => {
+    const a = (i / n) * Math.PI * 2, to = !d.said ? { x: p.x - 0.9 - 0.5 * i, y: p.y + (i % 2 ? 0.7 : -0.7) } : n <= 2 ? { x: p.x, y: p.y + (i ? 1 : -1) * c.spacing } : { x: p.x + Math.cos(a) * c.spacing, y: p.y + Math.sin(a) * c.spacing };
+    const far = dist(k, to), step = Math.min(far, c.kinSpeed * dt);
+    if (far > 0.02) { k.x += ((to.x - k.x) / far) * step; k.y += ((to.y - k.y) / far) * step; }
+    else if (d.said && inLight && still && !k.lamp) { k.lamp = true; float(s, k, 'here.', '#bfe9ff'); emit(s, 'pickup'); }
+  });
+  if (d.held >= c.hold || d.t >= c.window) {
+    d.shape = d.held >= c.hold ? 1 : 0.5;
+    s.flags.response = response(s, d.shape); s.flags.shape = d.shape; s.flags.ending = 'draw';
+    take(s, 'draw', d.shape === 1 ? 'held' : 'moved', { mute: true });
+    s.status = 'won'; emit(s, 'win');
   }
 }
 /** Chapter 4, in the liver: the last of the nodule, and the three things Shepherd wants done about it. */
