@@ -349,3 +349,27 @@ The engineer's departures, all accepted:
   - The first deviation floors awareness at 12.
   - From the third deviation on the same decision id, its weight is halved.
   - Weights are ×0.5 if `flags.repaired` is set.
+
+### 10.9 As built (unit-14, Version 64)
+
+All of these are accepted. Each entry gives what shipped and, where it differs from the spec, how.
+
+- **m13 kin-volunteer.** It now also needs no cloak ready and no hitchhikers.
+- **D13 suppress.** It is a hold mark placed 3 tiles from the nodule. Refusing means excising a tumour cell while the order is unmet. That raises alert by 25 and brings two Kupffer cells to the site.
+- **m6 margins.**
+  - Up to 6 healthy cells ringing the last nodule cells are eligible, and 4 are needed. The result is settled when you leave the map.
+  - Recurrence is rolled once, at 25%, at the chapter 5 heart.
+  - *Simplified:* recurrence does not regrow tumour cells or restart the drain. Instead it swaps the scan reel and appends creative's follow-up paragraph to the dispose and draw endings. It also turns a Stay into the Recurrence ending.
+  - Follow-up for later: the playable regrowth, meaning one more liver visit with the drain at its lowest rate.
+- **D12 beacon.** It is a hold mark on the dead tumour tile. Planting it and then breaking it is not built yet.
+- **D11 telemetry review.**
+  - It is offered at the heart in chapter 3 or later, at stage 2 or 3, as a question.
+  - Accepting resets the unit: awareness goes to 0, the `repaired` flag is set (it halves later gains), the hull is restored in full and 2 patches are added.
+- **D14 recall.**
+  - The warden recall is a question asked when trust is in band 0.
+  - Kin recall is a question at the heart, not a map. It comes up 50% of the time. Intercepting it costs 3 energy and one host hour.
+- **Endings.**
+  - `Story.conclude` follows the order in 6.1.
+  - It adds "Breathed out, with company" for stage 3 or higher with at least 1 kin.
+  - Tithonus is checked before Recurrence.
+- **Audit.** It lists the `ledger.defied` lines plus telemetry gaps.
