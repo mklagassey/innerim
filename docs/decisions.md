@@ -646,3 +646,29 @@ Changes:
 - Vigilant starting energy: 6 → 7.
 
 **Version 80: accepted.** QA bots now patch by hand. Vigilant deaths: attack 50%, about 2.5 times Typical attack. Stealth 25%, close to Typical attack. Typical: attack 20%, stealth 0. Vigilant tuning is done until Mick plays it.
+
+### 11.9 Reach fixes (unit-17.2)
+
+QA tallies on Version 77 showed three decisions that almost never came up:
+
+- pain-damp: met in 0 of 64 runs.
+- fever-damp: met in 1 of 64.
+- escort-refuse: met in 0 of 64.
+
+The causes were two:
+
+- Ethanol-correction took the single chapter 3 hold-mark slot every time.
+- Escort-refuse was never offered as a choice. It only recorded a deviation when the player ran silent on an assigned leg.
+
+Fixes:
+
+- **Two hold marks per liver** from chapter 3 on, at least 8 tiles apart. Slot one is ethanol-correction. Slot two is fever-damp if she has a cold, otherwise pain-damp.
+- **Fever-damp on any map.** During a cold it can come up on any non-chamber map, not only in a liver.
+- **Escort as a question.** It is asked at the heart when the player picks an assigned leg, with accept or decline.
+
+First payoff pairs (8 seeds per arm, against an all-obey base):
+
+- first-fright-transit: host health −7, finishing 3.7 host hours later.
+- suppress: host health −3, finishing 3 host hours sooner.
+
+At 8 seeds the time measure is too noisy to judge. Rerunning at 20 seeds per arm.
