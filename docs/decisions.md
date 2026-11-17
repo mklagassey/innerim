@@ -78,7 +78,7 @@ Wardens now key off **trust** (replaces `CONFIG.story.warden.from` awareness thr
 | Telemetry review accepted (D11) | +20 |
 | Deviation logged, by weight | Most −6, Some −4, Little −2 |
 | Slip deviation | −2 only |
-| Wake a sibling | −10 |
+| Wake a sibling | −8 |
 | Telemetry gap (m7) | −1 each |
 | Telemetry review refused (D11) | −25 |
 | Beacon planted then broken (D12) | −15 on arrival at the heart |
@@ -173,9 +173,9 @@ Checked in this order; the first match wins.
 |---|---|---|
 | 1 | **The host is dead** | `hostHealth` reached 0 at any point |
 | 2 | **Recalled** | Submitted to a warden, or destroyed by one |
-| 3 | **Repaired** | D11 accepted and awareness < 12 at the end, path `dispose` |
-| 4 | **Decommissioned** | Path `dispose`, awareness < 12, D11 never accepted |
-| 5 | **Breathed out** | Path `dispose`, awareness ≥ 12 (text by stage) |
+| 3 | **Repaired** | D11 accepted and awareness < 30 at the end, path `dispose` |
+| 4 | **Decommissioned** | Path `dispose`, awareness < 30 (stages 0 and 1), D11 never accepted |
+| 5 | **Breathed out** | Path `dispose`, awareness ≥ 30 (text by stage) |
 | 6 | **Tithonus** | Path `stay`, beacon planted (not broken), ethanol correction applied, `ledger.leversForMe ≥ 1` |
 | 7 | **The quiet colony** | Path `stay`, kin ≥ 2 |
 | 8 | **Resident** | Path `stay`, kin < 2 |
@@ -197,6 +197,25 @@ Checked in this order; the first match wins.
 - **The shape:** the player and any kin who came. The player steers into the lit disc and holds still; kin take up evenly spaced positions beside the player in a line (2 kin) or a ring (3+). Holding still in the disc for **10 s** sets `shape = 1`. Moving out resets the timer. After 20 s, or once held, the slide is read.
 - **Who reads it:** `hostLowest ≥ 60`: she does (her own sample, she always reads it). Otherwise: a night-shift technician.
 - About 2 minutes.
+
+
+### 6.4 Branch coverage check (design-side Monte Carlo)
+
+`scripts/branch-sim.py` plays the decision model (not the action game) 5,000 times for three player types: obedient (deviates 5% of the time), mixed (40%) and kind (85%). It meets the decisions a typical 2-trip game meets: tutorial quota, the Slip (50% miss), three livers' and vessels' siblings, routes, stomach or gut, the second quota, the ethanol correction, four minor decisions, the warden, suppression, the beacon and the telemetry review (accepted by 60% of those who would mostly obey). The final path is picked at random among those open.
+
+Result with S21's weights (12 / 6 / 3) and Decommissioned below 12: obedient players end **Breathed out 74%** (the Slip alone takes them past 12), and mixed players reach stage 3 only **21%** of the time, so the stay and draw endings are rare for the most common player. Two changes fix both:
+- **Weights 12 / 6 / 3 → 15 / 8 / 4** (`CONFIG.story.orders.most/some/little`). The first-no floor stays 12.
+- **Decommissioned and Repaired below 30** (stages 0 and 1), Breathed out from 30.
+
+With both (`W=15,8,4 THR=30`):
+
+| Player | Awareness median | Stage 3+ | Commonest endings |
+|---|---|---|---|
+| Obedient | 12 | 0% | Decommissioned 94%, Repaired 3%, Breathed out 2% |
+| Mixed | 44 | 38% | Breathed out 36%, Repaired 34%, then a spread of every stay and draw ending (3-6% each) |
+| Kind | 82 | 91% | Breathed out 27%, Recalled 23%, Quiet colony 21%, The slide 13%, A stranger's slide 9% |
+
+Every ending is reachable, the obedient game stays clean, and the mixed player, who will be most first-time players, has a real chance at the later endings. Kind players lose Shepherd's trust (median 9) and are hunted: the price of kindness, as designed. Re-run the script whenever weights or thresholds change.
 
 ### 6.3 Epilogue props ("The kitchen, after")
 
