@@ -2000,15 +2000,15 @@ function applyEcho(s: State, e: Echo) {
     case 'seedCell': { // the nodule in the artery wall was left: it has shed into the liver downstream
       if (!s.tumor.size || s.excised <= 0) break;
       const spot = [...s.tumor].flatMap((k) => STEPS.map(([dx, dy]) => ({ x: (k % s.size) + dx, y: Math.floor(k / s.size) + dy }))).find((q) => inside(s, q.x, q.y) && s.tiles[idx(s, q.x, q.y)] === 'cell' && !s.tumor.has(idx(s, q.x, q.y)));
-      if (spot) { s.tumor.add(idx(s, spot.x, spot.y)); s.excised--; note(s, 'The nodule here is one cell larger than the last scan showed. Seeded from the arterial wall.'); }
+      if (spot) { s.tumor.add(idx(s, spot.x, spot.y)); s.excised--; note(s, 'The nodule here has grown by one cell since the last scan. Cells shed from the deposit left in the artery wall upstream have lodged here.'); }
       break;
     }
     case 'rest': flagged(s, 'rest'); break;
     case 'longCold': flagged(s, 'longCold'); break;
-    case 'coldBreaks': if (s.antibodies.length > 3) { s.antibodies = s.antibodies.filter((_a, i) => i % 3 !== 2); note(s, 'Her fever broke in the night. There are fewer antibodies adrift than there were.'); } break;
+    case 'coldBreaks': if (s.antibodies.length > 3) { s.antibodies = s.antibodies.filter((_a, i) => i % 3 !== 2); note(s, 'Her fever broke in the night. The cold is beaten, her plasma cells have slowed, and fewer antibodies are adrift today.'); } break;
     case 'nerveLane': { // the old virus in her nerve roots is awake, and her T cells have come for it
       const at = freeTile(s, s.rng, (_x, _y, d) => d > 9 && d < 20);
-      if (at) { let n = 0; for (let tries = 0; n < 3 && tries < 300; tries++) { const x = at.x + roll(s, -3, 3), y = at.y + roll(s, -3, 3); if (open(s, x, y) && dist(s.player, { x, y }) > 6) { spawn(s, 'tcell', { x, y }); n++; } } note(s, 'T cells are gathering along a nerve root ahead. Something that has slept in her since she was six is awake, and they have come for it.'); }
+      if (at) { let n = 0; for (let tries = 0; n < 3 && tries < 300; tries++) { const x = at.x + roll(s, -3, 3), y = at.y + roll(s, -3, 3); if (open(s, x, y) && dist(s.player, { x, y }) > 6) { spawn(s, 'tcell', { x, y }); n++; } } note(s, 'T cells are gathering along a nerve root ahead. The chickenpox virus she caught at six has been asleep in it for fifty years. It is copying itself again, and they have come for it.'); }
       break;
     }
     case 'lowReserve': if (s.player.energy > CONFIG.marks.reserve) { s.player.energy = CONFIG.marks.reserve; note(s, 'Reserves are low for the last stretch. The harvest that was ordered would have covered it.'); } break;

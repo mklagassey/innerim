@@ -4,11 +4,11 @@
  * tagOnTouch = seconds every antibody drifts toward you after a cell touches you; cloakDecay = how much shorter each cloak on one map is than the last;
  * scanHeading = Shepherd's scan points at the nearest hunter; dropAhead = a trusted unit finds a supply drop in the liver; drain and mend scale the tumour's toll and the night's repair. */
 export const DIFFICULTY = {
-  suppressed: { name: 'Suppressed', what: 'She is recovering from chemotherapy and her white count is low. Her defences are slow to find you and quick to forget you.', damage: 0.6, hp: 0.8, spawns: 0.7, healing: 1.3, energy: 12, detection: 0.8, autoPatch: true,
+  suppressed: { name: 'Suppressed', what: 'She has been on a course of steroids for her arthritis. Her white count is low, and her defences are slow to find you and quick to forget you.', damage: 0.6, hp: 0.8, spawns: 0.7, healing: 1.3, energy: 12, detection: 0.8, autoPatch: true,
     rules: { trail: 1 / 1.5, ring: 1 / 1.5, memoryCarry: 0.5, tagOnTouch: 0, cloakDecay: 0, scanHeading: true, dropAhead: true, drain: 0.8, mend: 1 } },
   typical: { name: 'Typical', what: 'A healthy 58-year-old\'s defences, doing their job.', damage: 1, hp: 1, spawns: 1, healing: 1, energy: 8, detection: 1, autoPatch: true,
     rules: { trail: 1, ring: 1, memoryCarry: 1, tagOnTouch: 0, cloakDecay: 0, scanHeading: false, dropAhead: true, drain: 1, mend: 1 } },
-  vigilant: { name: 'Vigilant', what: 'She had her flu jab last week and her immune system is primed. It remembers your trail, learns your cloak, and once a cell has touched you every antibody knows where you are. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false,
+  vigilant: { name: 'Vigilant', what: 'She had her flu jab last week, and her immune system is primed. It remembers your trail, learns your cloak, and once a cell has touched you every antibody knows where you are. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false,
     rules: { trail: 1.3, ring: 1, memoryCarry: 1, tagOnTouch: 20, cloakDecay: 0.25, scanHeading: false, dropAhead: false, drain: 1.2, mend: 0.7 } },
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;

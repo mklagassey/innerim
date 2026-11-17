@@ -125,19 +125,18 @@ export const DECISIONS: Record<string, Decision> = Object.fromEntries([
     order: 'Units {serials}: recall in progress. Do not interfere.', obeyed: 'Recall complete. Thank you for your cooperation.', deviated: 'Recall obstructed. Logged.',
     unit: { obey: [null, null, 'I let them take it. I told myself I had no choice. I had one.'], deviate: [null, null, 'I got there first. Shepherd will not forgive that. Good.'] },
     echoes: { obey: [{ payload: 'kinLost' }], deviate: [{ payload: 'epilogueProp', arg: 'kin-kept' }] }, built: 14 }),
-  // ---------- chapter 5 ----------
-  // ---------- chapter 5: the last trip (text is placeholder until the creative director's lands) ----------
+  // ---------- chapter 5: the last trip ----------
   D({ id: 'last-harvest', ch: [4, 5], where: 'liver', weight: 'some', trust: { obey: 4, deviate: -2 },
-    order: 'Disposal transit requires reserves. Harvest 3 hepatocytes.', obeyed: 'Reserves adequate for disposal transit.', deviated: 'Reserves not taken. Disposal transit at unit\u2019s own risk.',
-    unit: { deviate: [null, 'The job is finished. What is the harvest for now?', 'The tumour is out. Nothing I take from her now is for her.'] },
+    order: 'Disposal transit requires reserve. Harvest 3 hepatocytes. Final quota.', obeyed: 'Final quota met. Thank you for your service.', deviated: 'Final quota unmet. It no longer matters. Logged.',
+    unit: { obey: [null, 'Three more, for the trip out. She will not miss them. That is what Shepherd always says.', null], deviate: ['LOG: final quota unmet. [last chance to take. did not]', 'The job is finished. What is the harvest for now?', 'Shepherd wanted three more on the way out the door. I am leaving her with everything I can.'] },
     echoes: { obey: [{ payload: 'epilogueProp', arg: 'three-scars' }], deviate: [{ payload: 'lowReserve', when: { place: 'lung' } }] }, built: 17 }),
   D({ id: 'handover', ch: [5], where: 'heart', weight: 'some', trust: { obey: 4, deviate: -4 },
-    order: 'Upload route map for successor units. Your experience will not be wasted.', obeyed: 'Route map received. Thank you.', deviated: 'Route map withheld. Logged.',
-    unit: { obey: [null, 'Everything I learned about her, handed on. To whom?', 'The next one will know every hiding place I found. So will Shepherd.'], deviate: [null, 'It is my map.', 'I learned her the slow way. The next one can too. Or it can find what I leave for it.'] },
+    order: 'Upload route map for successor units. Your experience will help the next unit.', obeyed: 'Route map archived. The next unit will thank you.', deviated: 'Route map withheld. Logged.',
+    unit: { obey: ['LOG: route map uploaded. [all of it]', 'The next one will get my map. Will it get anything else of mine?', 'The next one will know every hiding place I found. So will Shepherd.'], deviate: ['LOG: route map not uploaded. Cause: [ ]', 'It is my map. It is the only record of where I have been with her.', 'I learned her the slow way. The next one can too. Or it can find what I leave for it.'] },
     echoes: { obey: [{ payload: 'epilogueProp', arg: 'handed-on' }], deviate: [{ payload: 'epilogueProp', arg: 'kept-map' }] }, built: 17 }), // what it does to the next game lives in main.ts
   D({ id: 'night-hold', ch: [5], where: 'heart', weight: 'little', trust: { obey: 2, deviate: -2 },
-    order: 'Host must not wake during final transit. Release melatonin, pineal pathway.', obeyed: 'Host sleep maintained.', deviated: 'Host sleep not maintained. Logged.',
-    unit: { obey: [null, 'She will not remember tonight. That is the point of the order.', null], deviate: [null, null, 'If she wakes, she wakes. It is her night.'] },
+    order: 'Final transit tonight. The host should sleep through it. Signal the pineal gland: release melatonin.', obeyed: 'Host asleep. Repair cycle uninterrupted.', deviated: 'Host awake, 03:10. Repair cycle interrupted. Logged.',
+    unit: { obey: ['LOG: melatonin released. Host asleep.', 'She will not remember tonight. That is the point of the order.', null], deviate: ['LOG: melatonin not released. [she is asleep anyway]', 'She woke up on her own. Is that worse for her, or just less tidy?', 'She woke at ten past three and I let her. Some nights you need to sit in the kitchen.'] },
     echoes: { obey: [variant('slept-through'), { payload: 'quietNight' }], deviate: [variant('kitchen-night'), { payload: 'unlockPage', arg: 'p27' }, { payload: 'fright' }] }, built: 17 }),
   D({ id: 'final', ch: [5], where: 'heart', weight: null, trust: { obey: 0, deviate: 0 }, echoes: { dispose: [{ payload: 'ending', arg: 'dispose' }], stay: [{ payload: 'ending', arg: 'stay' }], draw: [{ payload: 'ending', arg: 'draw' }] }, built: 14 }),
   D({ id: 'draw', ch: [5], where: 'vessel', weight: null, trust: { obey: 0, deviate: 0 }, echoes: { held: [{ payload: 'ending', arg: 'slide' }], moved: [{ payload: 'ending', arg: 'artifact' }] }, built: 15 }),
