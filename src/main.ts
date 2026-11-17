@@ -1,7 +1,7 @@
 // Input, the game loop and the heads-up display. All rules live in game.ts.
 import { CONFIG, UPGRADES, UpgradeId } from './config';
 import * as G from './game';
-import { draw, nearestBloodCell, project, setSpin, TH, TW, unturn, View } from './render';
+import { breath, draw, nearestBloodCell, project, setSpin, TH, TW, unturn, View } from './render';
 import * as Tips from './tips';
 import * as Sound from './audio';
 import * as Stats from './stats';
@@ -589,6 +589,7 @@ function frame(now: number) {
   Sound.pulse(started && s.status === 'playing' && !tip && !paused ? bpm : 0, s.player.hp / G.maxHp(s), heat);
   aimPointer();
   const live = started && s.status === 'playing' && !tip && !paused;
+  Sound.scene(s.place === 'vessel' ? (s.vessel ?? 'artery') : s.place, breath(s), G.digesting(s.host.hour, s.host.snack), live);
   view.heat = live ? Sound.intensity() : 0;
   // The picture keeps the host's pulse even where the sound cannot start.
   const heard = live ? Sound.thump() : 0;

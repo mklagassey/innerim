@@ -4,7 +4,8 @@
 // Tiles are painted once into small off-screen images (with all their texture) and then
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
-import { Enemy, Point, State, inSearch, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { atmosphere } from './atmosphere';
+import { Enemy, Point, State, inSearch, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -691,6 +692,10 @@ export function draw(ctx: Ctx, s: State, v: View) {
   }
   ctx.globalAlpha = 1;
   ctx.restore();
+
+  // The fluid itself: drifting specks, lamp haze and the place's colour grade (src/atmosphere.ts).
+  const here = currentAt(s, p), along = project(here.x, here.y);
+  atmosphere(ctx, { w: v.w, h: v.h, dpr: v.dpr, zoom: v.zoom, time: v.time, still: v.still, kick: v.kick, cam, flow: along, strength: currentStrength(s), reach: reach * v.zoom, place: s.place === 'vessel' ? (s.vessel ?? 'artery') : s.place, breath: air, dt });
 
   // Darkness closing in at the edge of the screen.
   const dark = ctx.createRadialGradient(v.w / 2, v.h / 2, Math.min(v.w, v.h) * 0.3, v.w / 2, v.h / 2, Math.max(v.w, v.h) * 0.7);
