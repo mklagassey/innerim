@@ -136,6 +136,8 @@
   #scene[data-light="dawn"] #scene-light { background: radial-gradient(90% 40% at 50% 85%, rgba(236,180,120,0.3), rgba(236,180,120,0) 70%); }
   #scene-line { position: relative; display: grid; gap: 18px; justify-items: center; max-width: 36rem; min-height: 9em; align-content: center; opacity: 0; transition: opacity 1.2s ease; }
   #scene-art { width: min(36rem, calc(100vw - 64px)); } #scene-art:empty { display: none; } #scene-art svg { width: 100%; height: auto; display: block; -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, transparent 100%); mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, transparent 100%); } /* the picture melts into the dark instead of sitting on it like a card */
+  #scene-art svg.footage { -webkit-mask-image: radial-gradient(ellipse 56% 56% at 50% 50%, #000 70%, transparent 100%); mask-image: radial-gradient(ellipse 56% 56% at 50% 50%, #000 70%, transparent 100%); } /* footage has its own vignette; a softer outer fade keeps the corner marks */
+  @media (max-width: 560px) { #scene { padding: 16px; } #scene-art { width: calc(100vw - 32px); } }
   #scene-seen { margin: 0; text-align: center; font: italic 400 clamp(1.05rem, 3.6vw, 1.4rem)/1.45 var(--body, serif); color: var(--bone-dim); text-wrap: balance; }
   #scene-print { margin: 0; text-align: center; font: 500 clamp(1rem, 3.6vw, 1.35rem)/1.4 var(--data); letter-spacing: 0.06em; color: var(--bone); text-wrap: balance; }
   #scene-seen:empty, #scene-print:empty { display: none; }
