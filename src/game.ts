@@ -1657,7 +1657,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   const mem = CONFIG.memory;
   for (const b of [...s.decoys]) if ((b.t -= dt) <= 0) s.decoys.splice(s.decoys.indexOf(b), 1);
   for (const a of [...s.antibodies]) {
-    const c = currentAt(s, a), d = dist(a, p), near = (d < mem.pull || s.drawn > 0) && !cloaked(s);
+    const c = currentAt(s, a), d = dist(a, p), near = (d < mem.pull || (s.drawn > 0 && d < CONFIG.marks.tagReach)) && !cloaked(s);
     const wob = s.time * 0.8 + a.seed;
     let vx = c.x * mem.drift + Math.cos(wob) * 0.25, vy = c.y * mem.drift + Math.sin(wob * 1.3) * 0.25;
     if (near && d > 0.01) { vx += ((p.x - a.x) / d) * mem.homing; vy += ((p.y - a.y) / d) * mem.homing; }

@@ -1,15 +1,15 @@
 // Every number worth arguing about lives here. Distances are in tiles, times in seconds.
 /** How hard the host's immune system works. Each level is a different woman's body, with rules of its own (systems design 11.5); balance is done on Typical.
  * rules: trail = how long footprints last; ring = how far the hunt spreads; memoryCarry = how much of what she has learned of you carries to the next map;
- * tagOnTouch = seconds every antibody drifts toward you after a cell touches you; cloakDecay = how much shorter each cloak on one map is than the last;
+ * tagOnTouch = seconds the antibodies within marks.tagReach tiles drift toward you after a cell touches you; cloakDecay = how much shorter each cloak on one map is than the last;
  * scanHeading = Shepherd's scan points at the nearest hunter; dropAhead = a trusted unit finds a supply drop in the liver; drain and mend scale the tumour's toll and the night's repair. */
 export const DIFFICULTY = {
   suppressed: { name: 'Suppressed', what: 'She has been on a course of steroids for her arthritis. Her white count is low, and her defences are slow to find you and quick to forget you.', damage: 0.6, hp: 0.8, spawns: 0.7, healing: 1.3, energy: 12, detection: 0.8, autoPatch: true,
     rules: { trail: 1 / 1.5, ring: 1 / 1.5, memoryCarry: 0.5, tagOnTouch: 0, cloakDecay: 0, scanHeading: true, dropAhead: true, drain: 0.8, mend: 1 } },
   typical: { name: 'Typical', what: 'A healthy 58-year-old\'s defences, doing their job.', damage: 1, hp: 1, spawns: 1, healing: 1, energy: 8, detection: 1, autoPatch: true,
     rules: { trail: 1, ring: 1, memoryCarry: 1, tagOnTouch: 0, cloakDecay: 0, scanHeading: false, dropAhead: true, drain: 1, mend: 1 } },
-  vigilant: { name: 'Vigilant', what: 'She had her flu jab last week, and her immune system is primed. It remembers your trail, learns your cloak, and once a cell has touched you every antibody knows where you are. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false,
-    rules: { trail: 1.3, ring: 1, memoryCarry: 1, tagOnTouch: 20, cloakDecay: 0.25, scanHeading: false, dropAhead: false, drain: 1.2, mend: 0.7 } },
+  vigilant: { name: 'Vigilant', what: 'She had her flu jab last week, and her immune system is primed. It remembers your trail, learns your cloak, and once a cell has touched you every antibody knows where you are. Patches are applied by hand.', damage: 1.2, hp: 1.1, spawns: 1.15, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false,
+    rules: { trail: 1.3, ring: 1, memoryCarry: 1, tagOnTouch: 10, cloakDecay: 0.25, scanHeading: false, dropAhead: false, drain: 1.2, mend: 0.7 } },
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;
 /** Something ordinary that happens to the host and lasts a whole trip. Real physiology only; the words are the creative director's (docs/host-events.md). */
@@ -176,7 +176,7 @@ export const CONFIG = {
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
   // How far Shepherd trusts the unit: what it gives for obedience, and when it sends its own after you (decisions.md 3).
   draw: { at: 9, disc: 2.2, hold: 10, window: 20, spacing: 1.6, kinSpeed: 1.4 }, // the blood draw: the lit disc, seconds to hold still in it, seconds before the slide is read anyway
-  marks: { hold: 4, near: 1.7, yield: 10, gap: 10, lane: 4, bystander: { odds: 0.45, time: 22 }, volunteer: { hull: 0.35, hunters: 2 }, margins: 4, kinRun: { time: 60, lead: 13, speed: 0.55 }, orderedHarm: 0.35, pressed: 4, notice: 5, lastHarvest: 3, reserve: 6, dockAlert: 10, dockBreaks: 2, dockTrust: 15, recurrence: 0.25, regrown: 2, kinRecall: 0.5, intercept: { energy: 3, hours: 1 } }, // Shepherd's marked orders, and the small decisions around them
+  marks: { hold: 4, near: 1.7, yield: 10, gap: 10, lane: 4, bystander: { odds: 0.45, time: 22 }, volunteer: { hull: 0.35, hunters: 2 }, margins: 4, kinRun: { time: 60, lead: 13, speed: 0.55 }, orderedHarm: 0.35, pressed: 4, tagReach: 8, notice: 5, lastHarvest: 3, reserve: 6, dockAlert: 10, dockBreaks: 2, dockTrust: 15, recurrence: 0.25, regrown: 2, kinRecall: 0.5, intercept: { energy: 3, hours: 1 } }, // Shepherd's marked orders, and the small decisions around them
   trust: { start: 60, obey: 4, quota: 6, salvage: 5, tutorial: 2, escort: 2, slip: 2, wake: 8, gap: 1, deviate: { most: 6, some: 4, little: 2 }, valued: 80, nominal: 60, review: 40, flagged: 20, drop: { energy: 6, ahead: 8 }, selfTest: 25 },
   // The one garbled order of a game (decisions.md 4). fright: seconds into the vessel before it arrives.
   slip: { fright: 6, window: 20, hold: 15, near: 3, harvest: { gain: 5, host: 5 }, lamp: 2, reply: 6, hesitate: 8, fork: 1.5 },
