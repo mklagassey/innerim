@@ -2,6 +2,54 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 6: 2026-11-17, Version 54 (head d26ac3c, unit-10)
+
+84 tests pass, `tsc` clean, no page errors.
+
+**Pass 5 rechecks.** S2 fixed: the top row fits at 320 px (Map ends at 297). S3 fixed: no macrophage re-grabbed within 1 s of a release in 45 test fights (worst chain 1, was 4), and holds still never last over 2.0 s.
+
+**Tutorial (Briefing, on by default):**
+- **T1 (P2) Step 3 drags when no immune cell is near.** With no immune cell in the liver, each step waits 45 s, repeats its order, waits 45 s more and moves on, so step 3 ("neutralise the contact") costs a player 90 s with no target ring and nothing to do. Steps 2 and 4 behave the same if the player ignores them, which is fine because there is something to do. Suggest: if no immune cell is within the 12-tile target range, skip step 3 after about 10 s.
+- **T2 (P3) Info boxes pop up over the first order.** In the first seconds of the tutorial liver the "Portal vessel" info box opens while Shepherd's first order is up. They do not overlap (the order line stays readable above the box, screen `/mnt/project-files/qa/tutorial-tip-phone.png`), but it is two teachers talking at once. Suggest holding the non-danger info boxes until the tutorial's step 5, or folding them into the orders.
+- **T3 (P3) Four lines of amber text on phones.** Order line, two to three lines of goal text and the clock ribbon stack above the play area on a 390 px phone, pushing the ship down to mid-screen.
+- Resuming mid-tutorial works: a reload in the tutorial liver offers "Continue trip 1 from the liver", the saved trip still carries the tutorial flag, and the liver restarts at step 1.
+- Info boxes and orders never collide as popups: orders are a HUD line (`#order`), not a veil.
+- No-cell timeout confirmed for every step: an idle player with no immune cells advances 1 to 5 at 90, 180, 270 and 360 s. Caches and dark units appear at step 5 as intended.
+
+**Obedient run shows no bracket lines.** A bot that strips the 2-cell quota, kills what finds it, salvages dark units and excises the nodule finished the tutorial liver with awareness 0, no defiance, and no line containing "[" in its thoughts or Shepherd's rulings (10 of 10 runs).
+
+**Recheck at Version 56 (head a7a5188):** T1 fixed (with no immune cell near, step 3 is dropped after 10 s: 3 to 4 at 190 s, was 270 s). T2 fixed (no info box opened during steps 1 to 4 in the phone run). T3 fixed per the engineer (goal line hidden on narrow screens during steps 1 to 4). Hold-to-steer on touch completes step 1 (14.6 tiles moved, step 2 order shown). Obedient bot still shows 0 bracket lines in 10 runs.
+
+**Old saves** from Version 40, pre-ledger builds and Version 47 still resume and play.
+
+## Pass 5: 2026-11-17, Versions 49 to 52 (unit-8, unit-8b, unit-9; head b3a1c50)
+
+79 tests pass, `tsc` clean, no page errors.
+
+**S1 (P0, fixed in Version 52) The opening scene could trap the player.** Tapping or pressing Space during the scene's 1.2 s fade-out (or Skip followed by one tap) left `#scene` un-hidden at opacity 0, the world map never opened, and Escape and Skip did nothing; only a reload helped. 3 of 3 repros on an iPhone 13 size at Versions 49 to 51. Cause: `next()` cleared the shared timer that held `end()`'s hide-and-continue step. Rechecked at Version 52: tap, Space and Skip-then-tap all reach the world map.
+
+**S2 (P2) Map button runs off a 320 px screen.** With the new Silent button the top row is pause, sound, silent, two turns, map; at 320 px the Map button ends at 354 px, off the right edge (no sideways scroll, it is simply cut off). Fine at 360, 375 and 390 px. Shortening "Sound on" to an icon, or dropping the key hints on touch, would fit it.
+
+**S3 (P2) A fleeing ship gets engulfed again straight away.** Holds always release (never longer than 2.0 s, and two strikes break free in under 1 s), but after a timed release the macrophage's next blow usually lands before the ship is clear: a bot that flees on release was re-engulfed up to 4 times in a row, each within 1 s of the last release, and died 10 of 15 times against one macrophage in 30 s (a bot that strikes back died 0 of 15). A second or two of grace after a release, or a knock-back, would make "run" a real answer to engulfment and not only "strike".
+
+**S4 (P3) Scene ignores taps for its first 2 s.** By design, but on a phone a tap that does nothing reads as frozen. Skip works throughout.
+
+**Checked and fine:**
+- Hiding places: all 10 per liver are reachable from the start (12 seeds), a niche tile always has an open side so you cannot get stuck, and a ship sitting in one with a neutrophil and a macrophage next to it took no damage and was never engulfed over 20 s.
+- Saved trips from older builds resume cleanly: a Version 40 save at the liver, an older save at the gut with no ledger, and a Version 47 save at the heart all showed the right world map, filled in missing fields, and played on with difficulty Typical.
+- Difficulty carries in the saved trip (`carry.difficulty`).
+- Scene and tip popups: tips only fire when nothing else is open and the world is paused while one is, so "Run silent" and "Engulfed" cannot land on another popup; the scene sits above everything (z-index 30).
+
+**Typical over three trips (balance).** `npm run sim 20 3` at Version 51, the engineer's skim and strip bots (they do not use niches, silent running or the cloak well, so this is a floor, not a forecast):
+
+| Route | Skim bot home after 3 trips | Strip bot home | Host at end (skim / strip) |
+|---|---|---|---|
+| Hepatic | 40% | 55% | 96% / 29% |
+| Mesenteric | 60% | 50% | 97% / 24% |
+| Gastric | 65% | 40% | 96% / 19% |
+
+Almost every loss is to neutrophils in the liver. The design target is skim home at least 90% on every route; for a single trip the skim bot was at 95 to 100% at Version 40, so the combined unit-6 to unit-9 changes (weaker clotting and plating, primed neutrophils, engulfing, swarm on kill) have made the liver much more lethal for a simple fighter. A careful human who hides and runs silent should do better; Mick's next runs will tell. Worth a sim bot that uses niches before tuning numbers.
+
 ## Pass 4: 2026-11-17, Version 47 (head 42f6bb9, unit-7)
 
 69/69 tests, `tsc` clean, no page errors.
