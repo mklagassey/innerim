@@ -72,6 +72,8 @@ export interface State {
   tally: { silent: number; firstStrikes: number; grabs: number; niches: number }; // for the run report
   starved: boolean; // the ship died of an empty tank, not of anything that caught it
   drained: number; // fractions of host health the tumor has taken, not yet a whole point
+  drainHere: number; // whole points it has taken on this map
+  tumorCost: number; // and since injection
   cloakOffered: boolean; // the first liver cache always offers the cloak, once
   arrived: { energy: number; hp: number }; acidTime: number; // for the run report
   search: (Point & { r: number; dropped?: boolean }) | null; // where they last had you, and how far the hunt has spread from there
@@ -151,8 +153,8 @@ export const stewardship = (l: Ledger, excised: number) => ({
 });
 /** A lever pulled while the host is under 80% is for her; otherwise it is for you. */
 export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if (c.hostHealth < 80) l.leversForHer++; else l.leversForMe++; }
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty; event?: HostEvent | null }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger, defied: { ...s.ledger.defied }, obeyed: { ...s.ledger.obeyed } }, difficulty: s.difficulty, event: s.event });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger; difficulty?: Difficulty; event?: HostEvent | null; tumorCost?: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger, defied: { ...s.ledger.defied }, obeyed: { ...s.ledger.obeyed } }, difficulty: s.difficulty, event: s.event, tumorCost: s.tumorCost });
 export const hard = (s: State) => DIFFICULTY[s.difficulty];
 /** Time passing between maps: the tumor takes its share of the host there too. */
 /** Host health the tumor costs per host hour right now: in step with how much of it is still in. */
@@ -161,7 +163,7 @@ export function tumorToll(c: Carry, hours: number) {
   if (c.excised >= CONFIG.tumor.goal) return;
   c.drained = (c.drained ?? 0) + hours * tumorDrain(c.excised);
   const whole = Math.floor(c.drained);
-  c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole);
+  c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole); c.tumorCost = (c.tumorCost ?? 0) + whole;
   if (c.ledger) c.ledger.hostLowest = Math.min(c.ledger.hostLowest, c.hostHealth);
 }
 /** What the host will remember of you once you leave this map. */
@@ -228,6 +230,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     difficulty: carry?.difficulty ?? 'typical', silent: false, held: null, slipped: 0, niche: new Set(), hiding: false, nicheTime: 0, tally: { silent: 0, firstStrikes: 0, grabs: 0, niches: 0 }, starved: false, sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}), defied: { ...(carry?.ledger?.defied ?? {}) }, obeyed: { ...(carry?.ledger?.obeyed ?? {}) } }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
+    drainHere: 0, tumorCost: carry?.tumorCost ?? 0,
     verdict: '', defied: carry?.defied ?? 0, spots: 0, defiance: {}, obeyedHere: new Set(), defiedNow: [], rulings: [], tutorial: null,
     aware: carry?.aware ?? 0, kin: carry?.kin ?? 0, thoughts: [], noticed: new Set(), ask: null,
     flora: carry?.flora ?? 0,
@@ -1174,7 +1177,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   // The tumor is the clock: for as long as any of it is left, the host loses ground.
   if (s.excised < CONFIG.tumor.goal && s.hostHealth > 0) {
     s.drained += (dt / h.secondsPerHour) * tumorDrain(s.excised);
-    if (s.drained >= 1) { s.drained -= 1; s.hostHealth = Math.max(0, s.hostHealth - 1); }
+    if (s.drained >= 1) { s.drained -= 1; s.hostHealth = Math.max(0, s.hostHealth - 1); s.drainHere++; s.tumorCost++; }
   }
   // Acid comes up over a little while, never all at once, and the host telegraphs a meal before it lands.
   s.host.acid += (digesting(s.host.hour, s.host.snack, s.event) - s.host.acid) * Math.min(1, dt / CONFIG.stomach.rise);
