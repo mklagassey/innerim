@@ -14,12 +14,9 @@ export interface Scene { when: string; title: string; once: 'ever' | 'mission'; 
 
 // `when` keys: 'begin' (the cold open), 'home:N' (back at the heart after trip N).
 export const SCENES: Scene[] = [
-  { when: 'begin', title: 'More mornings', once: 'ever', light: 'night', beats: [
-    { seen: 'Night, a hospital lab. A woman at a microscope, seen from behind. A chipped mug beside her.', art: ART.lab, hold: 5 },
-    { seen: 'Her kitchen. An envelope, opened, on the table.', print: '“…not medically necessary at this time.”', art: ART.letter, sound: 'paper', hold: 5.5, light: 'dusk' },
-    { seen: 'She pins the letter to the fridge with a magnet, next to a glossy brochure.', print: 'TITHONUS. More mornings.', art: ART.fridge, hold: 5.5, light: 'dusk' },
-    { seen: 'An old grey-muzzled dog watches her from its bed.', art: ART.dog, hold: 4, light: 'dusk' },
-    { seen: 'A clinic. Her forearm, a gloved hand, a syringe.', print: 'H-O · GEN 3', art: ART.clinic, hold: 5, light: 'clinic' },
+  { when: 'begin', title: 'Injection', once: 'ever', light: 'clinic', beats: [
+    { seen: 'A clinic, shot wide and high like a ceiling camera. A woman in a chair, sleeve rolled up. We never see her face.', art: ART.clinic, hold: 5, light: 'clinic' },
+    { seen: 'Her forearm, a gloved hand, a syringe.', print: 'H-O · GEN 3 · TITHONUS 0001', art: ART.clinic, hold: 5, light: 'clinic' },
     { seen: 'The plunger goes down. Inside the vein, a slow cloud of tiny lights pours into the dark red current: millions of them, and one among them, no different.', art: ART.swarm, hold: 7, light: 'night' },
     { seen: '', print: 'HOST', hold: 3.5, light: 'night' },
   ] },
@@ -27,6 +24,12 @@ export const SCENES: Scene[] = [
     { seen: 'Morning, the kitchen. Coffee in the chipped mug.', art: ART.coffee, sound: 'spoon', hold: 4.5 },
     { seen: 'A small plaster on her forearm. She scratches at it without noticing. The dog nudges the leash on its hook.', art: ART.plaster, sound: 'claws', hold: 5.5 },
     { seen: 'She lifts the mug. The artery surges.', art: ART.lift, hold: 4 },
+  ] },
+  { when: 'home:2', title: 'The letter', once: 'mission', light: 'night', beats: [
+    { seen: 'Night. The kitchen light is the only one on in the house. She takes the letter down from the fridge.', art: ART.fridge, sound: 'paper', hold: 5 },
+    { seen: 'The letter, close enough to read at last.', print: '“…not medically necessary at this time.”', art: ART.letter, hold: 5.5 },
+    { seen: 'She looks at the brochure still on the fridge, then pins them both back up, side by side.', print: 'TITHONUS. More mornings.', art: ART.fridge, hold: 5.5 },
+    { seen: 'She touches her right side, under the ribs. The liver, and the ringed knot on the scan.', hold: 4.5 },
   ] },
 ];
 
