@@ -480,3 +480,5 @@ The Recurrence soft-lock is fixed.
   1. Suppress is now issued on first approach to the nodule (within 6 tiles) in chapter 4. If the tumour is already gone before the order is issued, nothing is recorded.
   2. Margins is issued when the ring is set. Leaving within 5 s of the order appearing counts as lapsed.
 - **Host target:** judged on medians. Outlier seeds below target are accepted.
+
+**QA on Version 74 (all-obey, 20 seeds): targets met.** 20/20 Decommissioned, 0 deaths, host lowest median 42, end median 57, awareness median 15.5 (12-22). Remaining awareness is wrong-reading Slips, as designed.
