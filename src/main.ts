@@ -277,7 +277,12 @@ function openWorld(title: string, text: string) {
     : `Mission: cut out the tumor in the liver. ${out} of ${CONFIG.tumor.goal} cells are out, so about ${visits} more liver visit${visits === 1 ? '' : 's'}. When it is all out, a road opens from the Heart to the Lungs and you can leave. The mission fails if the ship is destroyed or the host's health reaches zero.`;
   $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1, trip.event);
   $('world-event').hidden = !trip.event;
-  $('world-event').textContent = trip.event ? `Today: ${EVENTS[trip.event].name.toLowerCase()}. ${EVENTS[trip.event].world}` : '';
+  $('world-event').replaceChildren();
+  if (trip.event) { // her day, told from outside: a small dated heading, then the line
+    const ev = EVENTS[trip.event], head = document.createElement('span');
+    head.className = 'when'; head.textContent = `Today \u00b7 ${ev.icon} ${ev.name}`;
+    $('world-event').append(head, ev.world);
+  }
   $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised${c.excised < CONFIG.tumor.goal ? `, costing the host ${Math.round(G.tumorDrain(c.excised) * 10) / 10}% an hour` : ''}` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
