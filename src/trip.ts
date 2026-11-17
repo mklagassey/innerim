@@ -57,18 +57,19 @@ export interface Trip {
   offRoute: boolean; // left Shepherd's assigned route on this trip, and lost its escort
   defied: Order[]; // orders gone against from the world map on this trip: each counts once
   tutorial: boolean; // Shepherd will walk the unit through the next liver
+  carded: number; // the last chapter whose card has been shown
   seen: NodeId[]; // places this unit has been: its own chart fills in as it goes
   rng: () => number;
 }
 
-export const newTrip = (seed = Date.now()): Trip => ({ at: 'heart', trip: 1, fed: false, heat: 0, carry: null, tripsDone: 0, event: null, used: [], offRoute: false, defied: [], tutorial: false, seen: ['heart'], rng: mulberry32(seed) });
+export const newTrip = (seed = Date.now()): Trip => ({ at: 'heart', trip: 1, fed: false, heat: 0, carry: null, tripsDone: 0, event: null, used: [], offRoute: false, defied: [], tutorial: false, carded: 0, seen: ['heart'], rng: mulberry32(seed) });
 
 /** The chance of a patrol on a leg right now. An alarm you raised in the liver makes the way home worse. */
 export const riskOf = (t: Trip, leg: Leg) => (leg.risk === 0 ? 0 : Math.max(0, Math.min(0.95, leg.risk + t.heat * 0.5) - (escorted(t, leg) ? CONFIG.story.orders.escort : 0)));
 /** Shepherd is still giving this unit orders. Past the last stage it has lost the unit, and says nothing. */
 export const commanded = (t: Trip) => stageOf(t.carry?.aware ?? 0) < 4;
 /** Shepherd escorts units that keep to the route it assigned: the reward for doing as you are told. */
-export const escorted = (t: Trip, leg: Leg) => assigned(t, leg) && !t.offRoute && commanded(t);
+export const escorted = (t: Trip, leg: Leg) => assigned(t, leg) && !t.offRoute && commanded(t) && (t.carry?.trust ?? CONFIG.trust.start) >= CONFIG.trust.nominal;
 /** Is this leg on the route Shepherd has assigned right now? Once the tumor is out the only order is the lungs. */
 export const assigned = (t: Trip, leg: Leg) => !!leg.ordered && ((t.carry?.excised ?? 0) < TUMOR_GOAL || leg.to === 'lungs');
 export const riskWord = (r: number) => (r === 0 ? '' : r < 0.35 ? 'lightly patrolled' : r < 0.6 ? 'patrolled' : 'heavily patrolled');

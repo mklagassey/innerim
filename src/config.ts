@@ -167,7 +167,11 @@ export const CONFIG = {
   // Boarding: climb inside a wounded neutrophil and wear it.
   board: { reach: 1.5, below: 0.5, time: 12, speed: 0.8 },
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
-  story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, kin: { most: 3, gift: 2 }, quota: 2, orders: { most: 12, some: 6, little: 3, first: 12, fullTimes: 2, escort: 0.25, acid: 2, spotted: 2, levers: 80, repeat: 45, steer: 6, nobody: 10 }, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
+  // How far Shepherd trusts the unit: what it gives for obedience, and when it sends its own after you (decisions.md 3).
+  trust: { start: 60, obey: 4, quota: 6, salvage: 5, tutorial: 2, escort: 2, slip: 2, wake: 8, gap: 1, deviate: { most: 6, some: 4, little: 2 }, valued: 80, nominal: 60, review: 40, flagged: 20, drop: { energy: 6, ahead: 8 }, selfTest: 25 },
+  // The one garbled order of a game (decisions.md 4). fright: seconds into the vessel before it arrives.
+  slip: { fright: 6, window: 20, hold: 15, near: 3, harvest: { gain: 5, host: 5 }, lamp: 2, reply: 6, hesitate: 8, fork: 1.5 },
+  story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, kin: { most: 3, gift: 2 }, quota: 2, orders: { most: 15, some: 8, little: 4, first: 12, fullTimes: 2, escort: 0.25, acid: 2, spotted: 2, levers: 80, repeat: 45, steer: 6, nobody: 10 }, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
   flora: { cost: 4, aboard: 2, most: 4, lure: 8, lasts: 12, feast: 5, hostDamage: 2 }, // gut bacteria stuck to the hull, shed as bait
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },
   wait: { energy: 2, legHours: 0.5 }, // an hour's idling on the map costs this; a quiet leg takes this long

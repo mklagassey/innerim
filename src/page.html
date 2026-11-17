@@ -134,6 +134,15 @@
   #world-map .you { fill: var(--bone); }
   #world-ways { justify-content: flex-start; flex-flow: row wrap; }
   #world-map .place.unseen { opacity: 0.45; } #world-map[hidden], #world-goal[hidden], #world-text[hidden] { display: none; }
+  #card { position: absolute; inset: 0; z-index: 28; background: #050203; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; opacity: 0; transition: opacity 0.9s ease; cursor: pointer; }
+  #card.on { opacity: 1; } #card[hidden] { display: none; }
+  #card-no { font: 500 0.66rem/1 var(--data); letter-spacing: 0.3em; text-transform: uppercase; color: var(--bone-dim); }
+  #card-title { margin: 0; font: 300 clamp(1.8rem, 6vw, 3.2rem)/1.1 var(--display); letter-spacing: 0.34em; text-transform: uppercase; color: var(--bone); padding-left: 0.34em; }
+  #card-line { margin: 0; min-height: 1.5em; font: 500 0.7rem/1.5 var(--data); letter-spacing: 0.12em; color: #e8a25a; transition: opacity 0.45s ease; }
+  #card-line.dip { opacity: 0; } #card-line s { color: var(--bone-dim); margin-right: 0.8em; } #card-line em { font: italic 400 1.15rem var(--body, serif); letter-spacing: 0.02em; color: #8fd6e8; }
+  @media (prefers-reduced-motion: reduce) { #card, #card-line { transition: none; } }
+  #link { font: 500 0.58rem/1.2 var(--data); letter-spacing: 0.1em; text-transform: uppercase; color: var(--bone-dim); opacity: 0.7; text-align: right; }
+  #journal p.page { color: var(--bone); border-left: 2px solid var(--seam); padding-left: 10px; font-style: italic; }
   #transit { position: absolute; inset: 0; z-index: 20; background: #050203; opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
   #transit.on { opacity: 1; pointer-events: auto; } #transit[hidden] { display: none; }
   #transit-view { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -215,6 +224,7 @@
     <div class="gauge" id="host"><span>Host health &middot; <em id="host-state"></em></span><b id="host-val"></b><i><u id="host-fill"></u></i></div>
     <div id="host-drain"></div>
     <div class="gauge" id="alert"><span>Immune alert</span><b id="alert-val"></b><i><u id="alert-fill"></u></i></div>
+    <div id="link"></div>
     <div id="order" hidden></div>
     <div id="goal"></div>
     <div id="ribbon" aria-label="The host's next two hours"><i class="now"></i></div>
@@ -278,6 +288,7 @@
       <div class="acts" id="world-ways"></div>
     </div>
   </div>
+  <div id="card" hidden><span id="card-no"></span><h2 id="card-title"></h2><p id="card-line"></p></div>
   <div id="transit" hidden><canvas id="transit-view"></canvas><div id="transit-label"></div></div>
   <div id="scene" data-light="day" hidden>
     <div id="scene-light"></div>
