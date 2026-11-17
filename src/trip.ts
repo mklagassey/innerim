@@ -15,7 +15,7 @@ export const NODES: Record<NodeId, Node> = {
   heart: { name: 'Heart', x: 320, y: 58, kind: 'heart', what: 'Everything leaves from here and everything comes back.' },
   hepatic: { name: 'Hepatic artery', x: 318, y: 172, kind: 'artery', what: 'The direct road to the liver. Fast blood, heavy patrols.' },
   mesenteric: { name: 'Mesenteric artery', x: 200, y: 148, kind: 'artery', what: 'Feeds the gut. The long way round.' },
-  gut: { name: 'Gut flora', x: 140, y: 222, kind: 'town', what: 'Trillions of bacteria live here with the host\'s blessing, and the immune system leaves them be. They will trade for sugar.' },
+  gut: { name: 'Gut lumen', x: 140, y: 222, kind: 'town', what: 'Trillions of bacteria live here, tolerated by the immune system. Release glucose and they ferment it; collect what they and the gut wall make.' },
   gastric: { name: 'Gastric artery', x: 150, y: 76, kind: 'artery', what: 'Feeds the stomach.' },
   stomach: { name: 'Stomach', x: 52, y: 176, kind: 'organ', what: 'A lake of acid, worst after the host has eaten. The cells that make the acid are the richest in the body.' },
   portal: { name: 'Portal vein', x: 172, y: 326, kind: 'vein', what: 'Carries everything the gut absorbed to the liver. Slow and quiet.' },

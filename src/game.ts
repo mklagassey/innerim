@@ -52,6 +52,7 @@ export interface State {
   peak: number; // highest the alert has been on this map
   antibodies: Antibody[];
   sinceHurt: number; // seconds since the hull last took damage
+  ledger: Ledger;
   drained: number; // fractions of host health the tumor has taken, not yet a whole point
   cloakOffered: boolean; // the first liver cache always offers the cloak, once
   arrived: { energy: number; hp: number }; acidTime: number; // for the run report
@@ -116,14 +117,25 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained });
+/** How the host's insides were treated, summed over the whole mission. Plain counts, never a score. */
+export interface Ledger { stripped: number; skimmed: number; quotaObeyed: number; quotaDefied: number; woken: number; salvaged: number; leversForHer: number; leversForMe: number; baitReleased: number; hostLowest: number; feverPeak: number; feelings: number }
+export const newLedger = (): Ledger => ({ stripped: 0, skimmed: 0, quotaObeyed: 0, quotaDefied: 0, woken: 0, salvaged: 0, leversForHer: 0, leversForMe: 0, baitReleased: 0, hostLowest: CONFIG.host.maxHealth, feverPeak: 0, feelings: 0 });
+/** The two sums the ending will weigh (systems design S15). Computed, never stored or shown as a score. */
+export const stewardship = (l: Ledger, excised: number) => ({
+  harm: l.stripped * 10 + l.baitReleased * 2 + (CONFIG.host.maxHealth - l.hostLowest),
+  care: l.skimmed / 5 + excised * 2 + l.leversForHer * 5 + l.feelings * 5 + l.quotaDefied * 3,
+});
+/** A lever pulled while the host is under 80% is for her; otherwise it is for you. */
+export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if (c.hostHealth < 80) l.leversForHer++; else l.leversForMe++; }
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger } });
 /** Time passing between maps: the tumor takes its share of the host there too. */
 export function tumorToll(c: Carry, hours: number) {
   if (c.excised >= CONFIG.tumor.goal) return;
   c.drained = (c.drained ?? 0) + hours * CONFIG.tumor.drain;
   const whole = Math.floor(c.drained);
   c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole);
+  if (c.ledger) c.ledger.hostLowest = Math.min(c.ledger.hostLowest, c.hostHealth);
 }
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
@@ -179,7 +191,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
-    sinceHurt: 99, drained: carry?.drained ?? 0, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    sinceHurt: 99, drained: carry?.drained ?? 0, ledger: { ...newLedger(), ...(carry?.ledger ?? {}) }, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,
@@ -318,9 +330,9 @@ export function answer(s: State, id: 'salvage' | 'wake' | 'leave'): boolean {
     s.player.energy += c.energy; s.player.hp = Math.min(maxHp(s), s.player.hp + c.hull);
     float(s, s.player, `+${c.energy} energy`, '#ffd35a');
     say(s, 'You take the dark unit apart. Its cells and plating are a perfect fit.');
-    notice(s, 'salvage'); emit(s, 'pickup');
+    s.ledger.salvaged++; notice(s, 'salvage'); emit(s, 'pickup');
   } else {
-    s.player.energy -= c.wake; s.kin++;
+    s.player.energy -= c.wake; s.kin++; s.ledger.woken++;
     float(s, a.item, '...oh', '#bfe9ff');
     say(s, 'You give it some of your charge. Its lamp comes on, and it turns to look at you.');
     notice(s, 'woke'); emit(s, 'heal');
@@ -499,14 +511,14 @@ export function board(s: State): boolean {
   return true;
 }
 /** Show the 'do not eat me' signal: nothing can see you until it fades or you attack. */
-/** Throw a stowaway overboard. Innate immune cells cannot resist a real bacterium, but the host pays for it. */
+/** Shed a hitchhiking bacterium. Phagocytes are built to engulf bacteria: any nearby will go for it. The host pays for it. */
 export function bait(s: State): boolean {
   if (s.flora <= 0 || s.decoys.length || riding(s)) return false;
-  s.flora--;
+  s.flora--; s.ledger.baitReleased++;
   s.decoys.push({ x: s.player.x, y: s.player.y, t: CONFIG.flora.lasts });
   s.hostHealth = Math.max(0, s.hostHealth - CONFIG.flora.hostDamage);
   float(s, s.player, 'Bait away', '#9be38a');
-  say(s, s.place === 'liver' ? 'A stowaway goes overboard. Gut bacteria in the liver are exactly what these cells are here for.' : 'A stowaway goes overboard. Bacteria loose in the blood: the host will feel that.');
+  say(s, s.place === 'liver' ? 'The hull sheds a bacterium. Clearing gut bacteria is what the liver\'s phagocytes are for.' : 'The hull sheds a bacterium. Phagocytes are built to engulf bacteria: any nearby will go for it.');
   emit(s, 'bait');
   return true;
 }
@@ -755,8 +767,8 @@ export function leave(s: State): boolean {
   if (s.place === 'liver') s.player.energy -= CONFIG.energy.quota; // the fare
   // Shepherd wanted host cells harvested. It can only say so while it can still hear you.
   if (s.place === 'liver' && stage(s) < 4) {
-    if (s.cellsKilled >= CONFIG.story.quota) { s.verdict = 'obeyed'; s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 1); }
-    else if (s.cellsKilled === 0) { s.verdict = 'defied'; s.defied++; s.aware = Math.min(100, s.aware + CONFIG.story.defy); }
+    if (s.cellsKilled >= CONFIG.story.quota) { s.verdict = 'obeyed'; s.ledger.quotaObeyed++; s.patches = Math.min(CONFIG.items.maxPatches, s.patches + 1); }
+    else if (s.cellsKilled === 0) { s.verdict = 'defied'; s.defied++; s.ledger.quotaDefied++; s.aware = Math.min(100, s.aware + CONFIG.story.defy); }
   }
   say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : s.place === 'lung' ? 'Through the wall of the last air sac, and out on a breath.' : s.place === 'stomach' ? 'You slip into the gastric vein. It drains to the liver.' : 'The current takes you on.');
   return true;
@@ -769,7 +781,7 @@ function finishChannel(s: State, ch: Channel) {
     if (left <= 0) return;
     emit(s, 'skim');
     s.glucose.set(i, left - 1);
-    p.energy += CONFIG.energy.skim.gain;
+    p.energy += CONFIG.energy.skim.gain; s.ledger.skimmed++;
     float(s, p, `+${CONFIG.energy.skim.gain} energy`, '#e8b530');
     if (left - 1 > 0) p.channel = { ...ch, t: 0 }; // keep sipping until the patch runs dry
     return;
@@ -795,7 +807,7 @@ function finishChannel(s: State, ch: Channel) {
   s.flow = null; // a new gap for the blood to run through
   p.energy += c.gain;
   s.hostHealth = Math.max(0, s.hostHealth - c.hostDamage);
-  s.cellsKilled++;
+  s.cellsKilled++; s.ledger.stripped++;
   s.lastDamageSite = { x: ch.x, y: ch.y };
   float(s, p, `+${c.gain} energy`, '#e8b530');
   emit(s, 'strip');
@@ -918,6 +930,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   s.riding = Math.max(0, s.riding - dt); s.suppressed = Math.max(0, s.suppressed - dt);
   if (rode && !riding(s)) { s.riding = 0; emit(s, 'kill'); say(s, 'The neutrophil comes apart around you.'); }
   s.sinceHurt += dt;
+  s.ledger.hostLowest = Math.min(s.ledger.hostLowest, s.hostHealth);
   if (s.upgrades.clotting && p.hp < maxHp(s) && s.sinceHurt >= CONFIG.energy.clotPause) p.hp = Math.min(maxHp(s), p.hp + bonus(s, 'clotting') * dt);
 
   const before = { x: p.x, y: p.y };
@@ -1011,6 +1024,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     say(s, fever(s) > s.host.fever ? `The host's temperature is climbing: ${h.fever.degrees[fever(s)]}\u00b0. Immune cells quicken.` : fever(s) ? 'The fever eases a little.' : 'The fever breaks.');
     if (fever(s) > s.host.fever) emit(s, 'fever');
     s.host.fever = fever(s);
+    s.ledger.feverPeak = Math.max(s.ledger.feverPeak, s.host.fever);
   }
   const now = hostState(s);
   if (now !== was) {
@@ -1048,7 +1062,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
 
   // Acid eats the hull for as long as you sit in it.
   if (acidAt(s, p) === 2) {
-    if (s.flora > 0) { s.flora = 0; say(s, 'The stowaways do not survive the acid. Few things do.'); }
+    if (s.flora > 0) { s.flora = 0; say(s, 'The bacteria on the hull do not survive the acid. Few things do.'); }
     const lost = burnRate(s) * dt;
     p.hp -= lost; s.sizzle += lost; s.sinceHurt = 0; s.acidTime += dt;
     if (s.sizzle >= 1) { float(s, p, `-${Math.floor(s.sizzle)}`, '#c8f05a'); s.sizzle -= Math.floor(s.sizzle); p.hurt = 0.2; emit(s, 'burn'); }
@@ -1076,7 +1090,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     } else if (item.kind === 'cortisol') {
       s.suppressed = CONFIG.cortisol.time;
       float(s, p, 'Cortisol', '#ffd9a0');
-      say(s, 'Cortisol. For a little while the immune system has orders to stand down.');
+      say(s, 'Cortisol. It damps immune activity for a while.');
       emit(s, 'calm');
     } else if (item.kind === 'calm') {
       if (s.alert <= 0) continue; // nothing to soothe: leave it for later

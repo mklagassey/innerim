@@ -156,6 +156,8 @@ function showNotes() {
   const lines = journal();
   $('journal').replaceChildren(...(lines.length ? lines : [{ who: 'unit', text: 'LOG: empty.' }]).map((e) => Object.assign(document.createElement('p'), { className: e.who, textContent: e.text })));
   $('journal').scrollTop = 1e6;
+  const c = trip.carry, l = c?.ledger;
+  $('ledger').textContent = c && l ? `Her cells you took: ${l.stripped}. Sugar you skimmed: ${l.skimmed}. Tumor cut out: ${Math.min(c.excised, CONFIG.tumor.goal)} of ${CONFIG.tumor.goal}. Harvest quotas met: ${l.quotaObeyed}, refused: ${l.quotaDefied}. Dark units woken: ${l.woken}, taken apart: ${l.salvaged}. Bacteria shed into her blood: ${l.baitReleased}. Her lowest health: ${l.hostLowest}%. Her worst fever: ${['none', 'mild', 'high', 'dangerous'][l.feverPeak] ?? l.feverPeak}.` : 'Nothing on record yet.';
   const notes = Tips.fieldNotes();
   $('notes-list').replaceChildren(...notes.flatMap((n) => [Object.assign(document.createElement('dt'), { textContent: `${n.title} \u00b7 ${n.kind}` }), Object.assign(document.createElement('dd'), { textContent: n.body })]));
   if (!notes.length) $('notes-list').append(Object.assign(document.createElement('dd'), { textContent: 'Nothing yet. Notes are added as you meet things.' }));
@@ -178,7 +180,7 @@ function savedTrip(): T.Trip | null {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE) ?? 'null') as Partial<T.Trip> | null;
     if (!d || !d.carry || !d.at || !(d.at in T.NODES) || typeof d.carry.hp !== 'number' || d.carry.hp <= 0) return null;
-    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0 } };
+    return { ...T.newTrip(), ...d, carry: { hp: d.carry.hp, energy: d.carry.energy ?? 0, upgrades: d.carry.upgrades ?? ({} as G.Carry['upgrades']), patches: d.carry.patches ?? 0, hostHealth: d.carry.hostHealth ?? 100, hour: d.carry.hour ?? CONFIG.host.startHour, memory: d.carry.memory ?? 0, excised: d.carry.excised ?? 0, nap: d.carry.nap ?? 0, snack: d.carry.snack ?? -1, flora: d.carry.flora ?? 0, aware: d.carry.aware ?? 0, kin: d.carry.kin ?? 0, defied: d.carry.defied ?? 0, cloakOffered: d.carry.cloakOffered ?? false, drained: d.carry.drained ?? 0, ledger: { ...G.newLedger(), ...(d.carry.ledger ?? {}) } } };
   } catch { return null; }
 }
 const kept = savedTrip();
@@ -265,7 +267,7 @@ function openWorld(title: string, text: string) {
   $('world').scrollTop = 0;
 }
 
-// ---------- the gut flora market ----------
+// ---------- the gut lumen: glucose in, fermentation products out ----------
 
 let stock: UpgradeId[] = [], said = '';
 /** What you carry before you have played a single map. */
@@ -283,19 +285,19 @@ function market() {
     const b = document.createElement('button');
     b.type = 'button'; b.disabled = !can || c.energy < cost;
     const add = (tag: string, text: string) => b.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
-    add('small', `${cost} energy`); add('strong', title); add('span', what);
-    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); const line = said; said = ''; if (line) keepJournal([{ who: Story.stageOf(c.aware ?? 0) >= 3 ? 'awake' : 'unit', text: line }]); openWorld('Gut flora', `Done. You have ${c.energy} energy left.${line ? ` \u201c${line}\u201d` : ''}`); });
+    add('small', `Release ${cost} glucose`); add('strong', title); add('span', what);
+    b.addEventListener('click', () => { c.energy -= cost; buy(); Sound.play('pickup'); saveTrip(); const line = said; said = ''; if (line) keepJournal([{ who: Story.stageOf(c.aware ?? 0) >= 3 ? 'awake' : 'unit', text: line }]); openWorld('Gut lumen', `Done. You have ${c.energy} energy left.${line ? ` \u201c${line}\u201d` : ''}`); });
     return b;
   };
   box.replaceChildren(
-    offer('Biofilm repair', m.repair.cost, `They knit a film over the breaches: +${m.repair.hull} hull.`, c.hp < hullMax(c), () => { c.hp = Math.min(hullMax(c), c.hp + m.repair.hull); }),
-    offer('Fibrin patch', m.patch.cost, 'One patch for the road.', c.patches < CONFIG.items.maxPatches, () => { c.patches++; }),
-    offer('Butyrate', m.butyrate.cost, 'What gut bacteria make from fibre. It teaches the immune system tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }),
-    offer('Stowaways', CONFIG.flora.cost, `${CONFIG.flora.aboard} gut bacteria come aboard. When an immune cell finds you and the cloak cannot answer, one goes over the side on its own, and every innate cell nearby goes for it instead of you. Each one loose costs the host ${CONFIG.flora.hostDamage}% health. Stomach acid kills them.`, (c.flora ?? 0) + CONFIG.flora.aboard <= CONFIG.flora.most, () => { c.flora = (c.flora ?? 0) + CONFIG.flora.aboard; }),
-    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and she mends.`, c.nap <= 0, () => { c.nap = CONFIG.levers.serotonin.hours; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
-    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone. The host is in the fridge before she knows why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { c.snack = c.hour; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
-    ...(Story.stageOf(c.aware ?? 0) >= 4 ? [offer('A gut feeling', CONFIG.story.feeling.cost, `Not a lever. One signal up the vagus nerve with nothing in it except: you are looked after. ${Story.HOST} will not know where it came from. +${CONFIG.story.feeling.heals}% host health.`, c.hostHealth < CONFIG.host.maxHealth, () => { c.hostHealth = Math.min(CONFIG.host.maxHealth, c.hostHealth + CONFIG.story.feeling.heals); said = `She stopped on the stairs with a hand on her stomach, and smiled at nothing. That was me. That was the first thing I ever said to her.`; })] : []),
-    ...stock.map((id) => offer(`${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
+    offer('Biofilm patch', m.repair.cost, `Gut bacteria secrete a tough film on any surface they are fed on. Let one grow over the breaches and harden it: +${m.repair.hull} hull.`, c.hp < hullMax(c), () => { c.hp = Math.min(hullMax(c), c.hp + m.repair.hull); }),
+    offer('Vitamin K2', m.patch.cost, 'Gut bacteria make it, and clotting cannot happen without it. Enough to build one fibrin patch for the road.', c.patches < CONFIG.items.maxPatches, () => { c.patches++; }),
+    offer('Butyrate', m.butyrate.cost, 'A fatty acid gut bacteria make from fibre. It pushes the immune system toward tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }),
+    offer('Hitchhikers', CONFIG.flora.cost, `Bacteria stick to any surface, the hull included. Let ${CONFIG.flora.aboard} attach. When an immune cell finds you and the cloak cannot answer, the ship sheds one, and every phagocyte nearby goes for it instead of you. Each one loose costs the host ${CONFIG.flora.hostDamage}% health. Stomach acid kills them.`, (c.flora ?? 0) + CONFIG.flora.aboard <= CONFIG.flora.most, () => { c.flora = (c.flora ?? 0) + CONFIG.flora.aboard; }),
+    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and she mends.`, c.nap <= 0, () => { G.leverPulled(c); c.nap = CONFIG.levers.serotonin.hours; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
+    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone, made in the stomach wall. Signal the stomach to release it and the host is in the fridge before she knows why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { G.leverPulled(c); c.snack = c.hour; c.aware = Math.min(100, (c.aware ?? 0) + Story.GAIN.lever); said = Story.LINES.lever[Story.stageOf(c.aware)]; }),
+    ...(Story.stageOf(c.aware ?? 0) >= 4 ? [offer('A gut feeling', CONFIG.story.feeling.cost, `Not a lever. One signal up the vagus nerve with nothing in it except: you are looked after. ${Story.HOST} will not know where it came from. +${CONFIG.story.feeling.heals}% host health.`, c.hostHealth < CONFIG.host.maxHealth, () => { (c.ledger ??= G.newLedger()).feelings++; c.hostHealth = Math.min(CONFIG.host.maxHealth, c.hostHealth + CONFIG.story.feeling.heals); said = `She stopped on the stairs with a hand on her stomach, and smiled at nothing. That was me. That was the first thing I ever said to her.`; })] : []),
+    ...stock.map((id) => offer(`Salvage: ${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
       c.upgrades[id] = (c.upgrades[id] ?? 0) + 1;
       if (id === 'glycocalyx') c.hp += UPGRADES.glycocalyx.per;
       stock = stock.filter((x) => x !== id);
@@ -351,7 +353,7 @@ function answerAsk(i: number) { const id = askIds[i]; if (id) { G.answer(s, id a
 
 function land(to: T.NodeId, carry: G.Carry | null, alert: number, how: string) {
   const fromLiver = trip.at === 'liver', knew = trip.carry?.memory ?? 0;
-  if (to === 'gut') { // a fresh stall each visit
+  if (to === 'gut') { // the lining sheds different parts each visit
     const pool = (Object.keys(UPGRADES) as UpgradeId[]).filter((id) => (carry ?? trip.carry)?.upgrades[id] !== UPGRADES[id].max);
     stock = [];
     while (pool.length && stock.length < CONFIG.market.upgrade.stock) stock.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
@@ -449,7 +451,7 @@ function hud() {
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${CONFIG.tumor.drain}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
-    : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} stowaway${s.flora > 1 ? 's' : ''}` : ''}`);
+    : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}`);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
   const losing = G.losingThem(s);

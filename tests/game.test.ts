@@ -984,3 +984,21 @@ test('the tumor takes its share on the road between maps too', () => {
   G.tumorToll(c, 5);
   assert.equal(c.hostHealth, h0 - 1);
 });
+
+test('the ledger keeps plain counts of how the host was treated, across maps', () => {
+  const s = quiet(6); s.host.nextSurge = 999;
+  besideCell(s); s.player.energy = 0;
+  G.startStrip(s); run(s, CONFIG.energy.strip.time + 0.2);
+  assert.equal(s.ledger.stripped, 1);
+  assert.equal(s.ledger.hostLowest, s.hostHealth);
+  s.flora = 1; G.bait(s);
+  assert.equal(s.ledger.baitReleased, 1);
+  const c = G.carryOf(s);
+  c.hostHealth = 70; G.leverPulled(c); c.hostHealth = 95; G.leverPulled(c);
+  assert.deepEqual([c.ledger!.leversForHer, c.ledger!.leversForMe], [1, 1]);
+  const next = G.createGame(7, c);
+  assert.equal(next.ledger.stripped, 1, 'and it follows the unit');
+  const w = G.stewardship(next.ledger, 4);
+  assert.equal(w.harm, 10 + 2 + (100 - next.ledger.hostLowest));
+  assert.equal(w.care, 8 + 5);
+});
