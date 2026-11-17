@@ -137,6 +137,7 @@ function playScene(when: string, then: () => void, again = false) {
   const end = () => {
     if (over) return;
     over = true; sceneEnd = null; clearTimeout(timer);
+    Sound.outside(false); // the match cut: back inside
     box.classList.remove('on');
     timer = window.setTimeout(() => { box.hidden = true; then(); }, view.still ? 0 : 1200);
   };
@@ -152,6 +153,7 @@ function playScene(when: string, then: () => void, again = false) {
       $('scene-seen').textContent = beat.art ? '' : beat.seen;
       $('scene-print').textContent = beat.print ?? '';
       line.classList.add('on');
+      if (beat.sound) Sound.room[beat.sound]();
       timer = window.setTimeout(next, beat.hold * 1000);
     }, k === 0 || view.still ? 300 : 1100);
   };
@@ -161,6 +163,7 @@ function playScene(when: string, then: () => void, again = false) {
   void box.offsetWidth; // let the fade start from black
   box.classList.add('on');
   sceneEnd = end;
+  Sound.outside(true);
   const began = performance.now();
   box.onclick = (e) => { if ((e.target as HTMLElement).id === 'scene-skip') end(); else if (performance.now() - began > 2000) next(); };
   timer = window.setTimeout(next, view.still ? 200 : 1300);

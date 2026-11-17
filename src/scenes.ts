@@ -6,7 +6,8 @@
 // words that would really be printed in the scene (a letter, a label), and is the only text the
 // finished scenes carry.
 export type Light = 'clinic' | 'day' | 'dusk' | 'night' | 'dawn';
-export interface Beat { seen: string; print?: string; art?: string; hold: number; light?: Light }
+export type RoomSound = 'spoon' | 'claws' | 'paper' | 'sigh' | 'set';
+export interface Beat { seen: string; print?: string; art?: string; hold: number; light?: Light; sound?: RoomSound }
 export interface Scene { when: string; title: string; once: 'ever' | 'mission'; light: Light; beats: Beat[] }
 
 // `when` keys: 'begin' (the cold open), 'home:N' (back at the heart after trip N).
