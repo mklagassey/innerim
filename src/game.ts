@@ -116,8 +116,15 @@ export const tileOf = (p: Point): Point => ({ x: Math.floor(p.x), y: Math.floor(
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** What survives from one map to the next: who you have become, and the state of the host. */
-export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean }
-export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered });
+export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number }
+export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained });
+/** Time passing between maps: the tumor takes its share of the host there too. */
+export function tumorToll(c: Carry, hours: number) {
+  if (c.excised >= CONFIG.tumor.goal) return;
+  c.drained = (c.drained ?? 0) + hours * CONFIG.tumor.drain;
+  const whole = Math.floor(c.drained);
+  c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole);
+}
 /** What the host will remember of you once you leave this map. */
 export const memoryAfter = (s: State) => Math.min(1, s.memory + CONFIG.memory.perAlert * (s.peak / CONFIG.alert.max) + CONFIG.memory.perKill * s.kills);
 /** A liver is a place to feed. A vessel is a stretch of road with a patrol on it. */
@@ -172,7 +179,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     memory: carry?.memory ?? 0,
     peak: 0,
     antibodies: [],
-    sinceHurt: 99, drained: 0, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
+    sinceHurt: 99, drained: carry?.drained ?? 0, cloakOffered: carry?.cloakOffered ?? false, acidTime: 0,
     arrived: { energy: carry?.energy ?? CONFIG.player.startEnergy, hp: carry?.hp ?? CONFIG.player.maxHp },
     search: null, zoneTime: 0,
     verdict: '', defied: carry?.defied ?? 0,

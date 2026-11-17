@@ -971,3 +971,16 @@ test('the first liver cache always offers the cloak, once', () => {
     assert.equal(G.createGame(seed + 1, G.carryOf(s)).cloakOffered, true, 'and the next map remembers');
   }
 });
+
+test('the tumor takes its share on the road between maps too', () => {
+  const c = G.carryOf(quiet(6));
+  const h0 = c.hostHealth;
+  G.tumorToll(c, 0.5);
+  assert.equal(c.hostHealth, h0, 'half an hour is half a point, kept for later');
+  G.tumorToll(c, 0.5);
+  assert.equal(c.hostHealth, h0 - 1);
+  assert.equal(G.createGame(7, { ...c, drained: 0.75 }).drained, 0.75, 'and the fraction follows you into the next map');
+  c.excised = CONFIG.tumor.goal;
+  G.tumorToll(c, 5);
+  assert.equal(c.hostHealth, h0 - 1);
+});
