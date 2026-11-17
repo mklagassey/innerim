@@ -312,3 +312,16 @@ Run report gains `chapter`, `trust`, `compliance`, `met`, `took`, `slip`, `echoe
 3. **unit-14:** chapter 4 (D11 to D14, kin recall, margins); chapter 5 and the ending matrix; epilogue props; the audit; outcomes; chapter restarts; the previous unit.
 4. **unit-15:** the draw map (D16) and the arm road.
 5. **unit-16:** travel by branch, the heart chamber, flight transitions (with art). **Shipped early as unit-12a (Version 60):** forks at the heart and the gut; other stops carry straight on.
+
+### 10.7 As built (unit-12, Version 61)
+
+The lead engineer's departures from the letter of this spec, all accepted:
+
+1. **Hold / Harvest timing.** The forced fright comes 6 s into the return vessel, not 20 s (`CONFIG.slip.fright`), because a vessel can be crossed in about 12 s. Leaving the map during the window counts as lapsed.
+2. **The lamp Slip.** It forces the return-leg vessel (patrol 1), with the dark unit placed mid-channel. Passing it without answering counts as "do not touch".
+3. **Chapter 4 start.** It begins in-map at 3 cells left, with Shepherd's "Residual disease." The card and autosave show when that liver is left. Until the tumour is all out, the telemetry line reads `COMPLIANCE n% · RESIDUAL DISEASE`.
+4. **Compliance.** Completed tutorial steps and matched Slips count as obeyed. A Slip acted on the other reading counts as deviated. A Slip that lapses with no action counts as neither.
+5. **Wake cost.** Waking costs trust 8 in total; the salvage deviation does not also charge 6.
+6. **Trust arrival line.** It plays on liver arrivals only.
+7. **Travel forks.** Forks exist only at the heart and the gut; other stops carry straight on.
+8. **Run reports.** They now carry chapter, trust, compliance, slip (`kind:meant:result`), took, met and pages.
