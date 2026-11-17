@@ -597,3 +597,18 @@ Engineering: `DIFFICULTY.<level>.rules = { footFade, ringShrink, memoryCarry, ta
   - Vigilant: 10 to 25% deaths in 20 seeds for an attack bot and under 10% for a stealth bot. Vigilant should reward stealth, not armour, which answers Mick's "go in swinging".
 - **New minors:** m14 to m16 are met in at least 80% of runs that reach chapter 5.
 - **Tally:** please add a per-decision table of met / obeyed / deviated / lapsed counts to `qa-branches.cjs`, so the next audit can use real counts.
+
+### 11.7 As built (unit-17, Version 75)
+
+Accepted. Where the build differs from the spec:
+
+- **A.** Arriving early is a credit against the tumour drain, never a gain in host health. Arriving late also moves the clock.
+- **D.** If you deviate, a third of the antibodies are gone on the next map.
+- **E (partial).** Hiding on an escorted leg counts as a telemetry gap after 0.5 s. Forks are not locked.
+- **F.** The extra T cells are on the first chapter 5 map that is not a chamber.
+- **G (partial).** With no dock planted, the next supply drop is skipped. The "resident to contest" is the existing breakable dock. Requested in addition: `dockAlert` 10, so every later visit to that liver starts at alert +10 (a foreign-body response).
+- **m14** is issued in the last liver when its final tumour cell comes out.
+- **m15 and m16** are questions at the chapter 5 heart.
+  - The last trip starts at 02:30.
+  - The amber map and marked niches for m15 are deferred.
+- **Rules names:** `trail, ring, memoryCarry, tagOnTouch, cloakDecay, scanHeading, dropAhead, drain, mend`.
