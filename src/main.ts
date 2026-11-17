@@ -543,6 +543,42 @@ function hud() {
   }
 }
 
+// ---------- the host's next two hours ----------
+// A strip under the gauges: what the host is about to do slides in from the right toward "now" on the left.
+interface Ahead { id: string; at: number; icon: string; what: string }
+const RIBBON_HOURS = 2;
+function ahead(hour: number, nap: number): Ahead[] {
+  const h = CONFIG.host, name = (m: number) => (m < 10 ? 'Breakfast' : m < 16 ? 'Lunch' : 'Dinner');
+  const all: Ahead[] = [
+    ...h.meals.map((m) => ({ id: `meal${m}`, at: m, icon: '\u{1F374}\uFE0E', what: `${name(m)} at ${clock(m)}: sugar refills faster, and stomach acid rises over ${CONFIG.stomach.rise} seconds.` })),
+    ...h.coffee.at.map((m) => ({ id: `coffee${m}`, at: m, icon: '\u2615\uFE0E', what: `Coffee at ${clock(m)}: faster blood everywhere, and frights come more often.` })),
+    ...h.drink.at.map((m) => ({ id: `drink${m}`, at: m, icon: '\u{1F377}\uFE0E', what: `A drink at ${clock(m)}: sluggish immune cells, a swaying ship, and liver cells cost the host double.` })),
+    { id: 'sleep', at: h.asleepFrom, icon: '\u263E', what: `Asleep at ${clock(h.asleepFrom)}: slow blood, sharp noses, less sugar, and the host mends.` },
+    { id: 'wake', at: h.asleepUntil, icon: '\u2600\uFE0E', what: `Awake at ${clock(h.asleepUntil)}: the blood picks up and noses dull.` },
+  ];
+  if (nap > 0 && nap < RIBBON_HOURS) all.push({ id: 'napend', at: (hour + nap) % 24, icon: '\u2600\uFE0E', what: 'The nap ends: back to waking blood.' });
+  return all.map((e) => ({ ...e, at: (e.at - hour + 24) % 24 })).filter((e) => e.at > 0 && e.at <= RIBBON_HOURS);
+}
+let ribbonNote = 0;
+function ribbon() {
+  const box = $('ribbon'), list = ahead(s.host.hour, s.host.nap), have = new Map([...box.querySelectorAll('button')].map((b) => [b.dataset.id!, b]));
+  for (const e of list) {
+    let b = have.get(e.id);
+    if (!b) {
+      b = document.createElement('button'); b.type = 'button'; b.dataset.id = e.id; b.textContent = e.icon; b.style.opacity = '0';
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); $('ribbon-note').textContent = b!.title; ribbonNote = 5; });
+      box.append(b);
+      requestAnimationFrame(() => { b!.style.opacity = '1'; });
+    }
+    const secs = Math.round(e.at * CONFIG.host.secondsPerHour);
+    b.title = `${e.what} In about ${secs} seconds.`; b.setAttribute('aria-label', b.title);
+    b.style.left = `${(e.at / RIBBON_HOURS) * 100}%`;
+    b.classList.toggle('near', e.at < 0.34);
+    have.delete(e.id);
+  }
+  for (const b of have.values()) b.remove();
+}
+
 // ---------- loop ----------
 
 let then = performance.now(), walked = 0, heardBeat = false, beatClock = 0;
@@ -599,6 +635,7 @@ function frame(now: number) {
   view.bpm = bpm;
   draw(ctx, s, view);
   hud();
+  if (started) { ribbon(); if (ribbonNote > 0 && (ribbonNote -= dt) <= 0) $('ribbon-note').textContent = ''; }
   requestAnimationFrame(frame);
 }
 

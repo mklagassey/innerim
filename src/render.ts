@@ -644,7 +644,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.beginPath();
     for (let k = 0; k <= 56; k++) { const a = (k / 56) * Math.PI * 2, q = project(z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r); if (k) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }
     ctx.fillStyle = `rgba(190,60,130,${inside ? 0.05 + 0.02 * slow : 0.025})`; ctx.fill();
-    ctx.strokeStyle = `rgba(214,92,160,${0.3 + 0.22 * slow})`; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.lineDashOffset = v.still ? 0 : -v.time * 6; ctx.stroke();
+    ctx.strokeStyle = `rgba(236,110,180,${0.55 + 0.25 * slow})`; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.lineDashOffset = v.still ? 0 : -v.time * 6; ctx.stroke();
     ctx.setLineDash([]);
   }
   things.sort((a, b) => a.depth - b.depth);
