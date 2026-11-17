@@ -479,7 +479,7 @@ function lever(c: G.Carry) {
 }
 let ruled: G.Ruling[] = [], forHer = false;
 /** What you carry before you have played a single map. */
-const freshCarry = (): G.Carry => ({ difficulty, hp: CONFIG.player.maxHp, energy: DIFFICULTY[difficulty].energy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: 0, kin: 0 }); // every unit starts unwoken: what the last one became is a line of text, never awareness
+function freshCarry(): G.Carry { return { difficulty, hp: CONFIG.player.maxHp, energy: DIFFICULTY[difficulty].energy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: 0, kin: 0 }; } // every unit starts unwoken: what the last one became is a line of text, never awareness
 const ECHO = 'insiderim.echo';
 function echo(): number { try { return Math.min(40, Number(localStorage.getItem(ECHO)) || 0); } catch { return 0; } }
 function keepEcho(aware: number) { try { localStorage.setItem(ECHO, String(Math.max(echo(), Math.round(aware * CONFIG.story.echo)))); localStorage.setItem(ECHO + '.played', '1'); } catch { /* not kept */ } }

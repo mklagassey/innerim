@@ -1083,7 +1083,8 @@ export function leave(s: State): boolean {
   emit(s, 'win');
   if (s.place === 'liver') s.player.energy -= CONFIG.energy.quota; // the fare
   // Shepherd wanted host cells harvested. It can only say so while it can still hear you.
-  if (s.slipLive) resolveSlip(s, s.slip?.kind === 'lamp' ? 'B' : null, 0); // gone before answering: a dark unit passed by was not touched; an order not acted on has lapsed
+  if (s.slipLive) resolveSlip(s, s.slip?.kind === 'lamp' ? 'B' : null, 0);
+  else if (s.slip && !s.slip.result && s.pickups.some((i) => i.slip)) { meet(s, 'slip'); resolveSlip(s, null, 0); } // the unit it was about was never come near: the order never got through // gone before answering: a dark unit passed by was not touched; an order not acted on has lapsed
   settle(s);
   for (const th of s.thoughts) if (th.keep && th.t > s.time) s.rulings.push({ who: th.who, text: th.text, st: th.st });
   say(s, s.place === 'liver' ? 'You slip into the central vein and ride the current back toward the heart.' : s.place === 'lung' ? 'Through the wall of the last air sac, and out on a breath.' : s.place === 'stomach' ? 'You slip into the gastric vein. It drains to the liver.' : 'The current takes you on.');
@@ -1449,12 +1450,13 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     else if (s.host.surge <= 0 && s.lane) { take(s, 'first-fright-transit', s.host.slams === 0 && dist(p, s.lane.from) < CONFIG.marks.lane ? 'deviate' : 'obey'); s.lane = null; }
   }
   // Cornered and nearly finished, with a unit you woke close by.
-  if (s.kin > 0 && !s.met.includes('kin-volunteer') && s.chapter >= 2 && !s.junction && p.hp < maxHp(s) * CONFIG.marks.volunteer.hull && s.enemies.filter((e) => e.mood === 'chase' && dist(e, p) < 7).length >= CONFIG.marks.volunteer.hunters) { meet(s, 'kin-volunteer'); s.ask = { kind: 'volunteer', item: { x: p.x - p.face.x * 1.5, y: p.y - p.face.y * 1.5, kind: 'kin' } }; stop(s); }
+  if (s.kin > 0 && !s.met.includes('kin-volunteer') && s.chapter >= 2 && !s.junction && p.hp < maxHp(s) * CONFIG.marks.volunteer.hull && !(s.upgrades.cd47 && s.cloakCd <= 0 && p.energy >= CONFIG.cloak.energy && s.tagged <= 0) && s.flora <= 0 && !cloaked(s) && s.enemies.filter((e) => e.mood === 'chase' && dist(e, p) < 7).length >= CONFIG.marks.volunteer.hunters) { meet(s, 'kin-volunteer'); s.ask = { kind: 'volunteer', item: { x: p.x - p.face.x * 1.5, y: p.y - p.face.y * 1.5, kind: 'kin' } }; stop(s); }
   if (!s.selfTest && s.time > CONFIG.trust.selfTest && trustBand(s.trust) === 2 && stage(s) < 4 && !s.junction && !s.tutorial) { s.selfTest = true; shepherd(s, Story.SELF_TEST); }
   if (s.junction) for (const [i, ex] of s.junction.exits.entries()) if (dist(p, mid(ex.at)) < 1.4) {
     s.junction.chose = i; s.status = 'won'; emit(s, 'win');
     if (s.flags.route2 === 'live') { s.flags.route2 = 'done'; take(s, 'route-2', ex.to === 'hepatic' ? 'obey' : 'deviate', { mute: true }); }
     if (ex.assigned && s.silent && s.chapter >= 2 && stage(s) < 4) take(s, 'escort-refuse', 'deviate');
+    if (s.slipAt >= 0 && s.slip?.kind === 'fork' && !s.slip.result && !s.slipLive) beginSlip(s); // into a mouth before the order had finished arriving
     if (s.slipLive && s.slip?.kind === 'fork') resolveSlip(s, ex.to === 'hepatic' ? 'A' : ex.to === 'gastric' ? 'B' : null, 0);
     for (const th of s.thoughts) if (th.keep && th.t > s.time) s.rulings.push({ who: th.who, text: th.text, st: th.st });
     return;
