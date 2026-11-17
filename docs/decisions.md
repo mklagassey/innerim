@@ -692,3 +692,15 @@ pain-damp and beacon could not be measured. Almost every refusal of a hold mark 
 Fix in unit-17.3: a hold mark counts as lapsed only if the unit was engulfed, in contact, or a hunter's target for at least half the time the order stood (`pressedShare` 0.5).
 
 **Escort pair (simulation, Typical, 40 seeds). Accepted as is.** Declining the escort costs 2.7 hull per leg for the attack bot and 1.5 for the stealth bot, and it roughly doubles patrols. A sneaky player loses less by refusing the leash, which suits the theme.
+
+**Payoff pairs on Version 83, measured against a control that waits the same time but refuses nothing:**
+
+| Decision | Host | Time |
+|---|---|---|
+| beacon | +1.6 | 0 h |
+| fever-damp | +3.6 | +0.4 h |
+| pain-damp | inconclusive (only 4 runs) | |
+
+That puts 6 of 7 pairs in range.
+
+Open question: why does waiting in a chapter 3+ liver leave her healthier (+13)? My hypothesis is that the waiting run meets and obeys ethanol-correction, which turns on `stopDrink` and lowers harm on every later strip. QA is checking.
