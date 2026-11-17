@@ -206,7 +206,7 @@ function openWorld(title: string, text: string) {
     ? `The tumor is out. To finish, go to the Heart and take the new road to the Lungs${Story.stageOf(c?.aware ?? 0) >= 3 ? ', or refuse the recall there and stay' : ''}.`
     : `Mission: cut out the tumor in the liver. ${out} of ${CONFIG.tumor.goal} cells are out, so about ${visits} more liver visit${visits === 1 ? '' : 's'}. When it is all out, a road opens from the Heart to the Lungs and you can leave. The mission fails if the ship is destroyed or the host's health reaches zero.`;
   $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1);
-  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 ${Story.STAGES[Story.stageOf(c.aware ?? 0)].name} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised${c.excised < CONFIG.tumor.goal ? `, costing the host ${CONFIG.tumor.drain}% an hour` : ''}` : '');
+  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 ${Story.STAGES[Story.stageOf(c.aware ?? 0)].name} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised${c.excised < CONFIG.tumor.goal ? `, costing the host ${Math.round(G.tumorDrain(c.excised) * 10) / 10}% an hour` : ''}` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
@@ -455,7 +455,7 @@ function hud() {
   set('host', 'tier', mood === 'stressed' || G.fever(s) ? '2' : '0');
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
-    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${CONFIG.tumor.drain}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
+    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
     : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}`);
   set('alert-fill', 'width', pct(s.alert, CONFIG.alert.max));
   const tier = G.alertTier(s);
