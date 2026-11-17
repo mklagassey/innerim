@@ -67,7 +67,7 @@ test('stripping is fast, kills the cell, hurts the host and brings a response', 
   assert.equal(G.startStrip(s), true);
   run(s, CONFIG.energy.strip.time + 0.1);
   assert.equal(s.player.energy, CONFIG.player.startEnergy + CONFIG.energy.strip.gain);
-  assert.equal(s.hostHealth, 100 - CONFIG.energy.strip.hostDamage);
+  assert.equal(s.hostHealth, 100 - CONFIG.energy.strip.hostDamage * CONFIG.marks.orderedHarm, 'the first cells are the quota: surplus, and half the harm');
   assert.ok(s.alert >= CONFIG.energy.strip.alert - 1);
   assert.equal(s.tiles[G.idx(s, cell!.x, cell!.y)], 'dead');
   assert.ok(G.open(s, cell!.x, cell!.y), 'a dead cell opens a path');
@@ -826,7 +826,7 @@ test('story: the unit remarks on things once per map, noticing wakes nothing, an
   assert.ok(said.some((t) => t.text === Story.WAKING[2]) && said.some((t) => t.who === 'shepherd' && /self-test/.test(t.text)) && said.some((t) => t.text === Story.PERKS[2]));
   assert.equal(G.carryOf(s).aware, s.aware);
   const next = G.createGame(5, { ...G.carryOf(s), aware: 90 }, 'vessel');
-  assert.ok(next.thoughts.every((t) => t.who === 'unit'), 'Shepherd cannot hear a unit that far gone');
+  assert.ok(next.thoughts.some((t) => t.who === 'shepherd'), 'Shepherd does not know what the unit has become: the orders keep coming');
   for (const [k, v] of Object.entries(Story.LINES)) assert.equal(v.length, 5, k);
   assert.match(Story.ending('stay', 90, 2, 90).title, /colony/);
   assert.equal(Story.ending('breath', 0, 0, 90).title, 'Decommissioned');
@@ -1244,10 +1244,11 @@ test('S21: defiance counts once per order per map, only on leaving alive, and le
   const c: G.Carry = { ...G.carryOf(quiet(6)) };
   const gains: number[] = [];
   for (let n = 0; n < 4; n++) { const was = c.aware ?? 0; G.defyCarry(c, 'gastric', 6); gains.push((c.aware ?? 0) - was); }
-  assert.deepEqual(gains, [12, 6, 3, 3], 'the first no lifts to 12, the second counts in full, later ones half');
+  assert.deepEqual(gains.map((g) => Math.round(g * 100) / 100), [12, 5.28, 2.48, 2.41], 'the first no lifts to 12; after that each counts for less the more awake it is, and half once it is a habit');
+  assert.equal(G.roused(20, 15), 32); assert.equal(G.roused(60, 15), 66); assert.equal(G.roused(80, 15), 83.75);
   const far: G.Carry = { ...c, aware: 90 };
-  assert.deepEqual(G.defyCarry(far, 'quota', 12), [], 'past the last stage there are no orders left to defy');
-  assert.equal(far.aware, 90);
+  assert.ok(G.defyCarry(far, 'quota', 12).length > 0, 'Shepherd goes on ordering whatever the unit has become');
+  assert.equal(far.aware, 93);
 });
 
 test('S21: each standing order has its own test', () => {
@@ -1651,4 +1652,27 @@ test('the recall of a unit you woke is a race: reach it before the Warden does, 
   for (let t = 0; t < CONFIG.marks.kinRun.time + 2 && !l.took['kin-recall']; t += 1 / 60) { l.player.x = at.x; l.player.y = at.y; l.player.hp = 60; l.cloak = 999; G.update(l, 1 / 60); }
   assert.equal(l.took['kin-recall'], 'obey'); assert.equal(l.kin, 0);
   const o = heart(); G.answer(o, 'accept'); assert.equal(o.took['kin-recall'], 'obey'); assert.equal(o.kin, 0);
+});
+
+test('unit-15.3: ordered strips cost her half, a cell of the unit\'s own choosing costs full, and the liver grows some back overnight', () => {
+  const s = quiet(5); const d = CONFIG.energy.strip.hostDamage;
+  for (let n = 0; n < CONFIG.story.quota + 1; n++) { besideCell(s); assert.equal(G.startStrip(s), true); run(s, CONFIG.energy.strip.time + 0.1); }
+  assert.equal(s.hostHealth, 100 - CONFIG.story.quota * d * CONFIG.marks.orderedHarm - d);
+  assert.equal(s.flags.hep, CONFIG.story.quota + 1);
+  const c = G.carryOf(s); G.night(c);
+  assert.equal(c.hostHealth, Math.min(CONFIG.mend.cap, s.hostHealth + CONFIG.mend.each * (CONFIG.story.quota + 1)));
+  assert.equal(c.flags!.hep, 0); assert.equal(c.flags!.drank, true);
+  const many: G.Carry = { ...c, hostHealth: 40, flags: { hep: 9 } }; G.night(many);
+  assert.equal(many.hostHealth, 40 + CONFIG.mend.night, 'no more than a night\'s worth');
+  const well: G.Carry = { ...c, hostHealth: 95, flags: { hep: 3 } }; G.night(well);
+  assert.equal(well.hostHealth, 95, 'it never makes her better than she was, and never above the cap');
+  const dead: G.Carry = { ...c, hostHealth: 0, flags: { hep: 3 } }; G.night(dead); assert.equal(dead.hostHealth, 0);
+});
+
+test('unit-15.3: Shepherd asks about her drinking at the first chapter 3 liver once she has had a drink at all', () => {
+  const base = { ...G.carryOf(quiet(4)), chapter: 3, hour: 11 };
+  const sober = G.createGame(7, { ...base, flags: {} });
+  assert.ok(!sober.marks.some((m) => m.id === 'ethanol-correction'));
+  const drank = G.createGame(7, { ...base, flags: { drank: true } });
+  assert.ok(drank.marks.some((m) => m.id === 'ethanol-correction'));
 });

@@ -31,7 +31,7 @@ export const TIPS: Tip[] = [
   { id: 'net', kind: 'Danger', title: 'Neutrophil net',
     body: 'In open blood a neutrophil that cannot reach you spits out its own DNA as a sticky web. It slows you to a crawl for a moment, which is usually long enough for the rest to arrive. Kill the thrower, break its line to you, or be gone before they know you are there.' },
   { id: 'surge', kind: 'The host', title: 'A fright',
-    body: 'Something out in the world has scared the host, and adrenaline is doing what it does. Her heart races, arteries clench and the blood in them runs hard enough to sweep you along and throw you against the walls at the bends, so steer with it. Veins barely notice. The liver dumps sugar into the blood, so glucose comes back fast for a while. It passes in under half a minute.' },
+    body: 'Something out in the world has scared the host, and adrenaline is doing what it does. Her heart races, arteries clench and the blood in them runs hard enough to sweep you along and throw you against the walls at the bends. Veins barely notice. The liver dumps sugar into the blood, so glucose comes back fast for a while. It passes in under half a minute.' },
   { id: 'sleep', kind: 'The host', title: 'The host is asleep',
     body: 'The host has a day of her own, and the clock next to Host health at the top keeps it. While she sleeps the blood runs slow and easy, but sugar is scarce because she is fasting, and the immune system does its best work at night: everything smells you from further off.' },
   { id: 'fever', kind: 'The host', title: 'Fever',

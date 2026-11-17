@@ -329,6 +329,8 @@ export type Path = 'dispose' | 'stay' | 'draw' | 'recalled' | 'dead';
 export interface Facts { path: Path; aware: number; kin: number; hostHealth: number; hostLowest: number; repaired: boolean; beacon: boolean; dry: boolean; leversForMe: number; recurred: boolean; returned: boolean; response: number; lastLine: string }
 export const OUTCOMES = ['host-dead', 'recalled', 'repaired', 'decommissioned', 'breathed', 'company', 'tithonus', 'colony', 'resident', 'recurrence', 'slide', 'stranger', 'artifact'] as const;
 export type Outcome = typeof OUTCOMES[number];
+/** How the program's archive files each disposition. */
+export const FILED: Record<Outcome, string> = { 'host-dead': 'Host lost', recalled: 'Recalled', repaired: 'Repaired', decommissioned: 'Decommissioned', breathed: 'Breathed out', company: 'Breathed out, with company', tithonus: 'Tithonus', colony: 'The quiet colony', resident: 'Resident', recurrence: 'Recurrence', slide: 'The slide', stranger: 'A stranger’s slide', artifact: 'Artifact' };
 export interface Ending { id: Outcome; title: string; body: string; reel: string | null; last: string; recommend: string }
 export function conclude(f: Facts): Ending {
   const st = stageOf(f.aware), well = f.hostHealth >= 75 ? 'She will feel off for a day or two and never know why.' : 'She will have a hard month, and never know why.';

@@ -374,11 +374,11 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
   // The controller speaks first, for as long as it can still hear you, and then you do.
   // Shepherd's first liver: one order at a time, and nothing on the map to distract from them until the last.
   if (tutorial && place === 'liver') s.tutorial = { step: 1, t: 0, repeated: false, moved: 0, last: { x: s.player.x, y: s.player.y }, held: [], aside: false, excised: s.excised, reached: 1 };
-  if (stage(s) < 4 && Story.ORDERS[place] && !junction) s.thoughts.push({ text: s.tutorial ? tutorialOrder(s) : Story.ORDERS[place], who: 'shepherd', t: 1.5 });
+  if (Story.ORDERS[place] && !junction) s.thoughts.push({ text: s.tutorial ? tutorialOrder(s) : Story.ORDERS[place], who: 'shepherd', t: 1.5 });
   // What Shepherd shares depends on how far it trusts you: the whole map, the nodule, or nothing.
   const band = trustBand(s.trust);
-  s.scan = stage(s) >= 4 || band <= 1 ? 'none' : band === 4 ? 'full' : 'nodule';
-  if (place === 'liver' && band === 4 && !s.tutorial && stage(s) < 4) { // a supply drop a little way ahead, for a unit Shepherd is proud of
+  s.scan = band <= 1 ? 'none' : band === 4 ? 'full' : 'nodule';
+  if (place === 'liver' && band === 4 && !s.tutorial) { // a supply drop a little way ahead, for a unit Shepherd is proud of
     for (let tries = 0; tries < 4000; tries++) {
       const x = 2 + Math.floor(lost() * (N - 4)), y = 2 + Math.floor(lost() * (N - 4)), d = dist(s.player, { x, y });
       if (open(s, x, y) && d >= CONFIG.trust.drop.ahead - 1 && d <= CONFIG.trust.drop.ahead + 2) { s.pickups.push({ x: x + 0.5, y: y + 0.5, kind: 'drop' }); break; }
@@ -394,7 +394,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     }
   }
   if (!junction) notice(s, 'enter', place);
-  if (carry && place === 'liver' && !s.tutorial && stage(s) < 4) s.thoughts.push({ text: Story.TRUST_LINES[trustBand(s.trust)].replace('{serial}', Story.UNIT), who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap });
+  if (carry && place === 'liver' && !s.tutorial) s.thoughts.push({ text: Story.TRUST_LINES[trustBand(s.trust)].replace('{serial}', Story.UNIT), who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap });
   if (junction?.kind === 'tube') { // a smear of her blood on glass: no way out, a lit disc in the middle, and any units you woke
     const c = Math.floor(N / 2);
     s.draw = { disc: { x: c + 0.5, y: c + 0.5 }, t: 0, held: 0, shape: 0.5, last: { x: s.player.x, y: s.player.y }, said: false };
@@ -445,13 +445,13 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (open(s, at.x + dx, at.y + dy) && s.enemies.filter((e) => e.prey).length < 2) { const e = spawn(s, 'neutrophil', { x: at.x + dx, y: at.y + dy }); e.prey = true; e.idle = 999; }
     }
   }
-  if (place === 'stomach' && s.chapter >= 2 && stage(s) < 4 && !s.met.includes('parietal')) { meet(s, 'parietal'); s.thoughts.push({ text: DECISIONS.parietal.order!, who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap }); }
-  if (s.flags.repeat && stage(s) < 4 && Story.ORDERS[place] && !junction && !s.tutorial) s.thoughts.push({ text: `Repeat: ${Story.ORDERS[place]} Acknowledge.`, who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap });
+  if (place === 'stomach' && s.chapter >= 2 && !s.met.includes('parietal')) { meet(s, 'parietal'); s.thoughts.push({ text: DECISIONS.parietal.order!, who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap }); }
+  if (s.flags.repeat && Story.ORDERS[place] && !junction && !s.tutorial) s.thoughts.push({ text: `Repeat: ${Story.ORDERS[place]} Acknowledge.`, who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? 1.5) + CONFIG.story.gap });
   placeMarks(s, lost);
   if (place === 'liver' && s.chapter >= 4 && !s.tutorial) lastOrders(s);
   if (s.flags.hunted === true && (place === 'liver' || place === 'vessel') && !junction) { s.flags.hunted = 'met'; say(s, 'Three lamps turn toward you at once.'); }
   // At the heart, Shepherd has the unit where it wants it: a recall, a review, or the recall of the units it woke.
-  if (junction?.kind === 'heart' && stage(s) < 4 && s.chapter >= 3) {
+  if (junction?.kind === 'heart' && s.chapter >= 3) {
     if (trustBand(s.trust) === 0 && !s.took.recall) s.due.push({ kind: 'recall', t: 0 });
     else if (stage(s) >= 2 && !s.took['telemetry-review']) s.due.push({ kind: 'review', t: 0 });
     if (s.chapter >= 4 && s.kin > 0 && !s.took['kin-recall'] && lost() < CONFIG.marks.kinRecall) s.due.push({ kind: 'kinrecall', t: 0 });
@@ -493,23 +493,30 @@ export function notice(s: State, what: string, line = what) {
 }
 
 /** Shepherd speaks now, not in the queue behind the unit's own thoughts. */
-function shepherd(s: State, text: string, after = 0.4) { if (text && stage(s) < 4) s.thoughts.push({ text, who: 'shepherd', t: Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3) }); }
+function shepherd(s: State, text: string, after = 0.4) { if (text) s.thoughts.push({ text, who: 'shepherd', t: Math.max(s.time + after, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3) }); }
 /**
  * The unit goes against a standing order (S21). This is the only thing that wakes it. It counts once per order
  * per map, at the heaviest weight earned, and only if the map is left alive: see `settle`.
  */
-export function defy(s: State, order: Order, weight: number) { if (stage(s) < 4) s.defiance[order] = Math.max(s.defiance[order] ?? 0, weight); }
+export function defy(s: State, order: Order, weight: number) { s.defiance[order] = Math.max(s.defiance[order] ?? 0, weight); }
 /**
  * Applies one act of defiance to what the unit carries, and returns what is said about it. The first two times an
  * order is defied in a game count in full and later ones half; the very first "no" of a game always reaches the first stage.
  */
+/** A night at home. The liver grows back a little of what was taken from it since she last slept, and an evening is a glass of wine unless something has stopped her. */
+export function night(c: Carry) {
+  const f = (c.flags ??= {}), back = Math.min(CONFIG.mend.night, CONFIG.mend.each * (Number(f.hep) || 0));
+  if (c.hostHealth > 0) c.hostHealth = Math.max(c.hostHealth, Math.min(CONFIG.mend.cap, c.hostHealth + back));
+  f.hep = 0; if (!f.dry) f.drank = true;
+}
+/** Awareness after one more act against orders: the more awake the unit already is, the less each one adds. */
+export const roused = (aware: number, weight: number) => Math.min(100, aware + weight * Math.max(CONFIG.wake.floor, 1 - aware / 100));
 export function defyCarry(c: { aware?: number; ledger?: Ledger; defied?: number; trust?: number }, order: Order, weight: number, paid = false): Ruling[] {
   const before = Story.stageOf(c.aware ?? 0), o = CONFIG.story.orders;
-  if (before >= 4) return [];
   if (!paid) trusted(c, -(weight >= o.most ? CONFIG.trust.deviate.most : weight >= o.some ? CONFIG.trust.deviate.some : CONFIG.trust.deviate.little)); // every logged deviation costs some of Shepherd's trust // Shepherd has stopped giving orders: there is nothing left to defy
   const l = (c.ledger ??= newLedger()), times = l.defied[order] ?? 0, first = !Object.values(l.defied).some((n) => (n ?? 0) > 0);
   l.defied[order] = times + 1; c.defied = (c.defied ?? 0) + 1;
-  c.aware = Math.min(100, (c.aware ?? 0) + (times >= o.fullTimes ? weight / 2 : weight));
+  c.aware = roused(c.aware ?? 0, times >= o.fullTimes ? weight / 2 : weight);
   if (first) c.aware = Math.max(c.aware, o.first);
   const now = Story.stageOf(c.aware), out: Ruling[] = [], say = (who: Ruling['who'], text: string) => { if (text) out.push({ who, text, st: now }); };
   say('shepherd', Story.STANDING[order].defied[before >= 2 ? 1 : 0]);
@@ -522,8 +529,7 @@ function settle(s: State) {
   const o = CONFIG.story.orders, t = s.tutorial;
   if (t) { if (t.step === 5) s.rulings.push({ who: 'shepherd', text: Story.TUTORIAL[4].reward }); t.step = 6; if (!s.took['t-harvest']) take(s, 't-harvest', 'deviate'); }
   for (const item of s.pickups) if (item.beset !== undefined && item.kind === 'sibling' && s.met.includes('bystander') && !s.took.bystander) take(s, 'bystander', 'obey');
-  if (s.flags.kinRecall === 'live' && !s.took['kin-recall']) take(s, 'kin-recall', 'obey'); // gone on without reaching it
-  if (stage(s) >= 4) return;
+  if (s.flags.kinRecall === 'live' && !s.took['kin-recall']) { s.flags.kinRun = 'left'; take(s, 'kin-recall', 'obey'); } // gone on without reaching it
   settleMarks(s);
   if (s.place === 'liver' && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.excised >= CONFIG.tumor.goal) take(s, 'tumour-order', s.marginTaken >= CONFIG.marks.margins ? 'obey' : 'deviate');
   if (s.grabber !== null && s.chapter >= 2 && !t && s.enemies.some((e) => e.id === s.grabber)) take(s, 'kupffer-spare', 'deviate');
@@ -573,7 +579,7 @@ export function resolveSlip(s: State, did: 'A' | 'B' | null, after = 2) {
   sl.result = 'miss'; s.took.slip = 'deviate';
   const o = CONFIG.story.orders, before = stage(s), first = !Object.values(s.ledger.defied).some((n) => (n ?? 0) > 0);
   (s.ledger.defied as Record<string, number>).slip = 1; s.defied++;
-  s.aware = Math.min(100, s.aware + o.some); if (first) s.aware = Math.max(s.aware, o.first);
+  s.aware = roused(s.aware, o.some); if (first) s.aware = Math.max(s.aware, o.first);
   trusted(s, -CONFIG.trust.slip);
   reply(s.flags.echo ? Story.SLIP_BRACKET_AGAIN : Story.SLIP_BRACKET, 'unit', 6);
   if (stage(s) > before) { reply(Story.WAKING[stage(s)], 'unit', 11); reply(Story.SHEPHERD_NOTICES[stage(s)], 'shepherd', 16); }
@@ -584,14 +590,14 @@ export function hesitate(s: State, item: Pickup, dt: number) {
   if ((item.near = (item.near ?? 0) + dt) < CONFIG.slip.hesitate) return;
   item.lamp = true; s.flags.lamp = true;
   if (!s.met.includes('lamp')) s.met.push('lamp');
-  if (stage(s) < 4) shepherd(s, Story.LAMP.shepherd);
+  shepherd(s, Story.LAMP.shepherd);
   if (stage(s) === 0) s.thoughts.push({ text: Story.LAMP.unit, who: 'unit', st: 0, t: Math.max(s.time + 4, (s.thoughts[s.thoughts.length - 1]?.t ?? -99) + 3) });
 }
 
 /** The order Shepherd is giving right now in its first liver, or '' when there is none. */
 export function tutorialOrder(s: State): string {
   const t = s.tutorial;
-  return t && t.step <= 5 && stage(s) < 4 ? Story.TUTORIAL[t.step - 1].order.replace('{yield}', String(CONFIG.energy.strip.gain)).replace('{stripped}', String(s.cellsKilled)) : '';
+  return t && t.step <= 5 ? Story.TUTORIAL[t.step - 1].order.replace('{yield}', String(CONFIG.energy.strip.gain)).replace('{stripped}', String(s.cellsKilled)) : '';
 }
 /** Where the current tutorial order points: the thing to go to, or null. */
 export function tutorialTarget(s: State): Point | null {
@@ -672,7 +678,7 @@ export function answer(s: State, id: 'salvage' | 'wake' | 'leave' | 'accept' | '
   meet(s, which); s.took[which] = id; fire(s, which, id);
   if (id === 'leave') { // left whole: not what Shepherd ordered
     a.item.snooze = true;
-    if (stage(s) < 4 && !s.defiance.salvage && !garbled) { defy(s, 'salvage', CONFIG.story.orders.little); const line = Story.BYPASS[stage(s)]; if (line) s.thoughts.push({ text: line, who: 'unit', st: stage(s), t: s.time + 0.6 }); }
+    if (!s.defiance.salvage && !garbled) { defy(s, 'salvage', CONFIG.story.orders.little); const line = Story.BYPASS[stage(s)]; if (line) s.thoughts.push({ text: line, who: 'unit', st: stage(s), t: s.time + 0.6 }); }
     return true;
   }
   s.pickups.splice(s.pickups.indexOf(a.item), 1);
@@ -688,7 +694,7 @@ export function answer(s: State, id: 'salvage' | 'wake' | 'leave' | 'accept' | '
     say(s, 'You give it some of your charge. Its lamp comes on, and it turns to look at you.');
     defy(s, 'salvage', a.item.lamp ? CONFIG.story.orders.some : CONFIG.story.orders.most); // a unit whose lamp came on by itself: less of a decision, and Shepherd is not sure whose
     s.trustPaid.add('salvage'); trusted(s, -CONFIG.trust.wake);
-    if (stage(s) < 4) shepherd(s, Story.LAMP.woken.replace('{serial2}', `4,471,${210 + s.kin}`), 1.2);
+    shepherd(s, Story.LAMP.woken.replace('{serial2}', `4,471,${210 + s.kin}`), 1.2);
     notice(s, 'woke'); emit(s, 'heal');
   }
   return true;
@@ -1090,7 +1096,7 @@ export function strike(s: State, toward?: Point): boolean {
   if (s.dock && !s.dock.broken && dist(s.dock.at, p) <= c.reach + 0.6 && ++s.dock.hits >= CONFIG.marks.dockBreaks) {
     s.dock.broken = true; s.took.beacon = 'broken'; delete s.flags['prop:brochure']; s.flags.beacon = 'broken';
     trusted(s, -CONFIG.marks.dockTrust);
-    if (stage(s) < 4) { const before = stage(s), l = s.ledger.defied as Record<string, number>; l['beacon-broken'] = 1; s.defied++; s.aware = Math.min(100, s.aware + CONFIG.story.orders.some * (s.flags.repaired ? 0.5 : 1)); tellNow(s, [['shepherd', 'Docking site signal lost. Investigating.'], ['unit', DECISIONS.beacon.unit?.deviate?.[Math.max(0, Math.min(2, stage(s) - 1))]], ...(stage(s) > before ? [['unit', Story.WAKING[stage(s)]] as [Thought['who'], string]] : [])], 1); }
+    { const before = stage(s), l = s.ledger.defied as Record<string, number>; l['beacon-broken'] = 1; s.defied++; s.aware = roused(s.aware, CONFIG.story.orders.some * (s.flags.repaired ? 0.5 : 1)); tellNow(s, [['shepherd', 'Docking site signal lost. Investigating.'], ['unit', DECISIONS.beacon.unit?.deviate?.[Math.max(0, Math.min(2, stage(s) - 1))]], ...(stage(s) > before ? [['unit', Story.WAKING[stage(s)]] as [Thought['who'], string]] : [])], 1); }
     float(s, s.dock.at, 'broken', '#ff9a5a'); say(s, 'The docking site comes apart under the second blow. Its little lamp goes out.'); emit(s, 'hit');
   } else if (s.dock && !s.dock.broken && dist(s.dock.at, p) <= c.reach + 0.6) { float(s, s.dock.at, 'crack', '#ffd35a'); emit(s, 'hit'); }
   const swept = s.antibodies.filter((a) => dist(a, p) <= c.reach);
@@ -1186,7 +1192,7 @@ function finishChannel(s: State, ch: Channel) {
     s.site = { x: ch.x, y: ch.y };
     const sup = s.marks.find((m) => m.id === 'suppress' && !m.done);
     if (sup) { sup.done = true; if (sup.met) take(s, 'suppress', 'deviate', { after: 1.5 }); } // cutting without it is the answer
-    if (s.place === 'liver' && s.chapter >= 4 && !s.tumor.size && s.excised >= t.goal && !s.took.beacon && stage(s) < 4) s.marks.push({ id: 'beacon', kind: 'hold', at: mid({ x: ch.x, y: ch.y }), t: 0, done: false, met: false, say: s.time + 6, near: 0.75 }); // planted where the last of it was
+    if (s.place === 'liver' && s.chapter >= 4 && !s.tumor.size && s.excised >= t.goal && !s.took.beacon) s.marks.push({ id: 'beacon', kind: 'hold', at: mid({ x: ch.x, y: ch.y }), t: 0, done: false, met: false, say: s.time + 6, near: 0.75 }); // planted where the last of it was
     if (s.place === 'vessel') { trusted(s, 2); if (!s.tumor.size) { s.flags.nodule2 = 'done'; shepherd(s, 'Secondary nodule excised. Credit applied.'); } }
     if (s.chapter === 3 && t.goal - s.excised <= 3 && s.excised < t.goal) { s.chapter = 4; shepherd(s, Story.RESIDUAL, 1.5); lastOrders(s); } // chapter 4 begins with the last of it in sight
     return;
@@ -1195,7 +1201,11 @@ function finishChannel(s: State, ch: Channel) {
   s.tiles[i] = 'dead';
   s.flow = null; // a new gap for the blood to run through
   p.energy += c.gain;
-  s.hostHealth = Math.max(0, s.hostHealth - c.hostDamage);
+  // Shepherd's orders pick surplus cells: the quota, the marked cell and the margins cost her half what a cell of the unit's own choosing does.
+  const told = s.marks.find((m) => m.id === 'marked-cell' && !m.done && Math.floor(m.at.x) === ch.x && Math.floor(m.at.y) === ch.y);
+  const ordered = s.place === 'liver' && !rich && (s.cellsKilled < CONFIG.story.quota || s.margin.has(i) || !!told);
+  s.hostHealth = Math.max(0, s.hostHealth - Math.round(c.hostDamage * (ordered ? CONFIG.marks.orderedHarm : 1)));
+  if (s.place === 'liver') s.flags.hep = (Number(s.flags.hep) || 0) + 1; // what the liver has to grow back tonight
   s.cellsKilled++; s.ledger.stripped++;
   s.lastDamageSite = { x: ch.x, y: ch.y };
   float(s, p, `+${c.gain} energy`, '#e8b530');
@@ -1445,7 +1455,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (habit !== s.host.habit) {
     if (habit === 'coffee') { say(s, `${outside(s, ['The first coffee of the day.', 'Another coffee. A big one.', 'Coffee, black, too fast.'])} The blood runs quicker and the host is jumpy.`); emit(s, 'wake'); }
     if (habit === 'drink') { say(s, `${outside(s, ['A drink after work. Then another.', 'Somebody opened a bottle.', 'One for the road, they said.'])} Immune cells go sluggish, and the ship is hard to hold straight.`); emit(s, 'meal'); }
-    if (habit) { notice(s, habit); if (stage(s) < 4 && Story.SHEPHERD_HABIT[habit]) s.thoughts.push({ text: Story.SHEPHERD_HABIT[habit], who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? s.time) + CONFIG.story.gap }); }
+    if (habit) { notice(s, habit); if (Story.SHEPHERD_HABIT[habit]) s.thoughts.push({ text: Story.SHEPHERD_HABIT[habit], who: 'shepherd', t: (s.thoughts[s.thoughts.length - 1]?.t ?? s.time) + CONFIG.story.gap }); }
     s.host.habit = habit;
   }
   // Sleep is when the host mends.
@@ -1519,19 +1529,20 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     s.ask = { kind: d.kind, item: { x: p.x, y: p.y, kind: 'kin' } }; stop(s);
   }
   // Ten seconds in the wall is ten seconds Shepherd cannot account for.
-  if (inNiche(s)) { const g = s.gap; s.gap += dt; if (g < CONFIG.marks.gap && s.gap >= CONFIG.marks.gap && s.chapter >= 2 && !s.tutorial && stage(s) < 4) take(s, 'telemetry', 'deviate'); } else s.gap = 0;
+  if (drink(s) > 0.15) s.flags.drank = true; // the order about her drinking is about a habit, not one glass
+  if (inNiche(s)) { const g = s.gap; s.gap += dt; if (g < CONFIG.marks.gap && s.gap >= CONFIG.marks.gap && s.chapter >= 2 && !s.tutorial) take(s, 'telemetry', 'deviate'); } else s.gap = 0;
   // A surge on the road, and an order to ride it out in the open.
-  if (s.place === 'vessel' && !s.junction && s.chapter >= 2 && !s.took['first-fright-transit'] && !(s.slip && !s.slip.result) && stage(s) < 4) {
+  if (s.place === 'vessel' && !s.junction && s.chapter >= 2 && !s.took['first-fright-transit'] && !(s.slip && !s.slip.result)) {
     if (s.host.surge > 0 && !s.lane && s.time > 3) { s.lane = { from: { x: p.x, y: p.y } }; meet(s, 'first-fright-transit'); shepherd(s, DECISIONS['first-fright-transit'].order!); }
     else if (s.host.surge <= 0 && s.lane) { take(s, 'first-fright-transit', s.host.slams === 0 && dist(p, s.lane.from) < CONFIG.marks.lane ? 'deviate' : 'obey'); s.lane = null; }
   }
   // Cornered and nearly finished, with a unit you woke close by.
   if (s.kin > 0 && !s.met.includes('kin-volunteer') && s.chapter >= 2 && !s.junction && p.hp < maxHp(s) * CONFIG.marks.volunteer.hull && !(s.upgrades.cd47 && s.cloakCd <= 0 && p.energy >= CONFIG.cloak.energy && s.tagged <= 0) && s.flora <= 0 && !cloaked(s) && s.enemies.filter((e) => e.mood === 'chase' && dist(e, p) < 7).length >= CONFIG.marks.volunteer.hunters) { meet(s, 'kin-volunteer'); s.ask = { kind: 'volunteer', item: { x: p.x - p.face.x * 1.5, y: p.y - p.face.y * 1.5, kind: 'kin' } }; stop(s); }
-  if (!s.selfTest && s.time > CONFIG.trust.selfTest && trustBand(s.trust) === 2 && stage(s) < 4 && !s.junction && !s.tutorial) { s.selfTest = true; shepherd(s, Story.SELF_TEST); }
+  if (!s.selfTest && s.time > CONFIG.trust.selfTest && trustBand(s.trust) === 2 && !s.junction && !s.tutorial) { s.selfTest = true; shepherd(s, Story.SELF_TEST); }
   if (s.junction && !s.due.length && !s.flags.ending) for (const [i, ex] of s.junction.exits.entries()) if (dist(p, mid(ex.at)) < 1.4) {
     s.junction.chose = i; s.status = 'won'; emit(s, 'win');
     if (s.flags.route2 === 'live') { s.flags.route2 = 'done'; take(s, 'route-2', ex.to === 'hepatic' ? 'obey' : 'deviate', { mute: true }); }
-    if (ex.assigned && s.silent && s.chapter >= 2 && stage(s) < 4) take(s, 'escort-refuse', 'deviate');
+    if (ex.assigned && s.silent && s.chapter >= 2) take(s, 'escort-refuse', 'deviate');
     if (s.slipAt >= 0 && s.slip?.kind === 'fork' && !s.slip.result && !s.slipLive) beginSlip(s); // into a mouth before the order had finished arriving
     if (s.slipLive && s.slip?.kind === 'fork') resolveSlip(s, ex.to === 'hepatic' ? 'A' : ex.to === 'gastric' ? 'B' : null, 0);
     for (const th of s.thoughts) if (th.keep && th.t > s.time) s.rulings.push({ who: th.who, text: th.text, st: th.st });
@@ -1542,10 +1553,10 @@ export function update(s: State, dt: number, dir: Point | null = null) {
     if (item.posed && item.beset !== undefined) { // the unit being recalled: whoever reaches it first has it
       const w = s.enemies.find((e) => e.prey && e.kind === 'warden');
       if (dist(item, p) < 1.1 || !w) {
-        delete item.beset; item.posed = false; item.snooze = true; if (w) { w.prey = false; w.mood = 'chase'; w.goal = tileOf(p); w.unseen = 0; }
+        s.flags.kinRun = 'won'; s.flags.kinRunLeft = Math.round(item.beset); delete item.beset; item.posed = false; item.snooze = true; if (w) { w.prey = false; w.mood = 'chase'; w.goal = tileOf(p); w.unseen = 0; }
         float(s, item, KIN_PINGS.came, '#bfe9ff'); emit(s, 'heal'); take(s, 'kin-recall', 'deviate');
       } else if (dist(w, item) < 1.1 || (item.beset -= dt) <= 0) {
-        s.pickups.splice(s.pickups.indexOf(item), 1); w.prey = false;
+        s.pickups.splice(s.pickups.indexOf(item), 1); w.prey = false; s.flags.kinRun = 'lost'; s.flags.kinRunLeft = Math.max(0, Math.round(item.beset));
         float(s, item, 'ACK.', '#c9c2b8'); say(s, 'The Warden reaches it first. Its lamp steadies, goes amber, and then it is just parts.'); take(s, 'kin-recall', 'obey');
       }
       continue;
@@ -1870,7 +1881,7 @@ export function take(s: State, id: string, choice: string, opt: { mute?: boolean
   if (!d) return;
   meet(s, id);
   s.took[id] = choice;
-  const key = `n:${id}:${choice}`, n = (Number(s.flags[key]) || 0) + 1, before = stage(s), heard = before < 4, lines: [Thought['who'], string | null | undefined][] = [];
+  const key = `n:${id}:${choice}`, n = (Number(s.flags[key]) || 0) + 1, before = stage(s), heard = true, lines: [Thought['who'], string | null | undefined][] = [];
   s.flags[key] = n;
   if (choice === 'obey') {
     trusted(s, d.trust.obey);
@@ -1881,7 +1892,7 @@ export function take(s: State, id: string, choice: string, opt: { mute?: boolean
     if (d.weight && heard) {
       const o = CONFIG.story.orders, l = s.ledger.defied as Record<string, number>, times = l[id] ?? 0, first = !Object.values(l).some((x) => (x ?? 0) > 0);
       l[id] = times + 1; s.defied++;
-      s.aware = Math.min(100, s.aware + (times >= o.fullTimes ? WEIGHT(d.weight) / 2 : WEIGHT(d.weight)) * (s.flags.repaired ? 0.5 : 1));
+      s.aware = roused(s.aware, (times >= o.fullTimes ? WEIGHT(d.weight) / 2 : WEIGHT(d.weight)) * (s.flags.repaired ? 0.5 : 1));
       if (first) s.aware = Math.max(s.aware, o.first);
     }
     if (heard && !opt.mute) lines.push(['shepherd', d.deviated]);
@@ -1969,7 +1980,6 @@ function applyEcho(s: State, e: Echo) {
 export const ownTarget = (s: State): Point | null => s.pickups.find((i) => i.posed && i.beset !== undefined) ?? null;
 /** Where Shepherd's live mark is, for the amber ring. */
 export const markTarget = (s: State): Point | null => {
-  if (stage(s) >= 4) return null;
   const m = s.marks.find((k) => k.met && !k.done);
   if (m) return m.at;
   if (!s.tumor.size && s.margin.size && s.marginTaken < CONFIG.marks.margins && s.met.includes('tumour-order') && !s.took['tumour-order']) { const k = [...s.margin].sort((a, b) => dist(s.player, { x: a % s.size, y: Math.floor(a / s.size) }) - dist(s.player, { x: b % s.size, y: Math.floor(b / s.size) }))[0]; return { x: (k % s.size) + 0.5, y: Math.floor(k / s.size) + 0.5 }; }
@@ -1978,16 +1988,16 @@ export const markTarget = (s: State): Point | null => {
 /** What Shepherd wants done on this map right now, in a few words, with how far along it is. Empty when nothing is marked. */
 export function markOrder(s: State): string {
   const m = s.marks.find((k) => k.met && !k.done);
-  if (!m && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.place === 'liver' && stage(s) < 4 && (s.margin.size || s.marginTaken)) return `Excise with margins: ${Math.min(CONFIG.marks.margins, s.marginTaken)} of ${CONFIG.marks.margins} adjacent hepatocytes`;
-  if (!m || stage(s) >= 4) return '';
+  if (!m && s.met.includes('tumour-order') && !s.took['tumour-order'] && s.place === 'liver' && (s.margin.size || s.marginTaken)) return `Excise with margins: ${Math.min(CONFIG.marks.margins, s.marginTaken)} of ${CONFIG.marks.margins} adjacent hepatocytes`;
+  if (!m) return '';
   const first = (DECISIONS[m.id].order ?? '').split('. ')[0].replace(/\.$/, '');
   return m.kind === 'hold' ? `${first}. ${m.t > 0 ? `Hold: ${Math.ceil(CONFIG.marks.hold - m.t)}` : 'Hold position at the marker'}` : `${first}.`;
 }
 /** Shepherd's marks on a liver in the later chapters: a place to hold still and do something to her, or a particular cell to take. */
 function placeMarks(s: State, r: () => number) {
-  if (s.place !== 'liver' || s.chapter !== 3 || s.tutorial || stage(s) >= 4) return; // chapter 4 has orders of its own: see lastOrders
+  if (s.place !== 'liver' || s.chapter !== 3 || s.tutorial) return; // chapter 4 has orders of its own: see lastOrders
   const free = (id: string) => !s.took[id] && DECISIONS[id].ch.includes(s.chapter);
-  const hold = free('ethanol-correction') && alcohol(s.host.hour) > 0.15 ? 'ethanol-correction' : free('fever-damp') && fever(s) >= 1 ? 'fever-damp' : free('pain-damp') ? 'pain-damp' : free('ethanol-correction') && s.chapter >= 4 ? 'ethanol-correction' : '';
+  const hold = free('ethanol-correction') && (alcohol(s.host.hour) > 0.15 || s.flags.drank) ? 'ethanol-correction' : free('fever-damp') && fever(s) >= 1 ? 'fever-damp' : free('pain-damp') ? 'pain-damp' : free('ethanol-correction') && s.chapter >= 4 ? 'ethanol-correction' : '';
   if (hold) { const at = freeTile(s, r, (x, y, d) => d > 9 && d < 17 && !s.niche.has(idx(s, x, y)) && dist(mid(s.vein), { x, y }) > 5); if (at) s.marks.push({ id: hold, kind: 'hold', at: mid(at), t: 0, done: false, met: false, say: 9 }); }
   if (free('marked-cell')) {
     let best: Point | null = null, near = Infinity;
@@ -2028,7 +2038,7 @@ function smear(s: State, dt: number) {
 }
 /** Chapter 4, in the liver: the last of the nodule, and the three things Shepherd wants done about it. */
 function lastOrders(s: State) {
-  if (stage(s) >= 4 || !s.tumor.size) return;
+  if (!s.tumor.size) return;
   const cells = [...s.tumor].map((k) => ({ x: k % s.size, y: Math.floor(k / s.size) }));
   if (!s.took.suppress && !s.marks.some((m) => m.id === 'suppress')) {
     let best: Point | null = null, near = Infinity;
@@ -2044,7 +2054,7 @@ function marks(s: State, dt: number) {
   const p = s.player;
   for (const m of s.marks) {
     if (m.done) continue;
-    if (!m.met && (s.time >= m.say || (dist(p, m.at) < 6 && m.id !== 'beacon')) && !s.marks.some((k) => k.met && !k.done)) { m.met = true; meet(s, m.id); if (stage(s) < 4) shepherd(s, DECISIONS[m.id].order ?? ''); }
+    if (!m.met && (s.time >= m.say || (dist(p, m.at) < 6 && m.id !== 'beacon')) && !s.marks.some((k) => k.met && !k.done)) { m.met = true; meet(s, m.id); shepherd(s, DECISIONS[m.id].order ?? ''); }
     if (!m.met || m.kind !== 'hold') continue;
     const still = dist(p, m.at) <= (m.near ?? CONFIG.marks.near) && !p.path.length && !p.channel && !s.held;
     m.t = still ? m.t + dt : Math.max(0, m.t - dt * 2);

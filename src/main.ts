@@ -318,6 +318,12 @@ if (kept) { $('resume').hidden = false; $('resume').textContent = `Continue trip
 $('resume').addEventListener('click', () => { if (!kept) return; Sound.start(); trip = kept; first = true; $('intro').hidden = true; news.push('Unit restored from the last checkpoint.'); onward(); });
 $('begin').addEventListener('click', () => { forgetTrip(); trip = T.newTrip(); route = ['heart']; trip.tutorial = ($('briefing') as HTMLInputElement).checked; try { localStorage.removeItem(JOURNAL); } catch { /* nothing kept */ } try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } Sound.start(); $('intro').hidden = true; first = true; inbox = []; news = []; for (let n = 1; n <= 5; n++) try { localStorage.removeItem(CHAPTER + n); } catch { /* nothing kept */ } playScene('begin', () => card(1, onward)); });
 restarts($('chapters'));
+/** What the program has on file about the units that came before this one: which ways it has ended, and how many it has not. */
+function archive() {
+  const seen = outcomes().filter((id): id is Story.Outcome => id in Story.FILED), rest = Story.OUTCOMES.length - seen.length, n = lastUnit().games;
+  $('archive').hidden = !seen.length;
+  if (seen.length) $('archive').textContent = `Program archive, this host: ${n} prior unit${n === 1 ? '' : 's'}. Dispositions on file: ${seen.map((id) => Story.FILED[id]).join(' \u00b7 ')}.${rest ? ` ${rest} not yet observed.` : ' No others are known.'}`;
+}
 ($('briefing') as HTMLInputElement).checked = !played(); // a unit that has never finished a mission gets walked through its first liver
 $('again').addEventListener('click', () => { forgetTrip(); try { localStorage.removeItem(SEEN); } catch { /* nothing kept */ } route = ['heart']; trip = T.newTrip(); Tips.newRun(); $('over').hidden = true; $('audit').hidden = true; for (let n = 1; n <= 5; n++) try { localStorage.removeItem(CHAPTER + n); } catch { /* nothing kept */ } first = true; inbox = []; news = [echo() > 0 ? 'Shepherd has reassigned Directive 7 to the next unit in the queue. It boots with a trace of something that is not in its image.' : 'Shepherd has reassigned Directive 7 to the next unit in the queue.']; card(1, onward); });
 
@@ -595,6 +601,7 @@ function go(to: T.NodeId, forked = false) {
 const OUTCOMES = 'insiderim.outcomes', LAST = 'insiderim.last';
 const outcomes = (): string[] => { try { return JSON.parse(localStorage.getItem(OUTCOMES) ?? '[]') as string[]; } catch { return []; } };
 const lastUnit = (): { line: string; ending: string; games: number } => { try { return { line: '', ending: '', games: 0, ...(JSON.parse(localStorage.getItem(LAST) ?? '{}') as object) }; } catch { return { line: '', ending: '', games: 0 }; } };
+archive();
 const lastLine = (k: G.Carry) => ((k.aware ?? 0) < Story.STAGES[1].from ? 'ACK.' : [...journal()].reverse().find((e) => e.who === 'unit' || e.who === 'awake')?.text ?? 'ACK.');
 /** Shepherd's audit of the unit: every order not carried out, the outcome, and what it recommends. Never an explanation. */
 function audit(k: G.Carry, end: Story.Ending) {
@@ -683,6 +690,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
     if (st >= 3) tell([{ who: 'unit', st, text: 'I know what that means now. There is another file open on the link, marked generation 4: units that are never breathed out, and that decide for the host what she may eat, drink, and fear. I could go. I could also not go.' }]);
     else if (st === 2) tell([{ who: 'unit', st, text: 'I have read that order three times.' }]);
   } else if (home && kept) { const l = (c.ledger ??= G.newLedger()); l.obeyed.lane = (l.obeyed.lane ?? 0) + 1; tell([{ who: 'shepherd', text: Story.STANDING.lane.obeyed }]); }
+  if (home) G.night(c);
   if (home) news.push(`Trip ${trip.tripsDone} complete. The host is at ${c.hostHealth}%. The patrols will be larger this time.`);
   if (fromLiver && trip.heat >= 0.25) news.push('The alarm you raised is following you down the veins.');
   if (to === 'stomach') news.push(G.digesting(c.hour, c.snack, trip.event) > 0.3 ? 'The host has eaten not long ago: the acid will be fierce.' : 'The host has not eaten for a while: the acid is at its weakest.');
@@ -1004,7 +1012,7 @@ function frame(now: number) {
     tipRest -= dt;
     if (!tip && !s.offer && !s.ask && tipRest <= 0 && !(s.tutorial && s.tutorial.step < 5) && !s.junction) { // in its first liver, Shepherd's order is the only instruction on screen until the last step
       const road = s.place === 'vessel' || s.place === 'lung';
-      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, coffee: s.host.habit === 'coffee' ? s.player : null, drink: s.host.habit === 'drink' ? s.player : null, fever: G.fever(s) && s.hostHealth < CONFIG.host.fever.below[0] ? s.player : null };
+      const mood = G.hostState(s), host: Record<string, G.Point | null> = { surge: mood === 'stressed' && !s.slipLive ? s.player : null, sleep: mood === 'asleep' ? s.player : null, meal: s.host.eating && s.time > 2 ? s.player : null, coffee: s.host.habit === 'coffee' ? s.player : null, drink: s.host.habit === 'drink' ? s.player : null, fever: G.fever(s) && s.hostHealth < CONFIG.host.fever.below[0] ? s.player : null };
       if (s.place === 'lung') Object.assign(host, { road: null, kupffer: null, lung: s.time > 0.6 ? s.player : null, dust: s.enemies.filter((e) => e.kind === 'kupffer' && s.visible[G.idx(s, Math.floor(e.x), Math.floor(e.y))]).sort((a, b) => G.dist(a, s.player) - G.dist(b, s.player))[0] ?? null });
       if (s.place === 'stomach') Object.assign(host, { portal: null, vein: null, cell: null, stomach: s.time > 0.8 ? s.player : null, mucus: G.acidAt(s, s.player) === 1 ? s.player : null, parietal: Tips.nearestRich(s) });
       const next = Tips.nextTip(s, road ? { portal: null, cell: null, vein: null, rbc: null, road: s.time > 0.6 ? s.player : null, net: s.snare > 0 ? s.player : null, ...host } : { ...host, rbc: s.time > 9 ? nearestBloodCell(s) : null });
