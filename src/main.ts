@@ -415,6 +415,7 @@ function junction() {
 /** The road to her arm: carried there, drawn out with her blood, and set down on glass under her own lamp. */
 function tube() {
   const c = (trip.carry ??= freshCarry());
+  if (c.hour !== CONFIG.draw.at) { c.hour = CONFIG.draw.at; news.push('You hold in the vein at her elbow while the night goes. The blood warms as she wakes. Coffee. A car. A waiting room.'); } // her blood is drawn at nine: a unit that gets there early waits
   news.push('The cephalic vein, under the skin of her forearm. Above you, close enough to feel, is the place where the needle went in.', 'A tourniquet tightens. The vein swells. Then the needle, and a rush, and you are in the tube.');
   Stats.begin();
   enter(G.createGame(Date.now(), c, 'vessel', 0, 'vein', false, { kind: 'tube', exits: [] }), 'A drop of her blood \u00b7 on glass', 'vein', 'Cephalic vein');
@@ -985,6 +986,8 @@ function ahead(hour: number, nap: number, event: HostEvent | null = null): Ahead
   if (nap > 0 && nap < RIBBON_HOURS) all.push({ id: 'napend', at: (hour + nap) % 24, icon: '\u2600\uFE0E', what: 'The nap ends: back to waking blood.' });
   const soon = all.map((e) => ({ ...e, at: (e.at - hour + 24) % 24 })).filter((e) => e.at > 0 && e.at <= RIBBON_HOURS);
   // Today's event is not coming, it is here: it sits at the far end of the strip for the whole trip.
+  // Once the road to her arm is open, the morning's blood draw is on the strip, however far off it is.
+  if (started && s.junction?.exits.some((x) => x.to === 'arm')) soon.push({ id: 'draw', at: RIBBON_HOURS - (event ? 0.4 : 0), icon: '\u25C9', what: `${clock(CONFIG.draw.at)}: her weekly blood draw, from the vein at her elbow.`, held: true });
   if (event) soon.push({ id: `event-${event}`, at: RIBBON_HOURS, icon: EVENTS[event].icon, what: `${EVENTS[event].name}, all trip. ${EVENTS[event].brief}`, held: true });
   return soon;
 }
