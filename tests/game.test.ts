@@ -639,7 +639,7 @@ test('the tumor: every liver has a nodule, and cutting it out helps the host and
   run(s, CONFIG.tumor.time + 0.2);
   assert.equal(s.tumor.size, left - 1);
   assert.equal(s.excised, 1);
-  assert.equal(s.hostHealth, 70 + CONFIG.tumor.heal, 'the host is better for it');
+  assert.equal(s.hostHealth, 70, 'cutting it out stops the loss; it does not heal on the spot');
   assert.equal(s.player.energy, energy + CONFIG.tumor.gain);
   assert.equal(s.cellsKilled, 0, 'and it does not count as harm');
   assert.ok(s.alert < 10, 'hardly any alarm');
@@ -946,6 +946,7 @@ test('the tumor costs the host by the hour until it is all out', () => {
   const h0 = s.hostHealth;
   run(s, CONFIG.host.secondsPerHour * 2 + 0.5);
   assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain);
+  assert.equal(G.tumorDrain(CONFIG.tumor.goal / 2), CONFIG.tumor.drain / 2, 'half the tumor, half the cost');
   s.excised = CONFIG.tumor.goal;
   run(s, CONFIG.host.secondsPerHour + 0.5);
   assert.equal(s.hostHealth, h0 - 2 * CONFIG.tumor.drain, 'and stops once it is gone');
@@ -975,9 +976,9 @@ test('the first liver cache always offers the cloak, once', () => {
 test('the tumor takes its share on the road between maps too', () => {
   const c = G.carryOf(quiet(6));
   const h0 = c.hostHealth;
-  G.tumorToll(c, 0.5);
-  assert.equal(c.hostHealth, h0, 'half an hour is half a point, kept for later');
-  G.tumorToll(c, 0.5);
+  G.tumorToll(c, 0.25);
+  assert.equal(c.hostHealth, h0, 'a quarter hour is half a point, kept for later');
+  G.tumorToll(c, 0.25);
   assert.equal(c.hostHealth, h0 - 1);
   assert.equal(G.createGame(7, { ...c, drained: 0.75 }).drained, 0.75, 'and the fraction follows you into the next map');
   c.excised = CONFIG.tumor.goal;

@@ -29,7 +29,7 @@ export const CONFIG = {
     startHour: 11,
     // Hurt the host and they run a fever: each step down makes immune cells faster and burns your energy quicker.
     fever: { below: [80, 60, 40], speed: 0.1, burn: 0.25, degrees: [37, 37.9, 38.8, 39.7] },
-    sleepHeals: 6, // seconds of sleep that give the host back one point of health
+    sleepHeals: 15, // seconds of sleep that give the host back one point of health
     meals: [7.5, 12.5, 19],
     // Habits. Coffee quickens the blood and makes the host jumpy; an evening drink dulls the immune system, makes the ship hard to hold straight, and leaves the liver with less to spare.
     dreams: 0.4, // how often a sleeping host takes fright, against a waking one
@@ -117,7 +117,7 @@ export const CONFIG = {
     tcellSight: 1.3, // how close one must be to know you through the cloak: contact, not sight
   },
   // The mission: a tumor seeded through the liver, to be cut out a cell at a time.
-  tumor: { cells: 9, goal: 20, gain: 3, heal: 2, alert: 6, time: 1.4, drain: 1 }, // drain: host health lost per host hour while any of it is left
+  tumor: { cells: 9, goal: 20, gain: 1, heal: 0, alert: 2, time: 1.4, drain: 2 }, // drain: host health lost per host hour with the whole tumor in; it falls in step with what is left
   // The gut lumen: glucose released here is fermented by the flora, and the unit collects the products. Costs are in energy.
   lung: { macrophages: 2 },
   // Boarding: climb inside a wounded neutrophil and wear it.

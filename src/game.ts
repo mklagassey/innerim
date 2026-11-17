@@ -131,9 +131,11 @@ export function leverPulled(c: Carry) { const l = (c.ledger ??= newLedger()); if
 export interface Carry { hp: number; energy: number; upgrades: Record<UpgradeId, number>; patches: number; hostHealth: number; hour: number; memory: number; excised: number; nap: number; snack: number; flora?: number; aware?: number; kin?: number; defied?: number; cloakOffered?: boolean; drained?: number; ledger?: Ledger }
 export const carryOf = (s: State): Carry => ({ hp: s.player.hp, energy: s.player.energy, upgrades: { ...s.upgrades }, patches: s.patches, hostHealth: s.hostHealth, hour: s.host.hour, memory: memoryAfter(s), excised: s.excised, nap: s.host.nap, snack: s.host.snack, flora: s.flora, aware: s.aware, kin: s.kin, defied: s.defied, cloakOffered: s.cloakOffered, drained: s.drained, ledger: { ...s.ledger } });
 /** Time passing between maps: the tumor takes its share of the host there too. */
+/** Host health the tumor costs per host hour right now: in step with how much of it is still in. */
+export const tumorDrain = (excised: number) => CONFIG.tumor.drain * Math.max(0, CONFIG.tumor.goal - excised) / CONFIG.tumor.goal;
 export function tumorToll(c: Carry, hours: number) {
   if (c.excised >= CONFIG.tumor.goal) return;
-  c.drained = (c.drained ?? 0) + hours * CONFIG.tumor.drain;
+  c.drained = (c.drained ?? 0) + hours * tumorDrain(c.excised);
   const whole = Math.floor(c.drained);
   c.drained -= whole; c.hostHealth = Math.max(0, c.hostHealth - whole);
   if (c.ledger) c.ledger.hostLowest = Math.min(c.ledger.hostLowest, c.hostHealth);
@@ -187,7 +189,7 @@ export function createGame(seed = Date.now(), carry?: Carry, place: Place = 'liv
     suppressed: 0,
     slam: 0,
     sizzle: 0,
-    tumor: new Set((m.tumor ?? []).map((p) => p.y * N + p.x)),
+    tumor: new Set((m.tumor ?? []).slice(0, Math.max(0, CONFIG.tumor.goal - (carry?.excised ?? 0))).map((p) => p.y * N + p.x)), // only as much as the scan says is left
     excised: carry?.excised ?? 0,
     memory: carry?.memory ?? 0,
     peak: 0,
@@ -1009,7 +1011,7 @@ export function update(s: State, dt: number, dir: Point | null = null) {
   if (s.place === 'lung' && breathingOut(s) !== s.host.out) { s.host.out = breathingOut(s); emit(s, s.host.out ? 'exhale' : 'inhale'); }
   // The tumor is the clock: for as long as any of it is left, the host loses ground.
   if (s.excised < CONFIG.tumor.goal && s.hostHealth > 0) {
-    s.drained += (dt / h.secondsPerHour) * CONFIG.tumor.drain;
+    s.drained += (dt / h.secondsPerHour) * tumorDrain(s.excised);
     if (s.drained >= 1) { s.drained -= 1; s.hostHealth = Math.max(0, s.hostHealth - 1); }
   }
   // Acid comes up over a little while, never all at once, and the host telegraphs a meal before it lands.

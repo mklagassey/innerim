@@ -9,7 +9,7 @@ import { UPGRADES, UpgradeId } from '../src/config';
 
 type Bot = 'skim' | 'strip';
 const DT = 1 / 20, CAP = 420; // seconds a bot may spend in one map before it counts as stuck
-const RUNS = Number(process.argv[2] ?? 60), TRIPS = Number(process.argv[3] ?? 1);
+const RUNS = Number(process.argv[2] ?? 60), TRIPS = Number(process.argv[3] ?? 1), ONLY = process.argv[4] as Bot | undefined;
 
 const ROUTES: Record<string, T.NodeId[]> = {
   hepatic: ['hepatic', 'liver', 'hvein', 'cava', 'heart'],
@@ -65,7 +65,18 @@ function play(bot: Bot, s: G.State): { s: G.State; cause: string } {
     else if (!p.channel && (plan -= DT) <= 0) {
       plan = 0.4;
       const fed = s.place !== 'liver' || p.energy >= need();
-      if (fed) G.moveTo(s, vein.x, vein.y);
+      const target = G.stripTarget(s);
+      if (s.tumor.size && target && s.tumor.has(G.idx(s, target.x, target.y))) G.startStrip(s); // the job comes first
+      else if (s.tumor.size) {
+        // Stand on the nearest open tile beside a tumor cell.
+        let best: G.Point | null = null, bestD = Infinity;
+        for (const k of s.tumor) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const x = (k % s.size) + dx, y = Math.floor(k / s.size) + dy;
+          if (G.open(s, x, y) && G.dist({ x: x + 0.5, y: y + 0.5 }, p) < bestD) { bestD = G.dist({ x: x + 0.5, y: y + 0.5 }, p); best = { x: x + 0.5, y: y + 0.5 }; }
+        }
+        if (best && bestD > 0.3) G.moveTo(s, best.x, best.y); else { s.tumor.clear(); } // walled in: give up on it rather than stall
+      }
+      else if (fed) G.moveTo(s, vein.x, vein.y);
       else if (bot === 'strip') {
         if (flee > 0) { const away = acrossCurrent(s); if (away) { G.moveTo(s, away.x, away.y); plan = flee; flee = 0; } }
         else if (G.stripTarget(s) && !G.enemyNear(s, p, 10)) G.startStrip(s);
@@ -86,12 +97,12 @@ function play(bot: Bot, s: G.State): { s: G.State; cause: string } {
 }
 
 interface Stop { hp: number; energy: number }
-interface Run { home: boolean; cause: string; stops: Record<string, Stop>; host: number; liverTime: number; liverHost: number }
+interface Run { home: boolean; cause: string; stops: Record<string, Stop>; host: number; liverTime: number; liverHost: number; liverEnergy: number[]; memory: number; excised: number }
 
 /** One or more round trips along a fixed route. */
 function trip(bot: Bot, route: T.NodeId[], seed: number): Run {
   const t = T.newTrip(seed);
-  const out: Run = { home: false, cause: '', stops: {}, host: CONFIG.host.maxHealth, liverTime: 0, liverHost: 0 };
+  const out: Run = { home: false, cause: '', stops: {}, host: CONFIG.host.maxHealth, liverTime: 0, liverHost: 0, liverEnergy: [], memory: 0, excised: 0 };
   let n = 0;
   for (let round = 0; round < TRIPS; round++) {
     for (const to of route) {
@@ -110,7 +121,8 @@ function trip(bot: Bot, route: T.NodeId[], seed: number): Run {
       }
       t.carry ??= freshCarry();
       if (round === 0) out.stops[to] = { hp: t.carry.hp, energy: t.carry.energy };
-      out.host = t.carry.hostHealth;
+      out.host = t.carry.hostHealth; out.memory = t.carry.memory; out.excised = t.carry.excised;
+      if (to === 'liver') out.liverEnergy.push(t.carry.energy);
       if (t.carry.hostHealth <= 0) { out.cause = 'host died'; return out; }
     }
   }
@@ -122,7 +134,7 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const f = (x: number) => (Number.isNaN(x) ? '-' : x.toFixed(0));
 const liver: Record<string, Record<Bot, { time: number; host: number }>> = {};
 for (const [name, route] of Object.entries(ROUTES)) {
-  for (const bot of ['skim', 'strip'] as Bot[]) {
+  for (const bot of (ONLY ? [ONLY] : ['skim', 'strip']) as Bot[]) {
     const runs = Array.from({ length: RUNS }, (_, i) => trip(bot, route, i + 1));
     const home = runs.filter((r) => r.home), reached = runs.filter((r) => r.liverTime && r.stops.hvein);
     const causes: Record<string, number> = {};
@@ -130,9 +142,10 @@ for (const [name, route] of Object.entries(ROUTES)) {
     (liver[name] ??= {} as never)[bot] = { time: mean(reached.map((r) => r.liverTime)), host: mean(reached.map((r) => r.liverHost)) };
     console.log(`\n${name} / ${bot}: home ${home.length}/${RUNS} (${Math.round((100 * home.length) / RUNS)}%), host at end ${f(mean(home.map((r) => r.host)))}%`);
     console.log('  hull/energy at ' + route.map((to) => { const at = runs.filter((r) => r.stops[to]); return `${to} ${f(mean(at.map((r) => r.stops[to].hp)))}/${f(mean(at.map((r) => r.stops[to].energy)))} (n=${at.length})`; }).join(', '));
+    console.log(`  after ${TRIPS} trip${TRIPS > 1 ? 's' : ''}: energy on arriving at a liver ${f(mean(runs.flatMap((r) => r.liverEnergy)))}, immune memory ${f(100 * mean(home.map((r) => r.memory)))}, tumor out ${f(mean(home.map((r) => r.excised)))}`);
     console.log(`  liver: ${f(mean(reached.map((r) => r.liverTime)))} s, host change ${f(-mean(reached.map((r) => r.liverHost)))}`);
     console.log('  lost to: ' + (Object.entries(causes).sort((a, b) => b[1] - a[1]).map(([c, k]) => `${c} ${k}`).join(', ') || 'nothing'));
   }
 }
 console.log('\nTargets: skim home >= 90% on every route; strip finishes the liver >= 40% faster at <= 25 extra host damage.');
-for (const [name, b] of Object.entries(liver)) console.log(`  ${name}: strip is ${f(100 * (1 - b.strip.time / b.skim.time))}% faster in the liver, ${f(b.strip.host - b.skim.host)} extra host damage`);
+for (const [name, b] of Object.entries(liver)) if (b.skim && b.strip) console.log(`  ${name}: strip is ${f(100 * (1 - b.strip.time / b.skim.time))}% faster in the liver, ${f(b.strip.host - b.skim.host)} extra host damage`);

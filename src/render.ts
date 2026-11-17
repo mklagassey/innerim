@@ -1093,7 +1093,7 @@ function automap(ctx: Ctx, s: State, v: View) {
   if (s.tumor.size) {
     // The pre-op scan: roughly where the nodule is, whether or not you have been there.
     let tx = 0, ty = 0;
-    for (const k of s.tumor) { tx += (k % s.size) + 0.5; ty += Math.floor(k / s.size) + 0.5; if (s.explored[k]) dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.55, '#8a6ad8'); }
+    for (const k of s.tumor) { tx += (k % s.size) + 0.5; ty += Math.floor(k / s.size) + 0.5; if (s.explored[k]) { dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 1.05, 'rgba(235,225,255,0.9)'); dot((k % s.size) + 0.5, Math.floor(k / s.size) + 0.5, u * 0.8, '#8a5cf0'); } }
     const c = at(tx / s.tumor.size, ty / s.tumor.size);
     ctx.strokeStyle = 'rgba(160,130,240,0.8)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.ellipse(c.x, c.y, u * 5, u * 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
