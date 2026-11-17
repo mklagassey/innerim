@@ -357,9 +357,8 @@ Trip 1 has no event (learn the rules first); trips 2 and the lung trip get one e
 2. **Build `unit-4`:** S4 search zone and S5 clock ribbon (render + HUD work; rules are small).
 3. **Build `unit-5`:** S6 tumor drain, S10 rebalance, S12 report fields.
 4. **Then** S11 sim, S8 traits and S9 offers, and a balance pass from the sim plus Mick's runs.
-
+5. **Shipped as `unit-5` to `unit-7`:** S14, S15, S16 and post-playtest tuning.
 6. **`unit-8`:** S17, S18, S19 together. **`unit-9`:** S20. Then S8 (Tank, Warrior and Scout traits only) and S9.
-5. **Next text-and-data build:** S14, S15, S16. No gameplay change, so it can ship before Mick's unit-5 playtest.
 
 Ask Mick to play after steps 1 and 2; those fix what killed him and add the alert loop he asked for.
 
