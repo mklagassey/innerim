@@ -275,7 +275,7 @@ function openWorld(title: string, text: string) {
     ? `The tumor is out. To finish, go to the Heart and take the new road to the Lungs${Story.stageOf(c?.aware ?? 0) >= 3 ? ', or refuse the recall there and stay' : ''}.`
     : `Mission: cut out the tumor in the liver. ${out} of ${CONFIG.tumor.goal} cells are out, so about ${visits} more liver visit${visits === 1 ? '' : 's'}. When it is all out, a road opens from the Heart to the Lungs and you can leave. The mission fails if the ship is destroyed or the host's health reaches zero.`;
   $('world-host').textContent = forecast(c?.hour ?? CONFIG.host.startHour, c?.nap ?? 0, c?.snack ?? -1);
-  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 ${Story.STAGES[Story.stageOf(c.aware ?? 0)].name} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised${c.excised < CONFIG.tumor.goal ? `, costing the host ${Math.round(G.tumorDrain(c.excised) * 10) / 10}% an hour` : ''}` : '');
+  $('world-status').textContent = `Trip ${trip.trip} \u00b7 ${here.name}` + (c ? ` \u00b7 Hull ${Math.ceil(c.hp)} \u00b7 Energy ${c.energy} \u00b7 Host ${c.hostHealth}% \u00b7 ${clock(c.hour)} \u00b7 ${knows(c.memory)} \u00b7 Tumor ${Math.min(c.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} excised${c.excised < CONFIG.tumor.goal ? `, costing the host ${Math.round(G.tumorDrain(c.excised) * 10) / 10}% an hour` : ''}` : '');
   const el = (tag: string, attrs: Record<string, string | number>, text = '') => {
     const n = document.createElementNS(SVG, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
@@ -417,7 +417,7 @@ function finish(way: 'breath' | 'stay') {
   forgetTrip();
   keepEcho(k.aware ?? 0);
   $('over-title').textContent = end.title;
-  $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. Awareness: ${Story.STAGES[Story.stageOf(k.aware ?? 0)].name}. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${k.defied ? `Orders defied: ${k.defied}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
+  $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${k.defied ? `Orders defied: ${k.defied}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}`;
   $('over-saved').textContent = '';
   $('over').hidden = false;
   Sound.play('win');
