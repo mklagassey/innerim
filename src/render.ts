@@ -89,7 +89,9 @@ function lumpy(c: Ctx, cx: number, cy: number, rx: number, ry: number, seed: num
 }
 
 /** A hepatocyte: a soft mound of pink cytoplasm, granular with mitochondria, with a round nucleus. */
-function paintCell(c: Ctx, variant: number) {
+/** What a wall cell is made of. Each tissue keeps the same body (and the same footprint for the rules); only its crown changes. */
+type Tissue = 'liver' | 'muscle' | 'heart' | 'mucosa';
+function paintCell(c: Ctx, variant: number, tissue: Tissue = 'liver') {
   const r = rand(variant * 31 + 3), H = cellHeight(variant), rx = cellRadius(variant), ry = rx / 2;
   const ox = CELL_OX + cellShift(variant), oy = CELL_OY, top = oy - H, seed = variant * 2.3 + 1;
   // Tissue packed in behind the cell, so the crevices between neighbours are dark flesh and not holes.
@@ -126,9 +128,12 @@ function paintCell(c: Ctx, variant: number) {
   // The crown, domed: brightest up and to the left, darkening as it rolls over the edge.
   c.beginPath(); lumpy(c, ox, top, rx, ry, seed); c.closePath();
   g = c.createRadialGradient(ox - rx * 0.3, top - ry * 0.35, 1, ox, top, rx * 1.05);
-  g.addColorStop(0, '#f0b4ba'); g.addColorStop(0.55, '#cf8996'); g.addColorStop(0.9, '#a8627a'); g.addColorStop(1, '#8a4a66');
+  const crown = tissue === 'heart' ? ['#c96a6a', '#a04650', '#7c2c3c', '#5e1e30'] : tissue === 'mucosa' ? ['#f4e2d8', '#dcc0b8', '#b8968f', '#987874'] : ['#f0b4ba', '#cf8996', '#a8627a', '#8a4a66'];
+  g.addColorStop(0, crown[0]); g.addColorStop(0.55, crown[1]); g.addColorStop(0.9, crown[2]); g.addColorStop(1, crown[3]);
   c.fillStyle = g; c.fill();
   c.save(); c.clip();
+  if (tissue !== 'liver') { crownOf(c, r, tissue, ox, top, rx, ry); c.restore(); }
+  else {
   // Granules: hepatocytes are stuffed with mitochondria and glycogen.
   for (let i = 0; i < 80; i++) {
     const a = r() * 6.283, d = Math.sqrt(r()) * 0.93;
@@ -141,10 +146,11 @@ function paintCell(c: Ctx, variant: number) {
     c.strokeStyle = 'rgba(120,50,70,0.3)'; c.lineWidth = 0.5; c.stroke();
   }
   c.restore();
-  // Nucleus, sometimes two: about a quarter of real hepatocytes are binucleate.
+  // Nucleus, sometimes two: about a quarter of real hepatocytes are binucleate. The pair sit unequal and
+  // on a slant, never level and matched, so a cell never reads as a pair of eyes.
   const two = variant % 4 === 3;
-  for (const off of two ? [-7.5, 7.5] : [0]) {
-    const nx = ox + off + (r() - 0.5) * (two ? 2 : 9), ny = top + (r() - 0.5) * (two ? 2 : 4.5), nrx = two ? 6 : 8, nry = nrx * 0.56;
+  for (const [off, lift, size] of two ? [[-7, -2.2, 6.4], [6, 2.4, 5]] : [[0, 0, 8]]) {
+    const nx = ox + off + (r() - 0.5) * (two ? 2 : 9), ny = top + lift + (r() - 0.5) * (two ? 1.5 : 4.5), nrx = size, nry = nrx * 0.56;
     c.fillStyle = 'rgba(60,20,50,0.25)'; oval(c, nx + 1, ny + 1.5, nrx + 1, nry + 1); c.fill();
     g = c.createRadialGradient(nx - nrx * 0.35, ny - nry * 0.5, 0.5, nx, ny, nrx);
     g.addColorStop(0, '#8a66bd'); g.addColorStop(0.7, '#553784'); g.addColorStop(1, '#2f1c50');
@@ -154,10 +160,65 @@ function paintCell(c: Ctx, variant: number) {
     oval(c, nx + (r() - 0.5) * nrx * 0.7, ny + (r() - 0.5) * nry * 0.6, 1.5, 1); c.fill();
     if (r() < 0.6) { oval(c, nx + (r() - 0.5) * nrx, ny + (r() - 0.5) * nry * 0.8, 1, 0.7); c.fill(); }
   }
+  }
   // A wet sheen along the far rim and a soft glint on the crown.
   c.strokeStyle = 'rgba(255,232,228,0.45)'; c.lineWidth = 1.3; c.lineCap = 'round';
   c.beginPath(); lumpy(c, ox, top, rx - 1.5, ry - 1, seed, 0.05, Math.PI * 1.08, Math.PI * 1.7); c.stroke();
   c.fillStyle = 'rgba(255,245,240,0.22)'; oval(c, ox - rx * 0.36, top - ry * 0.42, rx * 0.26, ry * 0.2, -0.35); c.fill();
+}
+
+/** The crown of a cell that is not a hepatocyte. Seen end on, as the camera sees them.
+ *  muscle: the smooth muscle of a vessel wall, spindle cells lying in one direction with one long nucleus each.
+ *  heart: cardiac muscle, the same but striated across, with a dark band where one cell joins the next (an intercalated disc).
+ *  mucosa: the stomach's surface cells, capped with pale mucus and opening into a gastric pit; the nucleus sits low, out of sight. */
+function crownOf(c: Ctx, r: () => number, tissue: Tissue, ox: number, top: number, rx: number, ry: number) {
+  const ang = -0.42 + (r() - 0.5) * 0.3, ca = Math.cos(ang), sa = Math.sin(ang);
+  const along = (u: number, v: number): [number, number] => [ox + (u * ca - v * sa) * rx, top + (u * sa + v * ca) * ry];
+  if (tissue === 'mucosa') {
+    // Mucus: a glossy, lighter film over most of the crown.
+    c.fillStyle = 'rgba(255,250,244,0.22)'; oval(c, ox - rx * 0.1, top - ry * 0.1, rx * 0.8, ry * 0.7); c.fill();
+    // The pit: a small dark opening with a pale lip, off centre.
+    const [px, py] = along(0.38, 0.1);
+    c.fillStyle = 'rgba(70,40,46,0.55)'; oval(c, px, py, 3.2, 1.8); c.fill();
+    c.strokeStyle = 'rgba(255,244,236,0.4)'; c.lineWidth = 0.8; oval(c, px - 0.4, py - 0.4, 4, 2.3); c.stroke();
+    for (let i = 0; i < 30; i++) { // mucin granules under the film
+      const a = r() * 6.283, d = Math.sqrt(r()) * 0.85;
+      c.fillStyle = `rgba(255,252,246,${0.08 + r() * 0.14})`; oval(c, ox + Math.cos(a) * rx * d, top + Math.sin(a) * ry * d, 0.8 + r() * 1.4, 0.5 + r() * 0.8); c.fill();
+    }
+    // No nucleus: in these cells it sits at the base, out of sight under the mucus, and a dot beside the pit would make a face.
+    return;
+  }
+  // Fibres: two or three spindles lying side by side, the boundary between them a soft dark seam.
+  const n = 2 + Math.floor(r() * 2);
+  for (let k = 1; k < n; k++) {
+    const v = -1 + (2 * k) / n + (r() - 0.5) * 0.15;
+    c.strokeStyle = 'rgba(30,6,14,0.32)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(...along(-1.1, v)); c.quadraticCurveTo(...along(0, v + (r() - 0.5) * 0.2), ...along(1.1, v)); c.stroke();
+  }
+  if (tissue === 'heart') {
+    // Cross-striations: fine, faint, close together. Read as texture, never as stripes that flicker.
+    c.strokeStyle = 'rgba(255,200,196,0.09)'; c.lineWidth = 0.7;
+    for (let u = -1; u <= 1; u += 0.11) { c.beginPath(); c.moveTo(...along(u, -1)); c.lineTo(...along(u + 0.04, 1)); c.stroke(); }
+    const u0 = 0.55 + (r() - 0.5) * 0.3; // an intercalated disc, stepped
+    c.strokeStyle = 'rgba(40,8,18,0.5)'; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(...along(u0, -1)); c.lineTo(...along(u0, -0.2)); c.lineTo(...along(u0 + 0.08, -0.2)); c.lineTo(...along(u0 + 0.08, 1)); c.stroke();
+  } else {
+    for (let i = 0; i < 26; i++) { // a few dense bodies, the anchors smooth muscle pulls on
+      const u = (r() - 0.5) * 1.8, v = (r() - 0.5) * 1.6;
+      c.fillStyle = `rgba(110,40,62,${0.12 + r() * 0.2})`; oval(c, ...along(u, v), 0.6 + r() * 0.8, 0.4 + r() * 0.4); c.fill();
+    }
+  }
+  // One long nucleus per fibre, lying along it.
+  for (let k = 0; k < Math.min(n, 2); k++) nucleus(c, r, ...along((r() - 0.5) * 0.6, -1 + (2 * k + 1) / n), tissue === 'heart' ? 6.5 : 7.5, 0.34, ang);
+}
+function nucleus(c: Ctx, r: () => number, nx: number, ny: number, nrx: number, squash: number, rot: number) {
+  const nry = nrx * squash;
+  c.fillStyle = 'rgba(60,20,50,0.25)'; oval(c, nx + 1, ny + 1.2, nrx + 1, nry + 0.8, rot); c.fill();
+  const g = c.createRadialGradient(nx - nrx * 0.3, ny - nry * 0.5, 0.5, nx, ny, nrx);
+  g.addColorStop(0, '#8a66bd'); g.addColorStop(0.7, '#553784'); g.addColorStop(1, '#2f1c50');
+  c.fillStyle = g; oval(c, nx, ny, nrx, nry, rot); c.fill();
+  c.strokeStyle = 'rgba(25,12,45,0.6)'; c.lineWidth = 0.7; c.stroke();
+  c.fillStyle = '#1c0f33'; oval(c, nx + (r() - 0.5) * nrx * 0.6, ny + (r() - 0.5) * nry * 0.5, 1.2, 0.7, rot); c.fill();
 }
 
 /** An air sac of the lung: not a solid cell but a thin, translucent bubble of membrane one cell
@@ -196,10 +257,17 @@ function paintAlveolus(c: Ctx, variant: number) {
 
 const FLOOR_W = TW * 1.6, FLOOR_H = TH * 1.6 + 6;
 /** Sinusoid floor: the thin lining of a blood channel, perforated by clusters of pores. Soft-edged, so tiles melt together. */
-function paintFloor(c: Ctx, variant: number, dead: boolean) {
-  const r = rand(variant * 17 + (dead ? 91 : 5)), ox = FLOOR_W / 2, oy = FLOOR_H / 2;
+/** What the floor between the walls is. liver: the sieve-plated lining of a sinusoid. vessel: endothelium, flat cells
+ *  drawn out along the flow. heart: endocardium, smooth and glossy over the ridged muscle under it. stomach: mucosa,
+ *  dimpled with gastric pits under a film of mucus. lung: the thin wall of an air space, a net of capillaries showing through. */
+type Ground = 'liver' | 'vessel' | 'heart' | 'stomach' | 'lung' | 'glass' | 'edge';
+// glass: her blood smeared thin on a slide, the field pale and the red cells lying flat and apart. edge: the thick
+// rim of the smear, where cells pile up; it stands in for the chamber's walls, so there are no cells standing there.
+const GROUND: Record<Ground, string> = { liver: '#7c2231', vessel: '#7a1c2a', heart: '#6e1826', stomach: '#7a3a3c', lung: '#8a3a46', glass: '#94869a', edge: '#6e3450' };
+function paintFloor(c: Ctx, variant: number, dead: boolean, ground: Ground = 'liver') {
+  const r = rand(variant * 17 + (dead ? 91 : 5)), ox = FLOOR_W / 2, oy = FLOOR_H / 2, base = GROUND[ground];
   // A feathered pool of colour a little bigger than the tile: neighbours overlap and no seam shows.
-  c.save(); c.shadowColor = '#7c2231'; c.shadowBlur = 8 * spriteScale; c.fillStyle = '#7c2231';
+  c.save(); c.shadowColor = base; c.shadowBlur = 8 * spriteScale; c.fillStyle = base;
   oval(c, ox, oy, TW * 0.55, TH * 0.55); c.fill(); c.fill(); c.restore();
   poly(c, [ox, oy - TH / 2 - 2, ox + TW / 2 + 4, oy, ox, oy + TH / 2 + 2, ox - TW / 2 - 4, oy]);
   c.save(); c.clip();
@@ -209,8 +277,9 @@ function paintFloor(c: Ctx, variant: number, dead: boolean) {
     const y = oy - 12 + r() * 24, x = ox - 26 + r() * 18;
     c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 16, y + (r() - 0.5) * 8, x + 26 + r() * 14, y + 5 + r() * 7); c.stroke();
   }
+  if (ground !== 'liver') groundOf(c, r, ground, ox, oy);
   // Fenestrations: the sieve plates of a liver sinusoid.
-  for (let k = 0; k < 3; k++) {
+  if (ground === 'liver') for (let k = 0; k < 3; k++) {
     const cx = ox + (r() - 0.5) * 30, cy = oy + (r() - 0.5) * 12;
     for (let i = 0; i < 8; i++) {
       c.fillStyle = `rgba(28,4,10,${0.28 + r() * 0.3})`;
@@ -232,6 +301,54 @@ function paintFloor(c: Ctx, variant: number, dead: boolean) {
     }
   }
   c.restore();
+}
+
+function groundOf(c: Ctx, r: () => number, ground: Ground, ox: number, oy: number) {
+  if (ground === 'vessel') {
+    // Endothelial cells: long flat cobbles, all pointing the way the blood runs (one diagonal of the grid), each with a faint flat nucleus.
+    for (let k = 0; k < 7; k++) {
+      const cx = ox + (r() - 0.5) * 60, cy = oy + (r() - 0.5) * 30, L = 14 + r() * 8;
+      c.strokeStyle = 'rgba(30,4,10,0.22)'; c.lineWidth = 0.8; oval(c, cx, cy, L, 3.2 + r(), 0.46); c.stroke();
+      c.fillStyle = 'rgba(255,170,170,0.05)'; c.fill();
+      c.fillStyle = 'rgba(70,30,80,0.2)'; oval(c, cx + (r() - 0.5) * 4, cy, 3.4, 1.2, 0.46); c.fill();
+    }
+  } else if (ground === 'heart') {
+    // Endocardium: a wet, glassy lining. Under it the trabeculae, broad soft ridges of muscle, show as slow light and dark bands.
+    for (let k = 0; k < 3; k++) {
+      const y = oy - 10 + k * 10 + (r() - 0.5) * 4;
+      c.strokeStyle = 'rgba(30,4,12,0.2)'; c.lineWidth = 5 + r() * 3; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(ox - 40, y + 8); c.quadraticCurveTo(ox, y - 6 + (r() - 0.5) * 6, ox + 40, y + 2); c.stroke();
+      c.strokeStyle = 'rgba(255,190,190,0.07)'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(ox - 40, y + 5); c.quadraticCurveTo(ox, y - 9, ox + 40, y - 1); c.stroke();
+    }
+    c.fillStyle = 'rgba(255,230,230,0.06)'; oval(c, ox - 8, oy - 4, 18, 5, -0.2); c.fill(); // gloss
+  } else if (ground === 'stomach') {
+    // Gastric pits: small dark openings in a loose honeycomb, each with a pale lip of mucus.
+    for (let k = 0; k < 9; k++) {
+      const cx = ox + (r() - 0.5) * 54, cy = oy + (r() - 0.5) * 24;
+      c.fillStyle = 'rgba(40,14,20,0.4)'; oval(c, cx, cy, 2.2, 1.2); c.fill();
+      c.strokeStyle = 'rgba(255,236,226,0.16)'; c.lineWidth = 0.8; oval(c, cx - 0.3, cy - 0.3, 3.4, 1.9); c.stroke();
+    }
+    c.fillStyle = 'rgba(255,240,230,0.05)'; oval(c, ox, oy, 26, 10); c.fill(); // mucus film
+  } else if (ground === 'glass' || ground === 'edge') {
+    // Red cells as a stained smear shows them: flat pink discs, paler in the middle where the cell is thinnest.
+    // Apart on the glass; heaped and overlapping at the edge. No current: they lie where the smear left them.
+    const n = ground === 'edge' ? 16 : 3 + Math.floor(r() * 3);
+    for (let k = 0; k < n; k++) {
+      const cx = ox + (r() - 0.5) * 56, cy = oy + (r() - 0.5) * 26, rr = 5 + r() * 1.2;
+      c.fillStyle = ground === 'edge' ? 'rgba(150,56,84,0.62)' : 'rgba(196,104,128,0.75)'; oval(c, cx, cy, rr, rr * 0.5); c.fill();
+      c.fillStyle = 'rgba(232,206,214,0.55)'; oval(c, cx - 0.4, cy - 0.2, rr * 0.42, rr * 0.2); c.fill();
+      c.strokeStyle = 'rgba(110,40,70,0.35)'; c.lineWidth = 0.6; oval(c, cx, cy, rr, rr * 0.5); c.stroke();
+    }
+    if (ground === 'glass' && r() < 0.12) { // now and then a platelet clump, small and violet
+      const cx = ox + (r() - 0.5) * 40, cy = oy + (r() - 0.5) * 18;
+      for (let k = 0; k < 4; k++) { c.fillStyle = 'rgba(110,70,150,0.6)'; oval(c, cx + (r() - 0.5) * 4, cy + (r() - 0.5) * 2, 1 + r() * 0.6, 0.6 + r() * 0.4); c.fill(); }
+    }
+  } else if (ground === 'lung') {
+    // A capillary net under a wall one cell thick.
+    c.strokeStyle = 'rgba(170,30,50,0.22)'; c.lineWidth = 1;
+    for (let k = 0; k < 6; k++) { const x = ox + (r() - 0.5) * 50, y = oy + (r() - 0.5) * 22; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 8, y + (r() - 0.5) * 8, x + 14 + r() * 8, y + (r() - 0.5) * 8); c.stroke(); }
+  }
 }
 
 // ---------- red blood cells ----------
@@ -402,7 +519,9 @@ export function draw(ctx: Ctx, s: State, v: View) {
   const things: { depth: number; draw: () => void }[] = [];
   const seenAt = (q: Point) => s.visible[idx(s, Math.floor(q.x), Math.floor(q.y))] === 1;
   const floors: { x: number; y: number; i: number; c: Point; vis: boolean }[] = [];
-  const road = s.place === 'vessel', gut = s.place === 'stomach';
+  const road = s.place === 'vessel', gut = s.place === 'stomach', heart = s.junction?.kind === 'heart';
+  const slide = s.junction?.kind === 'tube';
+  const ground: Ground = slide ? 'glass' : heart ? 'heart' : road ? 'vessel' : gut ? 'stomach' : s.place === 'lung' ? 'lung' : 'liver';
   if (glowFor !== s.explored) { glowFor = s.explored; lit = new Float32Array(s.size * s.size); known = new Float32Array(s.size * s.size); reek = new Float32Array(s.size * s.size); thin = new Float32Array(s.size * s.size); }
   // Whatever matters on screen: a cell standing in front of one of these goes glassy so you can see it.
   const behind: Point[] = [p, ...s.enemies.filter(seenAt), ...s.pickups.filter(seenAt), ...s.antibodies.filter(seenAt)].map((q) => project(q.x, q.y));
@@ -418,6 +537,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
       lit[i] = vis ? Math.min(1, lit[i] + dt / FADE_IN) : Math.max(0, lit[i] - dt / FADE_OUT);
       known[i] = Math.min(1, known[i] + dt / FADE_KNOWN);
       const glow = lit[i] * lit[i] * (3 - 2 * lit[i]), seen = known[i]; // smoothstep: eases in and out
+      if (t === 'cell' && slide) { floors.push({ x, y, i, c, vis }); continue; } // on the slide the walls are the smear's thick edge, lying flat
       if (t === 'cell') {
         const variant = Math.floor(hash(x, y) * CELL_VARIANTS);
         const hit = !!target && target.x === x && target.y === y;
@@ -431,11 +551,11 @@ export function draw(ctx: Ctx, s: State, v: View) {
           for (const memory of [true, false]) {
             const a = memory ? (glow > 0.99 ? 0 : seen) : glow;
             if (a < 0.01) continue;
-            const rich = s.rich.has(i), look = s.place === 'lung' ? 'l' : road ? (s.vessel === 'vein' ? 'b' : 'v') : rich ? 'p' : gut ? 'g' : s.tumor.has(i) ? 't' : 'c';
+            const rich = s.rich.has(i), look = s.place === 'lung' ? 'l' : heart ? 'h' : road ? (s.vessel === 'vein' ? 'b' : 'v') : rich ? 'p' : gut ? 'g' : s.tumor.has(i) ? 't' : 'c';
             const img = sprite(`${look}${variant}`, CELL_W, CELL_H, scale, memory, (cx) => {
               if (look === 'l') { paintAlveolus(cx, variant); return; }
-              paintCell(cx, variant);
-              if (look === 'c') return;
+              paintCell(cx, variant, look === 'h' ? 'heart' : look === 'v' || look === 'b' ? 'muscle' : look === 'g' || look === 'p' ? 'mucosa' : 'liver');
+              if (look === 'c' || look === 'h') return;
               // The same living cells in other tissues: soaked in arterial red in a vessel wall, pale and
               // slimy in the stomach, and amber where a parietal cell is busy making acid.
               cx.globalCompositeOperation = 'source-atop';
@@ -472,7 +592,8 @@ export function draw(ctx: Ctx, s: State, v: View) {
   // Each tile's lit look is faded in over its remembered one, so light arrives and leaves gradually.
   const floorImg = (x: number, y: number, i: number, memory: boolean) => {
     const variant = Math.floor(hash(x, y) * 6), dead = s.tiles[i] === 'dead';
-    return sprite(`f${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, memory, (cx) => paintFloor(cx, variant, dead));
+    const g: Ground = slide && s.tiles[i] === 'cell' ? 'edge' : ground;
+    return sprite(`f${g}${variant}${dead ? 'd' : ''}`, FLOOR_W, FLOOR_H, scale, memory, (cx) => paintFloor(cx, variant, dead, g));
   };
   const ease = (i: number) => lit[i] * lit[i] * (3 - 2 * lit[i]);
   for (const { x, y, i, c } of floors) {
@@ -610,7 +731,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
     oval(ctx, c.x, c.y, TW * 0.3, TH * 0.3); ctx.stroke();
   }
 
-  for (const b of rbcs) if (b.x > 0 && seenAt(b) && !s.acid?.[idx(s, Math.floor(b.x), Math.floor(b.y))]) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
+  for (const b of rbcs) if (!slide && b.x > 0 && seenAt(b) && !s.acid?.[idx(s, Math.floor(b.x), Math.floor(b.y))]) things.push({ depth: depthOf(b.x, b.y), draw: () => bloodCell(ctx, b, v.time) });
   for (const e of s.enemies) if (seenAt(e)) things.push({ depth: depthOf(e.x, e.y), draw: () => enemy(ctx, e, v) });
   for (const a of s.antibodies) if (seenAt(a)) things.push({ depth: depthOf(a.x, a.y), draw: () => { const c = project(a.x, a.y); antibody(ctx, c.x, c.y - 14 + Math.sin(v.time * 1.7 + a.seed) * 3, v.time * 0.6 + a.seed, 1); } });
   if (s.tagged > 0) things.push({ depth: depthOf(p.x, p.y) + 0.02, draw: () => {
