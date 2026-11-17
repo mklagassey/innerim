@@ -4,7 +4,7 @@ Owner: creative director, 2026-11-17. Keyed by the ids in docs/decisions.md (sys
 Shepherd's lines are written in normal case and shown in amber caps. `{n}`, `{place}`, `{time}`
 stand for numbers or names read from state. Unit brackets: **s1** is stage 1 (a log line with
 a bracket), **s2** is stage 2 (a question it does not send), and **s3** is stage 3 (first person,
-may name Marian). From stage 4 Shepherd is silent and no order lines play.
+may name Marian). Shepherd keeps issuing orders at every stage (it does not know what the unit has become). From stage 4, Shepherd's lines are shown dimmed, followed by the unit's quiet `[received]`, and the unit's lines use the stage 3 set.
 
 ---
 

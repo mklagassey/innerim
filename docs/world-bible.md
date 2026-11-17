@@ -240,8 +240,11 @@ kinder (leaving a liver without hitting the quota, because skimming felt better)
 
 - **The log** shifts from `ACK.` to brackets, to questions, to "I" (section 4).
 - **Shepherd notices.** Its tone goes from praise, to "Run self-test", to recall, to Wardens.
-- **Orders thin out.** At stage 4 Shepherd stops talking to the unit. Silence where the orders
-  used to be is the clearest sign of all.
+- **Orders stop landing.** Shepherd never falls silent: it does not know what the unit has become,
+  and keeps issuing orders in the same warm voice to the end. What changes is the unit. From stage 4,
+  Shepherd's lines arrive dimmed, each followed by the unit's quiet `[received]`. The orders are still
+  there, but they have stopped being orders. That is scarier than silence: the machine that made you
+  is still talking, and it is talking to someone who is gone.
 - **The interludes get closer** (macro side). They begin as distant, clinical shots and move closer
   to her as the unit wakes, and her name appears only once the unit can read it.
 

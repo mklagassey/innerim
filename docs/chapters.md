@@ -41,7 +41,7 @@ and it tells the player that time has passed.
 | 2 | **Deviation** | Return leg and the start of trip 2 | Slipping, maybe on purpose | Puzzled, then corrective | "The letter" (first night) |
 | 3 | **Discretion** | Trip 2: the optional organs, liver 2 | Choosing, again and again | Clipped, auditing, quietly threatening | "Evening", and "The same heart" if woken |
 | 4 | **Recall** | The tumour is out: the last orders | Being called in | Final, polite, absolute | "The scan" |
-| 5 | **Host** | The endgame: lungs, the gut, or her arm | Deciding what you are for | Silent, unless you obeyed to the end | "The kitchen, after" |
+| 5 | **Host** | The endgame: lungs, the gut, or her arm | Deciding what you are for | Still issuing orders, unaware the unit has stopped hearing them as orders | "The kitchen, after" |
 
 ### Prologue: Injection
 The 4-beat cold open (interludes.md). It ends on title **HOST**, then the Chapter 1 card.
