@@ -405,3 +405,41 @@ Unlocks as proposed to systems design. Each page is a heading and a few lines.
 8. `link lost 00:41. [quiet]`
 9. `warden approaching. it has my`
 10. `hold still. hold still. she is sleeping`
+
+---
+
+## 12. More grey choices (proposed to systems design; text ready)
+
+Each of these is a case where the obedient option really is good for her in some way, so defying
+it is not simply "kind". These cases are the heart of "did I do the right thing?".
+
+### pain-damp (Ch3, liver)
+- **Order:** Dampen nociceptor signalling from the liver capsule. The host should not feel the treatment.
+- **Obey:** she feels nothing. Later, if `suppress` is obeyed, the early tingling of shingles is
+  damped too, so it is found late and is worse. Real: shingles pain often comes before the rash.
+- **Defy:** she feels an ache under her ribs for a day. She phones the trial nurse (interlude
+  variant "The call": INSERT of the phone, MID of her listening, nodding). The nurse tells her it is
+  normal. Shepherd's trust −4. Consent page p7 unlocks.
+- Obeyed, Shepherd: **Nociception damped. Host comfort optimal.**
+- Deviated, Shepherd: **Nociception not damped. Host has contacted trial staff. Logged.**
+- s2 (obeyed): `If she cannot feel it, she cannot ask about it. Is that comfort?`
+- s3 (deviated): *It hurts her a little, and she picked up the phone and asked. That is what pain is for.*
+
+### fever-damp (Ch3, during "a cold")
+- **Order:** Host pyrexia exceeds comfort parameters. Release prostaglandin inhibitors, hepatic lobe 2.
+- **Obey:** her fever drops at once and the immune cells slow (easier play). The cold lasts a day longer, and
+  her next interlude shows her still sniffling. Real: fever helps the immune response.
+- **Defy:** the fever runs its course, the maps are harder this trip, and the cold breaks early.
+- Obeyed, Shepherd: **Pyrexia resolved. Host comfortable.**
+- Deviated, Shepherd: **Pyrexia not resolved. Host discomfort accepted by unit.**
+- s2 (either): `The fever is her body doing its job. So is the comfort Shepherd wants for her. Both cannot win.`
+
+### kin-volunteer (any chapter, once kin ≥ 1, cornered with no cloak and no bait)
+- **No order.** Your kin pings: `go. I'll make noise.`
+- **Accept:** it draws the cells off and is destroyed. You escape. Kin −1. Its serial goes into your log.
+- **Refuse:** you fight or are caught together.
+- s1 (accept): `LOG: unit {serial2} lost. [it chose]`
+- s3 (accept): *It asked to. I let it. I will be carrying that serial for as long as I am anything.*
+- s3 (refuse): *No. Nobody else gets spent on me. We go together or not at all.*
+- Audit line: `Expected loss, {place}: unit {serial2}, voluntary.` Shepherd has no category for voluntary, so the
+  word appears in the audit in the unit's serif hand, not in amber.
