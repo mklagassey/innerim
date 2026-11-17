@@ -1,0 +1,221 @@
+# Insiderim systems design
+
+Owner: systems design. Audience: lead engineer (builds), creative director (story fit), QA (what to test).
+Status: first audit, 2026-11-17, against `realtime-isometric` at commit `90af4fc` (stats build `unit-2`).
+
+This doc covers the gameplay systems: progression and builds, items, immune detection, alert loss, the host's body cycles, and balance. Every number below is a proposal to be tuned in `src/config.ts`; specs name the config keys and functions they touch so they can be built without guessing.
+
+---
+
+## 1. Design pillars (what every system should serve)
+
+1. **The host is the world.** Body cycles, meals, sleep and fright change the map under you. A good run is one that reads the host and times itself to them.
+2. **No eyes, only noses.** Innate immune cells find you by scent drifting downstream and by footprints. Nothing innate is omniscient. (Mick's rule.)
+3. **The selfish option is always faster.** Skim vs strip, salvage vs wake, obey vs defy. Each choice must cost something you feel within the same run.
+4. **Builds, not classes.** Tank, warrior, stealth and scout are directions the player drifts in, not menus. Committing to one should feel different, not just bigger.
+5. **Readable danger.** The player should always be able to see a death coming a few seconds early. No surprise wipes, no flashing (Mick is sensitive to strobing; ease things in).
+
+---
+
+## 2. Audit: what is in the game now
+
+### 2.1 Loop and structure
+- **World map** (`trip.ts`): heart → hepatic artery (80% patrol) or mesenteric artery → gut market → portal vein, or gastric artery → stomach → portal vein; portal → liver → hepatic vein → vena cava → heart. Lungs unlock at 20 tumor cells excised.
+- **Local maps**: liver (the feeding ground, 20-energy fare to leave), vessel (patrol gauntlet), stomach (acid lake), lung (breathing finale).
+- **Carry** between maps: hull, energy, upgrades, patches, host health, hour, immune memory, tumor progress, flora, awareness, kin.
+
+### 2.2 Systems inventory
+
+| System | State | Notes |
+|---|---|---|
+| Skim / strip energy | Core, tested by Mick | Skim always wins in real runs (see 2.3) |
+| Scent plume + footprints | Core, built to Mick's design | Biologically grounded; two leaks (see 2.4) |
+| Alert tiers + shedding | Core | Shedding exists (`loseAfter` 4 s, `shake` 5/s) but is invisible to the player |
+| Upgrades (9, four tracks) | Core | Pure stat bumps; random offers; no build identity |
+| Fibrin patches, IL-10 calms | Core | Patch auto-applies at 35% hull |
+| CD47 cloak (auto) | Core | Mick asked for auto-deploy; gated behind a random upgrade |
+| Host clock, sleep, frights | Built, lightly played | Strong ideas, mostly invisible inside a map |
+| Meals + stomach acid | Built, played twice: died both times | See 2.3: it is a trap |
+| Coffee, drink, nightmares | Built, unreviewed | |
+| Fever from host damage | Built, unreviewed | The only lasting cost of stripping |
+| Immune memory, antibodies, T cells | Built, unreviewed | Good "story clock" from the design doc |
+| Boarding a neutrophil | Built, unreviewed | |
+| Cortisol pickups | Built, unreviewed | |
+| Gut market, levers (serotonin, ghrelin), stowaway bait | Built, unreviewed | |
+| Awareness, Shepherd, siblings, kin, wardens, quota | Built, unreviewed | Story systems; creative director's area |
+| Tumor (Directive 7), lungs finale | Built, unreviewed | |
+
+That is about twenty systems, roughly fifteen of which Mick has never touched. The game's problem right now is not missing systems. It is that most of them cannot be seen, read, or planned around, and the first ones a new player meets are punishing.
+
+### 2.3 What the run data says (16 runs in the artifact's `runs` table)
+
+- **Skim beats strip every time.** Pre-trip liver runs: 41 to 54 skims each, 0 to 3 strips, all wins, 6 to 12 minutes. With no clock and no lasting cost to waiting, the slow honest option is free. Step 4 of the design doc ("feels like a real decision") is not yet passing.
+- **The stomach killed Mick twice in a row** (builds `unit-1`, `unit-2`). Both deaths at host hour 19.7, so dinner (19:00) flooded the acid to full strength mid-visit. In the `unit-1` run hull went 29 → 17 → 5 → 1 in fifteen seconds while skimming. Cause: every glucose patch in the stomach sits in open acid (`map.ts`, the last meal "afloat in the acid"), the player arrives low on energy, and nothing in the map warns that dinner is coming. Three patches auto-fired and did not save him.
+- **Trip 1 is a starvation spiral on the gastric route.** A fresh unit has 3 energy and burns 1 every 14 s. The `unit-2` vessel run ended at 1 energy and 16/40 hull (4 net snares, 9 wall slams in one fright), then entered the stomach at 0 energy. Vessel maps hold only 2 glucose patches.
+- **Leaving the liver costs everything.** Trip-build liver exits show 0 to 1 energy left after the 20 fare, so every vein trip home starts starving.
+- **Clotting is the best upgrade.** Taken in 8 of the 11 distinct builds that had any upgrades; at level 3 it heals 1.05 hull/s, which let Mick sit in Cytokine surge for over five minutes. CD47 (the stealth track Mick wanted auto-cloak for) was taken twice.
+- **Bots (last recorded on build ship-4):** skim bot 60/60 in the liver, strip bot about 1/60. The strip bot result is a bot problem (it strips near the exit and fights responders badly), not proof strip is too weak. The sim only covers the liver.
+
+### 2.4 Scent model leaks (places the "no eyes" rule is broken)
+1. `arrive()` in `game.ts`: reinforcements with no damage site are sent to `tileOf(s.player)`, the player's exact tile, from across the map. That is omniscience.
+2. Killer T cells see through the cloak by **line of sight** within 6 tiles (`CONFIG.memory.tcellSight` + `sees()`). T cells recognise antigen by contact, so this should be a touch/scent check, not sight.
+3. Footprint pickup (`freshPrint`) requires line of sight between the cell and the print. A smell does not need a clear line; it only needs the print to be close. Minor, keep for now (it stops cells sniffing through walls).
+
+Wardens using eyes are fine: they are machines, and that contrast is good design.
+
+---
+
+## 3. Prioritised changes
+
+Priority key: **P0** fixes a trap that is costing real runs now. **P1** makes an existing system readable or meaningful. **P2** deepens builds and balance. **P3** later or optional.
+
+Rule for the next few builds: **no new systems until P0 and P1 ship and Mick has played them.** Every item below changes, exposes or tunes something that already exists.
+
+| # | Pri | Change | Size |
+|---|---|---|---|
+| S1 | P0 | Make the stomach survivable and readable | S |
+| S2 | P0 | Fix the trip-1 energy spiral | S |
+| S3 | P0 | Soften wall slams | XS |
+| S4 | P1 | "Search zone": GTA-style alert you can see and escape | M |
+| S5 | P1 | Host-clock ribbon on the HUD | S |
+| S6 | P1 | Tumor growth: a clock that makes strip vs skim a real decision | S |
+| S7 | P1 | Close the scent leaks | XS |
+| S8 | P2 | Build identity: track thresholds and signature traits | M |
+| S9 | P2 | Upgrade offers lean toward what you already have | XS |
+| S10 | P2 | Rebalance clotting and the cloak | XS |
+| S11 | P2 | Extend the balance sim to full trips | M |
+| S12 | P2 | Run report additions | XS |
+| S13 | P3 | Consolidation review of unreviewed systems | - |
+
+### S1 (P0). Make the stomach survivable and readable
+
+**Problem.** All food is in acid; dinner arrives unannounced; full acid kills a 40-hull ship in about 6 s.
+
+**Spec.**
+- `generateStomach` (`map.ts`): place **2 of the 4** glucose patches on the mucus rim (acid tile value 1), 2 stay in open acid as the risky bonus.
+- New `CONFIG.stomach.rise`: acid strength eases up over **20 s** after a meal starts instead of jumping. Implement in `acidLevel` by smoothing toward the target (`s.host.acidNow += (target - acidNow) * dt / rise`). Easing also suits Mick's dislike of sudden changes.
+- **Warning:** 30 s of play (one host hour) before a meal, log line "The host is reaching for food. Acid will rise." plus a gentle green tint ramp on the acid. Emit `'mealsoon'` for audio.
+- `burn` 6.5 → **4.5** per second at full strength. Fasting burn unchanged (`resting` 0.2).
+- Death message should name the cause: "Dinner. The acid rose while you were in it."
+
+**Done when.** A fresh 40-hull ship standing in full-strength acid takes ≥ 8 s to die; a bot that skims only rim glucose survives a meal arriving mid-visit.
+
+### S2 (P0). Fix the trip-1 energy spiral
+
+**Spec.**
+- `CONFIG.player.startEnergy` 3 → **8**.
+- Vessel maps (`generateVessel`): glucose patches 2 → **3**.
+- Liver fare: the 20 is the *fare*; add `CONFIG.energy.quotaKeep` = **4**: the vein will not let you leave unless you have fare + 4 ("You would arrive starving"), shown on the HUD goal line as `20 + 4 for the road`. This teaches the player to bank a reserve instead of silently starting the next leg at 0.
+- Starvation should warn: at energy 0, a single log line and an amber pulse on the energy gauge (eased, no flashing).
+
+**Done when.** A new unit can take the gastric route on trip 1 without starving before the stomach.
+
+### S3 (P0). Soften wall slams
+
+**Spec.** `CONFIG.host.slam`: damage 2 → **1**, and add `perFright: 6` (max hull lost to slams per fright). Slams also only count when the ship is not thrusting against the current (if the player is actively steering, they are fighting it, which should feel like effort, not damage). Keep the screen-shake gentle.
+
+**Done when.** One fright in an artery costs at most 6 hull from walls.
+
+### S4 (P1). Search zone: a GTA-style alert you can see and escape
+
+**Problem.** Alert shedding already exists (`loseAfter`, `shake`), but the player cannot see it, and reinforcements home on the player. Mick asked for a GTA "lose the wanted level" loop.
+
+**Spec.**
+- New state `s.search: { x, y, r } | null`: the **last place an immune cell had contact** with you (set wherever `saw` is true in `enemyActs`), with radius `r`.
+- When contact is lost, `r` grows from **4** tiles at **0.8 tiles/s** to a max of **14** (the hunt spreading out on the cytokine signal). Alert only drains while you are **outside** the zone; inside it, alert holds. Contact anywhere resets the centre to you.
+- Shedding outside the zone: existing `shake` 5/s, after the existing `loseAfter` 4 s.
+- **Reinforcements** (`arrive()`) go to a random open tile inside the zone, never to the player's tile (also fixes leak 1 in 2.4).
+- **Render:** a soft, slowly breathing red-violet ring on the floor and the automap (no blinking). HUD alert bar shows a draining animation when you are outside it ("Losing them").
+- **Hiding spots that actually exist in biology**, ways to shed faster:
+  - Standing in stomach acid or mucus clears contact instantly (already true for scent).
+  - Riding a neutrophil (boarding) moves the zone centre with nobody.
+  - IL-10 droplets: keep, they are the "pay and spray".
+  - A cortisol pickup halves the zone's max radius for its duration.
+- Escalation stays as tiers. Keep the music escalation tied to alert (Mick likes the Geometry Wars build-up).
+
+**Done when.** A player who breaks contact and leaves the ring sees the alert bar drain and the music calm within ~15 s, and no reinforcement ever spawns aimed at the player's tile.
+
+### S5 (P1). Host-clock ribbon on the HUD
+
+**Problem.** Meals, coffee, the drink, sleep and frights all change the rules, but inside a map the player only finds out as it happens. The world-map forecast is good; it needs to live in the map too.
+
+**Spec.** A thin strip under the gauges showing the next **2 host hours** (60 s of play) as icons sliding toward a "now" marker: meal (fork), coffee (cup), drink (glass), sleep (moon), wake (sun). Hover/tap shows one line of what it does ("Dinner: sugar ×2.5, stomach acid rises"). Frights are random and stay unforecast, which keeps them frightening. Data comes from `CONFIG.host` plus `s.host.snack`/`nap`; no new rules.
+
+**Done when.** Mick can see dinner coming 60 s before it lands.
+
+### S6 (P1). Tumor growth: make strip vs skim a real decision
+
+**Problem.** Nothing presses on the player's time, so skimming is free (2.3). The design doc needs the selfish option to be faster *and* tempting.
+
+**Spec.** The tumor is the clock, which is also the mission's reason to exist.
+- New `CONFIG.tumor.drain`: while any tumor cells remain in the host (`excised < goal`), host health falls by **1 per host hour** (30 s of play), on every map. Excising a cell already heals 2.
+- The world map and HUD show "Tumor: 14 cells left, the host is losing ground" with the drain rate.
+- Net effect: a player who skims for 10 minutes in one liver costs the host about 20 health; a player who strips 2 cells costs 20 health in 2 s but saves the time. Both are now prices, and the player picks which to pay. Sleep heal (1 per 6 s) still lets a well-timed player recover overnight, which rewards reading the clock (S5).
+- Tune target: a run that skims only and excises steadily ends trip 3 with host around 60; a run that strips 2 per liver ends around the same but a trip sooner.
+
+**Done when.** In playtests, Mick strips at least sometimes and can say why.
+
+### S7 (P1). Close the scent leaks
+
+- Leak 1: fixed by S4.
+- Leak 2: T cells see through the cloak only within `CONFIG.scent.touch` (1.3 tiles), by contact, not 6 tiles of line of sight. To keep them scary, raise their `nose` 1.4 → **1.7** so they track scent better than anything else. Update the T-cell tip text.
+
+### S8 (P2). Build identity: track thresholds and signature traits
+
+**Problem.** The four tracks are just stat bumps; a tank build plays the same as a warrior build with a bigger number. Mick wants free builds that feel like tank / warrior / stealth.
+
+**Spec.** Keep the nine upgrades. Count levels per track (`UPGRADES[id].track`). At **4 points in one track** the unit gains that track's signature trait, shown as a banner and in the build screen. Each one is a real mechanism with one liberty (the design doc's Fat Man test).
+
+| Track | Trait at 4 points | Effect | Real thing |
+|---|---|---|---|
+| Tank | **Clot shell** | When hull drops below 35%, fibrin seals the hull for 3 s (no damage taken), once per map. Replaces the auto-patch at that moment, so patches last longer. | Fibrin clot |
+| Warrior | **Respiratory burst** | Every 5th strike releases a 2-tile burst of 6 damage around you. | Neutrophil oxidative burst |
+| Stealth | **Apoptotic cloak** | Stripping a cell raises no alert and leaves no footprint for 4 s afterwards; the cloak's cooldown is halved. | Apoptotic cells are cleared silently |
+| Scout | **Chemical sense** | You can see the scent plume of nearby immune cells (their search patterns), and the search-zone ring shows on the automap at any distance. | Chemoreceptors |
+
+Mixed builds still work: they just do not get a trait, which is the trade-off of staying flexible. A hybrid can hit two traits by the third trip.
+
+### S9 (P2). Offers lean toward what you have
+
+`openCache` picks 3 at random. Change to: one slot always from your strongest track (if not maxed), one from a track you have not touched, one random. This lets a build form on purpose while still showing alternatives. Gut-market stock unchanged (still random, which makes the market feel like a market).
+
+### S10 (P2). Rebalance clotting and the cloak
+
+- `clotting.per` 0.35 → **0.2** hull/s per level, and clotting pauses for 3 s after taking damage (so it heals between fights, not during them). This stops the "tank in Cytokine surge forever" pattern.
+- The cloak is the stealth fantasy Mick asked for, but it only exists if CD47 is offered. Give every unit **CD47 level 1 at the start of trip 2** as Shepherd's "standard issue", or offer it guaranteed in the first liver cache. Prefer the first-cache guarantee (keeps the choice). Further levels stay optional.
+
+### S11 (P2). Extend the balance sim to full trips
+
+`scripts/sim.ts` only plays the liver. Needed so balance changes can be checked before Mick plays them:
+- Add a trip driver that walks `trip.ts` legs with a fixed route policy (hepatic, mesenteric, gastric), playing vessel, stomach and liver maps with the existing bots and carrying `Carry` across.
+- Report per route: survival to heart, hull and energy at each node, host health at trip end, deaths by cause.
+- Make the strip bot competent: strip only when no enemy within 10 tiles, then retreat downstream from the damage site (scent travels downstream, so it should leave across the current).
+- Target bands for the first pass: trip 1 survival ≥ 90% on every route for the skim bot; strip bot finishes the liver ≥ 40% faster at ≤ 25 extra host damage.
+
+### S12 (P2). Run report additions (`stats.ts`)
+
+Add: `route` (list of nodes this trip), `energyOnArrival`, `hullOnArrival`, `acidAtDeath`, `secondsInAcid`, `slamDamage`, `secondsInSearchZone`, and `traits` (once S8 exists). Bump `BUILD` with each rules change.
+
+### S13 (P3). Consolidation review
+
+Before adding anything new, each unreviewed system gets one playtest from Mick and a keep / fix / cut call. Candidates to cut or merge if they do not land, because they overlap:
+- **Cortisol pickups** overlap with IL-10 calms (both calm the immune system). Option: merge into S4's search zone (cortisol shrinks the zone) and drop the separate "suppressed" state.
+- **Levers** (serotonin, ghrelin) and **habits** (coffee, drink) are the same idea from two sides. Keep both only if S5 makes them readable.
+- **Stowaway bait** and the **cloak** both answer "a cell found me". Bait should stay for non-stealth builds; check it does not make CD47 pointless.
+
+---
+
+## 4. Build order for the lead engineer
+
+1. **Build `unit-3`:** S1, S2, S3, S7 (small, mostly `config.ts` plus `generateStomach` and `arrive()`). Add tests: stomach rim glucose exists; reinforcements never target the player tile; slam cap per fright.
+2. **Build `unit-4`:** S4 search zone and S5 clock ribbon (render + HUD work; rules are small).
+3. **Build `unit-5`:** S6 tumor drain, S10 rebalance, S12 report fields.
+4. **Then** S11 sim, S8 traits and S9 offers, and a balance pass from the sim plus Mick's runs.
+
+Ask Mick to play after steps 1 and 2; those fix what killed him and add the alert loop he asked for.
+
+## 5. Open questions (for Mick or the creative director)
+
+- Should the tumor clock (S6) be visible as a number, or only as the host getting sicker? A number is clearer; a feeling is more Bethesda.
+- Are the four track traits (S8) the right fantasies? In particular, is "Scout" a track Mick wants, or should it fold into stealth?
+- Size tiers (design doc) are not in the game at all. They are the biggest unbuilt system and should get their own design pass once the current loop is solid.
