@@ -443,3 +443,47 @@ it is not simply "kind". These cases are the heart of "did I do the right thing?
 - s3 (refuse): *No. Nobody else gets spent on me. We go together or not at all.*
 - Audit line: `Expected loss, {place}: unit {serial2}, voluntary.` Shepherd has no category for voluntary, so the
   word appears in the audit in the unit's serif hand, not in amber.
+
+---
+
+## 13. Chapter 5 minors and other text for unit-17 (decisions.md section 11)
+
+### m14 last-harvest
+- Order: **Disposal transit requires reserve. Harvest 3 hepatocytes. Final quota.**
+- Obeyed: **Final quota met. Thank you for your service.**
+- Deviated: **Final quota unmet. It no longer matters. Logged.**
+- s1 (deviated): `LOG: final quota unmet. [last chance to take. did not]`
+- s2 (obeyed): `Three more, for the trip out. She will not miss them. That is what Shepherd always says.`
+- s3 (deviated): *Shepherd wanted three more on the way out the door. I'm leaving her with everything I can.*
+- Echo (epilogue scan), world voice: **Three small pale marks at the edge of the liver, the kind a radiologist calls "incidental".**
+
+### m15 handover
+- Order: **Upload route map for successor units. Your experience will help the next unit.**
+- Obeyed: **Route map archived. The next unit will thank you.**
+- Deviated: **Route map withheld. Logged.**
+- s2 (obeyed): `The next one will get my map. Will it get anything else of mine?`
+- s3 (deviated): *My map is the only record of where I've been with her. The next unit can find its own way. I hope it does.*
+- Echo, next game (obeyed): the old amber map appears on the telemetry chart, labelled `ROUTE: UNIT {prevSerial}`. Once, in the first liver, the log reads `ACK.` from the old serial, in grey.
+- Echo, next game (deviated): the first liver holds a dark sibling carrying the player's last log line (chapters.md "next unit in the queue").
+
+### m16 night-hold
+- Order (at night, if she stirs): **Host arousal detected. Release melatonin. The host should sleep through.**
+- Obeyed: **Host asleep. Repair cycle uninterrupted.**
+- Deviated: **Host awake, 03:10. Repair cycle interrupted. Logged.**
+- s2 (deviated): `She woke up on her own. Is that worse for her, or just less tidy?`
+- s3 (deviated): *She woke at ten past three and I let her. Some nights you need to sit in the kitchen.*
+- Interlude variant **"Ten past three"** (2 beats): WIDE · the kitchen, only the cooker-hood light on, her at the table in a dressing gown, the dog's head on her knee (6 s). INSERT · the clock on the oven: 03:10. A glass of water, not wine (4 s). Match cut: the water glass becomes the still pool of a quiet vessel.
+
+### Difficulty blurbs, with a reason (replaces host-events.md S19 lines)
+| Setting | Start-screen line |
+| --- | --- |
+| **Suppressed** | She has been on a course of steroids for her arthritis. Her white count is low, and her defences are slow to learn. |
+| **Typical** | A healthy 58-year-old's defences, doing their job. |
+| **Vigilant** | She had her flu jab last week. Her immune system is primed, quick and unforgiving. Patches are applied by hand. |
+
+(Steroid courses really do lower white-cell activity; a recent vaccine really does leave the immune system
+briefly more alert. Chemotherapy would contradict her backstory, since she has had no treatment but the trial.)
+
+### Shingles prodrome lane (in-map, world voice)
+- **Along one nerve root at the level of her sixth rib, the varicella virus has started copying itself again, after fifty years latent. Nerve cells here are firing for no reason. She will feel it as a burning she cannot place, days before any rash.**
+- Short form, if a second line is needed: **The T6 nerve root is inflamed. Her immune system has noticed, late.**
