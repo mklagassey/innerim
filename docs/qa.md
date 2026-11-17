@@ -2,6 +2,10 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 3: 2026-11-17, recheck at Version 44 (head 73903bd)
+
+69/69 tests, no JavaScript errors and no layout flags in a phone bot run. **B1 fixed:** walking to the stomach exit in fog now spends 0.0 s in open acid (was 5.7), fully explored also 0.0; the rim bot that waits out dinner then leaves now loses 4 hull on average with 0 deaths in 15 (was 24 hull, 1 death); a tap on the exit at any hour costs about 1 hull. As the engineer notes, a human reaches the exit in several taps, since each path stops at the edge of the known rim. **B5 fixed** (veil 99%), **B7 fixed** (clock ribbon icons are 36x36, and the bot no longer flags any small tap targets). All pass-1 bugs are now closed; realism items R1 to R3 stay open for the creative director and systems designer.
+
 ## Pass 2: 2026-11-17, recheck at Version 43 (head e2489a3)
 
 `tsc` clean, 68/68 tests, bot runs at desktop, iPhone 13 and Galaxy S8 sizes with no JavaScript errors. Acceptance checks unchanged from pass 1 (S1, S2, S3, S7 met).
