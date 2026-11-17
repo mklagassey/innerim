@@ -111,6 +111,65 @@ export function sofa(st: Stage, k: SofaKit) {
   }
 }
 
+// ---------- the sitting room by day (the echo variants: The nap, Groggy) ----------
+
+export interface NapKit { breath: number; mug?: 'cold' | 'hot' | null; up?: Pose | null; clock?: string; light?: 'afternoon' | 'morning' }
+/** The same sofa in daylight: a window at the left, the blind's slats laid across the wall; the TV off. */
+export function sofaDay(st: Stage, k: NapKit) {
+  const key = k.light === 'morning' ? '#f4e6c8' : '#f2b870', t = st.still ? 0 : st.t;
+  st.light = { x: 60, y: 80, color: key };
+  st.layer(0.75, (c) => {
+    c.fillStyle = '#2e2420'; c.fillRect(-300, -100, 1600, 600);
+    // the window and its blind, and the stripes of light it lays on the wall (steady; a blind does not flicker)
+    c.fillStyle = mixHex('#2a201c', key, 0.85); c.fillRect(20, 40, 130, 170);
+    c.fillStyle = rgba('#2a201c', 0.55); for (let y = 44; y < 210; y += 12) c.fillRect(20, y, 130, 4);
+    c.fillStyle = '#1a1412'; c.fillRect(14, 34, 142, 6); c.fillRect(14, 210, 142, 8);
+    c.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 9; i++) { c.fillStyle = rgba(key, 0.07); c.beginPath(); c.moveTo(300, 60 + i * 22); c.lineTo(760, 90 + i * 26); c.lineTo(760, 102 + i * 26); c.lineTo(300, 68 + i * 22); c.closePath(); c.fill(); }
+    const g = c.createRadialGradient(90, 120, 10, 200, 160, 700); g.addColorStop(0, rgba(key, 0.32)); g.addColorStop(1, rgba(key, 0));
+    c.fillStyle = g; c.fillRect(-300, -100, 1600, 600); c.globalCompositeOperation = 'source-over';
+    // the TV off at the right: a dark slab with a dull reflection of the window
+    c.fillStyle = '#0a0a0c'; c.fillRect(960, 120, 14, 130); c.fillRect(930, 250, 70, 70);
+    if (k.clock) { c.fillStyle = '#e8e0d0'; c.beginPath(); c.arc(820, 70, 16, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#2a2420'; c.lineWidth = 2; c.stroke(); }
+  });
+  st.layer(0.92, (c) => floor(c, 330, 430, '#4a3628', '#1a120e', 600));
+  // a low table with the mug
+  st.lit(0.96, (c) => { c.fillRect(700, 300, 160, 10); c.fillRect(712, 310, 8, 56); c.fillRect(840, 310, 8, 56); }, { body: '#1e1612', rim: 0.6, width: 1.6, fill: 0.5, at: [780, 320, 200] });
+  if (k.mug) st.layer(0.96, (c) => mugFor(c, 760, 300, k.mug!, key));
+  // the sofa, and her asleep along it under a blanket, head on the arm, face to the ceiling
+  st.lit(1, (c) => { blob(c, [[300, 360], [296, 230], [312, 140], [352, 132], [376, 150], [380, 250], [620, 250], [640, 240], [668, 246], [676, 280], [664, 360]], true, 0.25); c.fill(); }, { body: '#3a2c26', rim: 0.6, width: 2, fill: 0.7, at: [480, 260, 380] });
+  if (!k.up) {
+    const b = k.breath;
+    st.layer(1, (c) => {
+      c.fillStyle = '#120c0a';
+      c.save(); c.translate(636, 228); c.rotate(1.55); c.scale(28, 28);
+      blob(c, [[-0.16, 0.5], [-0.4, 0.14], [-0.38, -0.25], [-0.12, -0.5], [0.14, -0.5], [0.33, -0.3], [0.37, -0.11], [0.36, -0.02], [0.45, 0.11], [0.37, 0.15], [0.385, 0.22], [0.355, 0.26], [0.37, 0.3], [0.32, 0.36], [0.3, 0.45], [0.12, 0.5]], true, 0.35); c.fill();
+      c.restore();
+      // the blanket: knitted, warm in the window light along its top, its fringe hanging over the seat
+      const top = 232 - b * 4;
+      const g = c.createLinearGradient(0, 220, 0, 300); g.addColorStop(0, '#7a4a36'); g.addColorStop(1, '#24120e');
+      // over her shape: feet, shins, the knees drawn up a little, hip, then the chest rising with her breath
+      c.fillStyle = g; c.beginPath(); c.moveTo(384, 262); c.bezierCurveTo(390, 246, 404, 240, 420, 242); c.bezierCurveTo(446, 244, 462, 226, 480, 226); c.bezierCurveTo(500, 226, 512, 242, 530, 240); c.bezierCurveTo(556, 236, 566, top, 594, top - 2); c.quadraticCurveTo(616, top - 2, 624, 246); c.lineTo(640, 264); c.lineTo(644, 300); c.quadraticCurveTo(510, 308, 378, 300); c.closePath(); c.fill();
+      c.strokeStyle = rgba('#000', 0.25); c.lineWidth = 2; for (let x = 396; x < 636; x += 14) { c.beginPath(); c.moveTo(x, 284); c.lineTo(x + 2, 296); c.stroke(); }
+      c.strokeStyle = rgba('#ffd0a0', 0.25); c.lineWidth = 1.2; c.beginPath(); c.moveTo(400, 244); c.bezierCurveTo(450, 236, 520, 244, 560, top + 2); c.stroke();
+    });
+  } else {
+    const p = k.up;
+    st.lit(1.01, (c) => woman(c, p), { body: '#120c0a', rim: 1, width: 2.2, fill: 0.5, at: [p.x, p.y - p.s * 0.4, p.s] });
+  }
+  void t;
+}
+function mugFor(c: C, x: number, y: number, kind: 'cold' | 'hot', key: string) {
+  c.save(); c.translate(x, y);
+  const g = c.createLinearGradient(-10, 0, 10, 0); g.addColorStop(0, '#d8d0c4'); g.addColorStop(1, '#6a6058');
+  c.fillStyle = g; c.beginPath(); c.roundRect(-10, -24, 20, 24, 3); c.fill();
+  c.strokeStyle = '#8a8076'; c.lineWidth = 3; c.beginPath(); c.arc(12, -12, 6, -1.2, 1.2); c.stroke();
+  // coffee gone cold has a dull skin; hot coffee has a light on it
+  c.fillStyle = kind === 'cold' ? '#3a2a1e' : '#4a2e1a'; c.beginPath(); c.ellipse(0, -22, 9, 2.4, 0, 0, Math.PI * 2); c.fill();
+  if (kind === 'hot') { c.fillStyle = rgba(key, 0.5); c.fillRect(-5, -23, 6, 1); }
+  c.restore();
+}
+
 // ---------- the bedroom (The same heart) ----------
 
 export interface BedKit { dogOn?: number; hand?: number; breath: number; close?: boolean }
