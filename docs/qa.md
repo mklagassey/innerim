@@ -2,6 +2,34 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 5: 2026-11-17, Versions 49 to 52 (unit-8, unit-8b, unit-9; head b3a1c50)
+
+79 tests pass, `tsc` clean, no page errors.
+
+**S1 (P0, fixed in Version 52) The opening scene could trap the player.** Tapping or pressing Space during the scene's 1.2 s fade-out (or Skip followed by one tap) left `#scene` un-hidden at opacity 0, the world map never opened, and Escape and Skip did nothing; only a reload helped. 3 of 3 repros on an iPhone 13 size at Versions 49 to 51. Cause: `next()` cleared the shared timer that held `end()`'s hide-and-continue step. Rechecked at Version 52: tap, Space and Skip-then-tap all reach the world map.
+
+**S2 (P2) Map button runs off a 320 px screen.** With the new Silent button the top row is pause, sound, silent, two turns, map; at 320 px the Map button ends at 354 px, off the right edge (no sideways scroll, it is simply cut off). Fine at 360, 375 and 390 px. Shortening "Sound on" to an icon, or dropping the key hints on touch, would fit it.
+
+**S3 (P2) A fleeing ship gets engulfed again straight away.** Holds always release (never longer than 2.0 s, and two strikes break free in under 1 s), but after a timed release the macrophage's next blow usually lands before the ship is clear: a bot that flees on release was re-engulfed up to 4 times in a row, each within 1 s of the last release, and died 10 of 15 times against one macrophage in 30 s (a bot that strikes back died 0 of 15). A second or two of grace after a release, or a knock-back, would make "run" a real answer to engulfment and not only "strike".
+
+**S4 (P3) Scene ignores taps for its first 2 s.** By design, but on a phone a tap that does nothing reads as frozen. Skip works throughout.
+
+**Checked and fine:**
+- Hiding places: all 10 per liver are reachable from the start (12 seeds), a niche tile always has an open side so you cannot get stuck, and a ship sitting in one with a neutrophil and a macrophage next to it took no damage and was never engulfed over 20 s.
+- Saved trips from older builds resume cleanly: a Version 40 save at the liver, an older save at the gut with no ledger, and a Version 47 save at the heart all showed the right world map, filled in missing fields, and played on with difficulty Typical.
+- Difficulty carries in the saved trip (`carry.difficulty`).
+- Scene and tip popups: tips only fire when nothing else is open and the world is paused while one is, so "Run silent" and "Engulfed" cannot land on another popup; the scene sits above everything (z-index 30).
+
+**Typical over three trips (balance).** `npm run sim 20 3` at Version 51, the engineer's skim and strip bots (they do not use niches, silent running or the cloak well, so this is a floor, not a forecast):
+
+| Route | Skim bot home after 3 trips | Strip bot home | Host at end (skim / strip) |
+|---|---|---|---|
+| Hepatic | 40% | 55% | 96% / 29% |
+| Mesenteric | 60% | 50% | 97% / 24% |
+| Gastric | 65% | 40% | 96% / 19% |
+
+Almost every loss is to neutrophils in the liver. The design target is skim home at least 90% on every route; for a single trip the skim bot was at 95 to 100% at Version 40, so the combined unit-6 to unit-9 changes (weaker clotting and plating, primed neutrophils, engulfing, swarm on kill) have made the liver much more lethal for a simple fighter. A careful human who hides and runs silent should do better; Mick's next runs will tell. Worth a sim bot that uses niches before tuning numbers.
+
 ## Pass 4: 2026-11-17, Version 47 (head 42f6bb9, unit-7)
 
 69/69 tests, `tsc` clean, no page errors.
