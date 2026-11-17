@@ -2,6 +2,24 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 6: 2026-11-17, Version 54 (head d26ac3c, unit-10)
+
+84 tests pass, `tsc` clean, no page errors.
+
+**Pass 5 rechecks.** S2 fixed: the top row fits at 320 px (Map ends at 297). S3 fixed: no macrophage re-grabbed within 1 s of a release in 45 test fights (worst chain 1, was 4), and holds still never last over 2.0 s.
+
+**Tutorial (Briefing, on by default):**
+- **T1 (P2) Step 3 drags when no immune cell is near.** With no immune cell in the liver, each step waits 45 s, repeats its order, waits 45 s more and moves on, so step 3 ("neutralise the contact") costs a player 90 s with no target ring and nothing to do. Steps 2 and 4 behave the same if the player ignores them, which is fine because there is something to do. Suggest: if no immune cell is within the 12-tile target range, skip step 3 after about 10 s.
+- **T2 (P3) Info boxes pop up over the first order.** In the first seconds of the tutorial liver the "Portal vessel" info box opens while Shepherd's first order is up. They do not overlap (the order line stays readable above the box, screen `/mnt/project-files/qa/tutorial-tip-phone.png`), but it is two teachers talking at once. Suggest holding the non-danger info boxes until the tutorial's step 5, or folding them into the orders.
+- **T3 (P3) Four lines of amber text on phones.** Order line, two to three lines of goal text and the clock ribbon stack above the play area on a 390 px phone, pushing the ship down to mid-screen.
+- Resuming mid-tutorial works: a reload in the tutorial liver offers "Continue trip 1 from the liver", the saved trip still carries the tutorial flag, and the liver restarts at step 1.
+- Info boxes and orders never collide as popups: orders are a HUD line (`#order`), not a veil.
+- No-cell timeout confirmed for every step: an idle player with no immune cells advances 1 to 5 at 90, 180, 270 and 360 s. Caches and dark units appear at step 5 as intended.
+
+**Obedient run shows no bracket lines.** A bot that strips the 2-cell quota, kills what finds it, salvages dark units and excises the nodule finished the tutorial liver with awareness 0, no defiance, and no line containing "[" in its thoughts or Shepherd's rulings (10 of 10 runs).
+
+**Old saves** from Version 40, pre-ledger builds and Version 47 still resume and play.
+
 ## Pass 5: 2026-11-17, Versions 49 to 52 (unit-8, unit-8b, unit-9; head b3a1c50)
 
 79 tests pass, `tsc` clean, no page errors.
