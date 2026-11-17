@@ -373,3 +373,11 @@ All of these are accepted. Each entry gives what shipped and, where it differs f
   - It adds "Breathed out, with company" for stage 3 or higher with at least 1 kin.
   - Tithonus is checked before Recurrence.
 - **Audit.** It lists the `ledger.defied` lines plus telemetry gaps.
+
+### 10.10 As built (unit-15.2, Version 68): follow-ups closed
+
+- **Recurrence.** The 0.25 roll (`CONFIG.marks.recurrence`) happens at a chapter 5 junction. If it lands, 2 tumour cells regrow, and Stay and the arm road stay locked until they are excised again. `Facts.recurred` feeds the ending.
+- **Beacon break.** The dock breaks after 2 strikes (`dockBreaks`). Breaking it costs trust 15 (`dockTrust`) and sets the flag `beacon-broken`. Planting gives +10, so planting and then breaking it nets −5.
+- **Kin recall race.** Refusing the recall opens a vessel race (`CONFIG.marks.kinRun`: time 60, lead 13, speed 0.55, prey Warden). Reaching the kin first sets `siblingSaved`; losing sets `kinLost`.
+  - Tuning target: a player who goes straight for the kin wins about 70% of the time, and a player who detours or fights loses it.
+  - The win rate is to be read from run reports once Mick has played. Until then the numbers stay as shipped.
