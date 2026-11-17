@@ -5,7 +5,7 @@
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
 import { atmosphere } from './atmosphere';
-import { Enemy, Point, State, tutorialTarget, markTarget, ownTarget, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, tutorialTarget, markTarget, ownTarget, hunterHeading, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -934,6 +934,13 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(q.x, q.y, 150, 82, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = `rgba(255,244,214,${(0.25 + 0.45 * held) * up})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(q.x, q.y, 104, 57, 0, 0, Math.PI * 2); ctx.stroke();
     if (held > 0) { ctx.strokeStyle = `rgba(255,244,214,${0.8 * up})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(q.x, q.y, 104, 57, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * held); ctx.stroke(); }
+    ctx.restore();
+  }
+  const hunter = hunterHeading(s);
+  if (hunter && !s.visible[idx(s, Math.floor(hunter.x), Math.floor(hunter.y))]) { // the scan's heading on whatever is closing: a short red tick out past the ship, steady
+    const q = project(hunter.x, hunter.y), h = project(p.x, p.y), dx = q.x - h.x, dy = q.y - h.y, far = Math.hypot(dx, dy) || 1, ux = dx / far, uy = dy / far, ax = h.x + ux * 64, ay = h.y - 8 + uy * 64;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const [w, col] of [[5, 'rgba(10,6,4,0.6)'], [2, 'rgba(255,128,118,0.75)']] as const) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(ax - ux * 5 - uy * 5, ay - uy * 5 + ux * 5); ctx.lineTo(ax + ux * 3, ay + uy * 3); ctx.lineTo(ax - ux * 5 + uy * 5, ay - uy * 5 - ux * 5); ctx.stroke(); }
     ctx.restore();
   }
   const ordered = tutorialTarget(s) ?? markTarget(s), want = ordered ?? ownTarget(s), tone = ordered ? '240,170,90' : '150,225,255'; // amber for Shepherd's pointer, the unit's own teal for its own

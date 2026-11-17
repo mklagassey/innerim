@@ -1,9 +1,15 @@
 // Every number worth arguing about lives here. Distances are in tiles, times in seconds.
-/** How hard the host's immune system works. Multipliers only: balance is done on Typical. */
+/** How hard the host's immune system works. Each level is a different woman's body, with rules of its own (systems design 11.5); balance is done on Typical.
+ * rules: trail = how long footprints last; ring = how far the hunt spreads; memoryCarry = how much of what she has learned of you carries to the next map;
+ * tagOnTouch = seconds every antibody drifts toward you after a cell touches you; cloakDecay = how much shorter each cloak on one map is than the last;
+ * scanHeading = Shepherd's scan points at the nearest hunter; dropAhead = a trusted unit finds a supply drop in the liver; drain and mend scale the tumour's toll and the night's repair. */
 export const DIFFICULTY = {
-  suppressed: { name: 'Suppressed', what: 'Her immune system is running low. It is easier to slip past, and slower to learn you.', damage: 0.6, hp: 0.8, spawns: 0.7, healing: 1.3, energy: 12, detection: 0.8, autoPatch: true },
-  typical: { name: 'Typical', what: 'A healthy 58-year-old\'s defences, doing their job.', damage: 1, hp: 1, spawns: 1, healing: 1, energy: 8, detection: 1, autoPatch: true },
-  vigilant: { name: 'Vigilant', what: 'Her immune system is quick, thorough and unforgiving. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false },
+  suppressed: { name: 'Suppressed', what: 'She is recovering from chemotherapy and her white count is low. Her defences are slow to find you and quick to forget you.', damage: 0.6, hp: 0.8, spawns: 0.7, healing: 1.3, energy: 12, detection: 0.8, autoPatch: true,
+    rules: { trail: 1 / 1.5, ring: 1 / 1.5, memoryCarry: 0.5, tagOnTouch: 0, cloakDecay: 0, scanHeading: true, dropAhead: true, drain: 0.8, mend: 1 } },
+  typical: { name: 'Typical', what: 'A healthy 58-year-old\'s defences, doing their job.', damage: 1, hp: 1, spawns: 1, healing: 1, energy: 8, detection: 1, autoPatch: true,
+    rules: { trail: 1, ring: 1, memoryCarry: 1, tagOnTouch: 0, cloakDecay: 0, scanHeading: false, dropAhead: true, drain: 1, mend: 1 } },
+  vigilant: { name: 'Vigilant', what: 'She had her flu jab last week and her immune system is primed. It remembers your trail, learns your cloak, and once a cell has touched you every antibody knows where you are. Patches are applied by hand.', damage: 1.4, hp: 1.25, spawns: 1.3, healing: 0.7, energy: 6, detection: 1.15, autoPatch: false,
+    rules: { trail: 1.3, ring: 1, memoryCarry: 1, tagOnTouch: 20, cloakDecay: 0.25, scanHeading: false, dropAhead: false, drain: 1.2, mend: 0.7 } },
 } as const;
 export type Difficulty = keyof typeof DIFFICULTY;
 /** Something ordinary that happens to the host and lasts a whole trip. Real physiology only; the words are the creative director's (docs/host-events.md). */
@@ -55,6 +61,7 @@ export const CONFIG = {
   },
   // The host is a person getting on with their day. Their body changes around you.
   host: {
+    lastNight: 2.5, // the hour the last trip begins
     maxHealth: 100,
     secondsPerHour: 30, // a whole day and night passes in twelve minutes of play
     startHour: 11,
@@ -169,12 +176,12 @@ export const CONFIG = {
   // Cortisol: what a fright leaves in the blood. It tells the immune system to stand down.
   // How far Shepherd trusts the unit: what it gives for obedience, and when it sends its own after you (decisions.md 3).
   draw: { disc: 2.2, hold: 10, window: 20, spacing: 1.6, kinSpeed: 1.4 }, // the blood draw: the lit disc, seconds to hold still in it, seconds before the slide is read anyway
-  marks: { hold: 4, near: 1.7, yield: 10, gap: 10, lane: 4, bystander: { odds: 0.45, time: 22 }, volunteer: { hull: 0.35, hunters: 2 }, margins: 4, kinRun: { time: 60, lead: 13, speed: 0.55 }, orderedHarm: 0.35, pressed: 4, notice: 5, dockBreaks: 2, dockTrust: 15, recurrence: 0.25, regrown: 2, kinRecall: 0.5, intercept: { energy: 3, hours: 1 } }, // Shepherd's marked orders, and the small decisions around them
+  marks: { hold: 4, near: 1.7, yield: 10, gap: 10, lane: 4, bystander: { odds: 0.45, time: 22 }, volunteer: { hull: 0.35, hunters: 2 }, margins: 4, kinRun: { time: 60, lead: 13, speed: 0.55 }, orderedHarm: 0.35, pressed: 4, notice: 5, lastHarvest: 3, reserve: 6, dockBreaks: 2, dockTrust: 15, recurrence: 0.25, regrown: 2, kinRecall: 0.5, intercept: { energy: 3, hours: 1 } }, // Shepherd's marked orders, and the small decisions around them
   trust: { start: 60, obey: 4, quota: 6, salvage: 5, tutorial: 2, escort: 2, slip: 2, wake: 8, gap: 1, deviate: { most: 6, some: 4, little: 2 }, valued: 80, nominal: 60, review: 40, flagged: 20, drop: { energy: 6, ahead: 8 }, selfTest: 25 },
   // The one garbled order of a game (decisions.md 4). fright: seconds into the vessel before it arrives.
   slip: { fright: 6, window: 20, hold: 15, near: 3, harvest: { gain: 5, host: 5 }, lamp: 2, reply: 6, hesitate: 8, fork: 1.5 },
   wake: { floor: 0.25 }, // each defiance adds weight x max(floor, 1 - awareness/100): Self is for a unit that keeps choosing
-  mend: { each: 3, night: 15, cap: 90 }, // overnight the liver grows back: host health per hepatocyte stripped since she last slept, the most in one night, and how well it can make her
+  mend: { each: 3, night: 15, cap: 90, rest: 5, restCap: 95, cold: 4, prodrome: 6 }, // overnight the liver grows back: host health per hepatocyte stripped since she last slept, the most in one night, and how well it can make her
   story: { sibling: { liver: 1, vessel: 0.4, energy: 6, hull: 5, wake: 3 }, gap: 6, kin: { most: 3, gift: 2 }, quota: 2, orders: { most: 15, some: 8, little: 4, first: 12, fullTimes: 2, escort: 0.25, acid: 2, spotted: 2, levers: 80, repeat: 45, steer: 6, nobody: 10 }, feeling: { cost: 2, heals: 4 }, sight: 1, scent: 0.85, echo: 0.5, warden: { sight: 6.5, from: [55, 80], yields: 0.5 } }, // siblings, seconds between thoughts, and what waking is worth
   flora: { cost: 4, aboard: 2, most: 4, lure: 8, lasts: 12, feast: 5, hostDamage: 2 }, // gut bacteria stuck to the hull, shed as bait
   cortisol: { drops: 3, time: 14, slow: 0.6, nose: 0.6 },

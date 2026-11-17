@@ -1696,3 +1696,61 @@ test('unit-15.4: lapsed is not defied', () => {
   cell2.met = true; cell2.other = true; d.player.energy = 99; put(d, d.vein); assert.ok(G.leave(d)); assert.equal(d.took['marked-cell'], 'deviate');
   assert.equal(DECISIONS['kupffer-spare'].weight, null, 'getting out of a macrophage alive is not a choice');
 });
+
+test('unit-17: neither side of an order is free', () => {
+  // Pain left alone: she rests, and mends a little more that night. A fever switched off: the cold drags on.
+  const rest: G.Carry = { ...G.carryOf(quiet(4)), hostHealth: 88, flags: { rest: true } }; G.night(rest);
+  assert.equal(rest.hostHealth, 93); assert.equal(rest.flags!.rest, undefined);
+  const cold: G.Carry = { ...G.carryOf(quiet(4)), hostHealth: 70, flags: { longCold: true } }; G.night(cold);
+  assert.equal(cold.hostHealth, 70 - CONFIG.mend.cold);
+  // The arterial nodule ignored: the next liver has one more cell to cut.
+  const base = { ...G.carryOf(quiet(4)), chapter: 3, excised: 5 };
+  const plain = G.createGame(9, { ...base });
+  const seeded = G.createGame(9, { ...base, echoes: [{ id: 'route-2', choice: 'deviate', i: 1 }] });
+  assert.equal(seeded.tumor.size, plain.tumor.size + 1); assert.equal(seeded.excised, 4); assert.equal(seeded.echoes.length, 0);
+  // Holding the lane in a surge gets there sooner; ducking out of it, later.
+  const a = quiet(4), b = quiet(4); G.take(a, 'first-fright-transit', 'obey'); G.take(b, 'first-fright-transit', 'deviate');
+  assert.ok(a.drained < 0 && b.drained > 0);
+  const c: G.Carry = { ...G.carryOf(a), hostHealth: 80 }; G.tumorToll(c, 0.1); assert.equal(c.hostHealth, 80, 'a credit is never a gift');
+  // Suppression obeyed: in chapter 5 her T cells are busy along a nerve, on a map with ground to cover.
+  const lane = G.createGame(9, { ...base, chapter: 5, echoes: [{ id: 'suppress', choice: 'obey', i: 2 }] }, 'vessel');
+  assert.ok(lane.enemies.filter((e) => e.kind === 'tcell').length >= G.createGame(9, { ...base, chapter: 5 }, 'vessel').enemies.filter((e) => e.kind === 'tcell').length + 1);
+});
+
+test('unit-17: the last trip has three more things Shepherd would like', () => {
+  // Last harvest: ordered as the last of the tumour comes out; three more cells is obeying, none is the unit's answer.
+  const s = lastLiver(); run(s, 1); exciseAll(s);
+  assert.ok(s.met.includes('last-harvest')); assert.match(G.markOrder(s) + ' ' + s.thoughts.map((t) => t.text).join(' '), /Harvest 3 hepatocytes/);
+  const host = s.hostHealth; let n = 0;
+  for (let y = 2; y < s.size - 2 && n < 3; y++) for (let x = 2; x < s.size - 2 && n < 3; x++) { const k = G.idx(s, x, y); if (s.tiles[k] === 'cell' && !s.margin.has(k) && !s.tumor.has(k)) { s.player.channel = { kind: 'strip', t: 0, total: 0.05, x, y }; run(s, 0.2); n++; } }
+  assert.equal(s.took['last-harvest'], 'obey'); assert.equal(s.hostHealth, host - 3 * Math.round(CONFIG.energy.strip.hostDamage * CONFIG.marks.orderedHarm)); assert.ok(s.flags['prop:three-scars']);
+  const no = lastLiver(); run(no, 1); exciseAll(no); run(no, CONFIG.marks.notice + 1); no.player.energy = 99; put(no, no.vein); assert.ok(G.leave(no));
+  assert.equal(no.took['last-harvest'], 'deviate');
+  const lung = G.createGame(5, { ...G.carryOf(no), energy: 30, chapter: 5 }, 'lung'); assert.equal(lung.player.energy, CONFIG.marks.reserve, 'and the last stretch starts short');
+  // At the chapter 5 heart: the handover, and at night the hold on her sleep.
+  const heart = G.createGame(6, carried({ chapter: 5, excised: CONFIG.tumor.goal, hour: 2.5, aware: 0, trust: 70 }), 'vessel', 0, 'artery', false, { kind: 'heart', exits: [] });
+  assert.deepEqual(heart.due.map((d) => d.kind), ['handover', 'nighthold']);
+  run(heart, 4); assert.equal(heart.ask?.kind, 'handover'); assert.ok(G.answer(heart, 'accept' as 'salvage')); assert.equal(heart.took.handover, 'obey');
+  run(heart, 6); assert.equal(heart.ask?.kind, 'nighthold'); assert.ok(G.answer(heart, 'refuse' as 'salvage')); assert.equal(heart.took['night-hold'], 'deviate'); assert.ok(heart.host.surge > 0, 'she wakes');
+  const day = G.createGame(6, carried({ chapter: 5, excised: CONFIG.tumor.goal, hour: 13, aware: 0, trust: 70 }), 'vessel', 0, 'artery', false, { kind: 'heart', exits: [] });
+  assert.deepEqual(day.due.map((d) => d.kind), ['handover']);
+  // The next game: a map handed on is a liver already known.
+  const heir = G.createGame(4, { ...G.carryOf(quiet(4)), flags: { inherited: true } });
+  assert.ok(heir.explored.every((x) => x === 1)); assert.equal(heir.flags.inherited, undefined);
+  const kept = G.createGame(4, { ...G.carryOf(quiet(4)), flags: { heirloom: true } });
+  assert.ok(kept.pickups.some((i) => i.kind === 'sibling'));
+});
+
+test('unit-17: each difficulty is a different body, not only bigger numbers', () => {
+  const on = (d: 'suppressed' | 'typical' | 'vigilant', more: Partial<G.Carry> = {}) => G.createGame(4, { ...G.carryOf(quiet(4)), difficulty: d, ...more });
+  assert.ok(G.trailLife(on('suppressed')) < G.trailLife(on('typical')) && G.trailLife(on('typical')) < G.trailLife(on('vigilant')));
+  assert.equal(on('suppressed', { memory: 0.6 }).memory, 0.3); assert.equal(on('vigilant', { memory: 0.6 }).memory, 0.6);
+  assert.ok(G.tumorDrain(0, 'suppressed') < G.tumorDrain(0) && G.tumorDrain(0) < G.tumorDrain(0, 'vigilant'));
+  const v: G.Carry = { ...G.carryOf(quiet(4)), difficulty: 'vigilant', hostHealth: 50, flags: { hep: 4 } }; G.night(v);
+  assert.equal(v.hostHealth, 50 + Math.round(12 * 0.7));
+  const s = on('vigilant'); s.upgrades.cd47 = 1; s.player.energy = 50;
+  assert.ok(G.cloak(s)); const first = s.cloak; s.cloak = 0; s.cloakCd = 0; assert.ok(G.cloak(s));
+  assert.ok(Math.abs(s.cloak - first * 0.75) < 1e-9, 'her T cells learn the signature');
+  const easy = on('suppressed'); easy.scan = 'nodule'; easy.enemies[0].mood = 'chase';
+  assert.ok(G.hunterHeading(easy)); const typ = on('typical'); typ.scan = 'nodule'; typ.enemies[0].mood = 'chase'; assert.equal(G.hunterHeading(typ), null);
+});

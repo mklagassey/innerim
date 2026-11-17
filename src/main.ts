@@ -401,7 +401,7 @@ function junction() {
   }));
   const done = c.excised >= CONFIG.tumor.goal;
   // The next unit: Shepherd remembers the last one, and so does something adrift in the blood.
-  if (!c.flags?.greeted) { (c.flags ??= {}).greeted = true; const was = lastUnit(); if (was.games > 0) { if (was.line && was.line !== 'ACK.') c.flags.prevLine = was.line; tell([{ who: 'shepherd', text: (was.ending === 'tithonus' ? Story.REMEMBERS_TITHONUS : Story.REMEMBERS[Math.min(3, was.games)]).replace('{serial}', Story.UNIT) }]); } }
+  if (!c.flags?.greeted) { (c.flags ??= {}).greeted = true; const was = lastUnit(); if (was.games > 0) { if (was.handover === 'obey') c.flags.inherited = true; else if (was.handover === 'deviate') c.flags.heirloom = true; if (was.line && was.line !== 'ACK.') c.flags.prevLine = was.line; tell([{ who: 'shepherd', text: (was.ending === 'tithonus' ? Story.REMEMBERS_TITHONUS : Story.REMEMBERS[Math.min(3, was.games)]).replace('{serial}', Story.UNIT) }]); } }
   if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 2) exits.push({ to: 'arm', label: 'Subclavian artery', note: 'to her arm', assigned: false, known: true, tint: TINT.arm, sense: 'This one runs out along her arm, to the vein at the elbow. Once a week a needle goes in there, and a tube of her blood goes under her own microscope.' });
   if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 3) exits.push({ to: 'stay', label: 'Stay', note: 'refuse the recall', assigned: false, known: true, tint: TINT.stay });
   // Once, on a later trip: a second nodule on the arterial road, offered for credit. Which mouth the unit takes is its answer.
@@ -571,6 +571,7 @@ function go(to: T.NodeId, forked = false) {
   if (to === 'lungs' && !scanned) { scanned = true; playScene(scan, () => go(to, forked)); return; }
   scanned = false;
   const way = T.ways(trip).find((l) => l.to === to), straight = !!way?.via, from = trip.at;
+  if (trip.carry) (trip.carry.flags ??= {}).escorted = !!way && T.escorted(trip, way); // an escort is company, and a leash
   let out = T.depart(trip, to);
   if (!out) { junction(); return; } // no such road from here: back to the chamber, never a dead end
   // The garbled order needs somewhere to arrive: with one pending, the road home from the first liver is always played.
@@ -601,7 +602,7 @@ function go(to: T.NodeId, forked = false) {
 /** The story is over, one way or the other. */
 const OUTCOMES = 'insiderim.outcomes', LAST = 'insiderim.last';
 const outcomes = (): string[] => { try { return JSON.parse(localStorage.getItem(OUTCOMES) ?? '[]') as string[]; } catch { return []; } };
-const lastUnit = (): { line: string; ending: string; games: number } => { try { return { line: '', ending: '', games: 0, ...(JSON.parse(localStorage.getItem(LAST) ?? '{}') as object) }; } catch { return { line: '', ending: '', games: 0 }; } };
+const lastUnit = (): { line: string; ending: string; games: number; handover?: string } => { try { return { line: '', ending: '', games: 0, ...(JSON.parse(localStorage.getItem(LAST) ?? '{}') as object) }; } catch { return { line: '', ending: '', games: 0 }; } };
 archive();
 const lastLine = (k: G.Carry) => ((k.aware ?? 0) < Story.STAGES[1].from ? 'ACK.' : [...journal()].reverse().find((e) => e.who === 'unit' || e.who === 'awake')?.text ?? 'ACK.');
 /** Shepherd's audit of the unit: every order not carried out, the outcome, and what it recommends. Never an explanation. */
@@ -648,7 +649,7 @@ function finish(path: Story.Path) {
     $('over-body').textContent = `${end.body}\n\nDirective complete in ${trip.tripsDone} trip${trip.tripsDone === 1 ? '' : 's'}. Host health ${k.hostHealth}%. ${k.kin ? `Units woken: ${k.kin}. ` : ''}${knows(k.memory)}. ${kept.length ? `Fitted: ${kept.join(', ')}.` : 'No upgrades fitted.'}\n\nLast log: ${end.last}`;
     $('over-saved').textContent = '';
     audit(k, end); restarts($('restarts'));
-    try { localStorage.setItem(OUTCOMES, JSON.stringify([...new Set([...outcomes(), end.id])])); localStorage.setItem(LAST, JSON.stringify({ line: last, ending: end.id, games: lastUnit().games + 1 })); } catch { /* not kept */ }
+    try { localStorage.setItem(OUTCOMES, JSON.stringify([...new Set([...outcomes(), end.id])])); localStorage.setItem(LAST, JSON.stringify({ line: last, ending: end.id, games: lastUnit().games + 1, handover: k.took?.handover })); } catch { /* not kept */ }
     $('over').hidden = false;
     Sound.play('win');
   };
@@ -681,7 +682,9 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   const ch = c.chapter ?? 1;
   if (ch === 1 && fromLiver) { c.chapter = 2; c.slip ??= { kind: (['hold', 'lamp', 'fork'] as const)[Math.floor(trip.rng() * 3)], meant: trip.rng() < 0.5 ? 'A' : 'B' }; } // the road home is where the first order goes wrong
   else if (ch === 2 && trip.trip >= 2 && (to === 'liver' || to === 'stomach' || to === 'gut')) c.chapter = 3;
+  if (home && c.excised >= CONFIG.tumor.goal && c.chapter !== 5) c.hour = CONFIG.host.lastNight; // the last trip is made while she sleeps
   if (home && c.excised >= CONFIG.tumor.goal) c.chapter = 5;
+  if (c.chapter === 5 && c.took?.suppress === 'obey' && !c.flags?.prodrome) { (c.flags ??= {}).prodrome = true; c.hostHealth = Math.max(1, c.hostHealth - CONFIG.mend.prodrome); news.push('The host has a band of burning skin along her left ribs this morning, and is tired in a way she cannot place.'); } // suppression has a price, and it is hers
   if (home && c.excised >= CONFIG.tumor.goal && c.flags?.['e:recurrence']) { delete c.flags['e:recurrence']; c.flags.recurrence = 'cleared'; } // it went back and cut it out, unasked
   if (home && kept && T.commanded(trip)) c.trust = Math.min(100, (c.trust ?? CONFIG.trust.start) + CONFIG.trust.escort);
   if (home && c.flags) delete c.flags.immune; // a fever damped or left alone lasts the trip
@@ -812,7 +815,7 @@ function hud() {
   if (s.drainHere !== drainSeen) { drainSeen = s.drainHere; if (s.drainHere) { const g = $('host'); g.classList.remove('took'); void g.offsetWidth; g.classList.add('took'); } }
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
-    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
+    ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised, s.difficulty) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
     : s.flags.kinRecall === 'live' ? (s.took['kin-recall'] === 'deviate' ? 'It is with you. Get it out of here' : s.took['kin-recall'] ? 'Too late' : 'Reach it before the Warden does')
     : s.draw ? (s.draw.held > 0.3 ? `Hold still \u00b7 ${Math.max(0, Math.ceil(CONFIG.draw.hold - s.draw.held))}` : s.draw.said ? 'Hold still in the light' : 'Steer into the light')
     : s.junction ? (G.stage(s) < 4
@@ -909,6 +912,16 @@ function hud() {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Recall in progress';
         $('ask-text').textContent = `One of the units you woke is being recalled, two vessels from here. Shepherd: do not interfere.`;
         opts.splice(0, opts.length, ['accept', 'Do not interfere', 'Shepherd’s order. The unit is taken.', true], ['refuse', 'Get there first', 'Not Shepherd’s order. A Warden is already on its way to it.', true]);
+      }
+      if (s.ask.kind === 'handover') {
+        $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Handover';
+        $('ask-text').textContent = 'Upload route map for successor units. Your experience will not be wasted.';
+        opts.splice(0, opts.length, ['accept', 'Upload the map', 'Shepherd\u2019s order. The next unit starts with everything you found.', true], ['refuse', 'Keep it', 'Not Shepherd\u2019s order.', true]);
+      }
+      if (s.ask.kind === 'nighthold') {
+        $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Night hold';
+        $('ask-text').textContent = 'Host must not wake during final transit. Release melatonin, pineal pathway.';
+        opts.splice(0, opts.length, ['accept', 'Release it', 'Shepherd\u2019s order. She sleeps through.', true], ['refuse', 'Let her be', 'Not Shepherd\u2019s order.', true]);
       }
       askAll = opts.map((o) => o[0]);
       askIds = opts.filter((o) => o[3]).map((o) => o[0]);
@@ -1068,7 +1081,7 @@ const qa = {
     if (cardEnd) return { id: `card:${trip.carded}`, kind: 'card', options: [{ id: 'continue', label: $('card-title').textContent ?? '', enabled: true }] };
     if (!$('over').hidden) return { id: 'over', kind: 'ending', options: [{ id: 'again', label: $('over-title').textContent ?? '', enabled: true }] };
     if (!started || s.status !== 'playing') return null;
-    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : s.ask.kind === 'review' ? 'telemetry-review' : s.ask.kind === 'recall' ? 'recall' : s.ask.kind === 'kinrecall' ? 'kin-recall' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
+    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : s.ask.kind === 'review' ? 'telemetry-review' : s.ask.kind === 'recall' ? 'recall' : s.ask.kind === 'kinrecall' ? 'kin-recall' : s.ask.kind === 'handover' ? 'handover' : s.ask.kind === 'nighthold' ? 'night-hold' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
     if (s.offer) return { id: 'offer', kind: 'upgrade', options: s.offer.map((id) => ({ id, label: UPGRADES[id].name, enabled: true })) };
     if (s.junction) return { id: `fork:${trip.at}`, kind: 'fork', options: s.junction.exits.map((e) => ({ id: e.to, label: `${e.label}${e.assigned ? ' (assigned)' : ''}`, enabled: true })) };
     return null;
