@@ -1548,3 +1548,64 @@ test('the bystander: draw the neutrophils off and it lives; hold your lane and i
   for (let t = 0; t < CONFIG.marks.bystander.time + 1 && !b.took.bystander; t += 1 / 60) { b.player.x = at.x; b.player.y = at.y; b.cloak = 999; b.player.hp = 60; G.update(b, 1 / 60); }
   assert.equal(b.took.bystander, 'obey'); assert.ok(!b.pickups.includes(u2));
 });
+
+// ---------- unit-14: chapter 4 and the endings ----------
+import * as Story14 from '../src/story';
+const lastLiver = () => { const s = G.createGame(4, carried({ chapter: 4, excised: CONFIG.tumor.goal - 2, aware: 20 })); s.enemies = s.enemies.filter((e) => e.kind !== 'warden'); s.host.nextSurge = 999; return s; };
+const exciseAll = (s: G.State) => { for (const k of [...s.tumor]) { s.player.channel = { kind: 'strip', t: 0, total: 0.05, x: k % s.size, y: Math.floor(k / s.size) }; run(s, 0.2); } };
+test('chapter 4: suppression stands her immune cells down, and cutting without it brings macrophages', () => {
+  const s = lastLiver(), m = s.marks.find((k) => k.id === 'suppress')!;
+  assert.ok(m, 'the last liver carries the suppression order'); assert.equal(s.tumor.size, 2);
+  run(s, 9); assert.ok(m.met);
+  s.player.x = m.at.x; s.player.y = m.at.y; s.player.path = []; run(s, CONFIG.marks.hold + 0.3);
+  assert.equal(s.took.suppress, 'obey'); assert.ok(s.stood); assert.ok(s.flags['prop:shingles']);
+  const before = s.alert; exciseAll(s); assert.equal(s.alert, before, 'nothing answers the excision');
+  const no = lastLiver(); run(no, 9); const cells = no.enemies.filter((e) => e.kind === 'kupffer').length;
+  exciseAll(no);
+  assert.equal(no.took.suppress, 'deviate'); assert.equal(no.enemies.filter((e) => e.kind === 'kupffer').length, cells + 2);
+});
+test('chapter 4: margins and the docking beacon are settled by what was done before leaving', () => {
+  const s = lastLiver(); run(s, 1);
+  assert.ok(s.met.includes('tumour-order')); assert.ok(s.margin.size >= CONFIG.marks.margins);
+  exciseAll(s);
+  assert.equal(s.excised, CONFIG.tumor.goal);
+  const b = s.marks.find((k) => k.id === 'beacon')!; assert.ok(b, 'with the nodule out, Shepherd hands over the beacon');
+  for (const k of [...s.margin].slice(0, CONFIG.marks.margins)) { s.player.channel = { kind: 'strip', t: 0, total: 0.05, x: k % s.size, y: Math.floor(k / s.size) }; run(s, 0.2); }
+  assert.equal(s.marginTaken, CONFIG.marks.margins);
+  s.enemies = []; run(s, 7); assert.ok(b.met); assert.ok(!s.took.beacon, 'not planted by standing beside it'); s.player.x = b.at.x; s.player.y = b.at.y; s.player.path = []; const e0 = s.player.energy; run(s, CONFIG.marks.hold + 0.3);
+  assert.equal(s.took.beacon, 'obey'); assert.ok(s.player.energy > e0 + 5, 'the supply for planting it'); assert.ok(s.pages.includes('p34'));
+  s.player.energy = 99; put(s, s.vein); assert.ok(G.leave(s));
+  assert.equal(s.took['tumour-order'], 'obey');
+  const no = lastLiver(); run(no, 1); exciseAll(no); no.enemies = []; no.player.energy = 99; run(no, 7); put(no, no.vein); assert.ok(G.leave(no));
+  assert.equal(no.took['tumour-order'], 'deviate'); assert.equal(no.took.beacon, 'deviate');
+});
+test('at the heart: the review wipes a unit that accepts it, and the recall ends one that holds still', () => {
+  const heart = (extra: Partial<G.Carry>) => G.createGame(3, carried({ chapter: 3, ...extra }), 'vessel', 0, 'artery', false, plan(3));
+  const s = heart({ aware: 45, kin: 1 });
+  assert.deepEqual(s.due.map((d) => d.kind), ['review']);
+  run(s, 3.2); assert.equal(s.ask?.kind, 'review');
+  assert.ok(G.answer(s, 'accept'));
+  assert.equal(s.aware, 0); assert.ok(s.flags.repaired); assert.equal(s.trust, CONFIG.trust.start + 20);
+  const no = heart({ aware: 45 }); run(no, 3.2); assert.ok(G.answer(no, 'refuse'));
+  assert.equal(no.trust, CONFIG.trust.start - 25); assert.ok(no.aware > 45);
+  assert.equal(heart({ aware: 10 }).due.length, 0, 'never offered to a unit that has not woken that far');
+  const r = heart({ trust: 10, aware: 45 }); assert.equal(r.due[0].kind, 'recall');
+  r.player.x = r.junction!.exits[0].at.x + 0.5; r.player.y = r.junction!.exits[0].at.y + 0.5; run(r, 1);
+  assert.equal(r.status, 'playing', 'no road out while Shepherd is waiting on an answer');
+  run(r, 3); assert.equal(r.ask?.kind, 'recall'); assert.ok(G.answer(r, 'accept'));
+  assert.equal(r.flags.ending, 'recalled'); assert.equal(r.status, 'won');
+  const run2 = heart({ trust: 10, aware: 45 }); run(run2, 3.2); G.answer(run2, 'refuse'); assert.equal(run2.flags.hunted, true);
+  assert.equal(G.createGame(5, G.carryOf(run2), 'vessel', 1).enemies.filter((e) => e.kind === 'warden').length, 3);
+});
+test('endings are checked in the design order, and every one of the thirteen can be reached', () => {
+  const base: Story14.Facts = { path: 'dispose', aware: 0, kin: 0, hostHealth: 80, hostLowest: 70, repaired: false, beacon: false, dry: false, leversForMe: 0, recurred: false, response: 0, lastLine: 'I was here.' };
+  const id = (f: Partial<Story14.Facts>) => Story14.conclude({ ...base, ...f }).id, got = new Set<string>();
+  const want: [Partial<Story14.Facts>, string][] = [
+    [{ hostHealth: 0, path: 'stay' }, 'host-dead'], [{ path: 'recalled' }, 'recalled'], [{ repaired: true, aware: 12 }, 'repaired'], [{ aware: 29 }, 'decommissioned'], [{ repaired: true, aware: 40 }, 'breathed'],
+    [{ aware: 80, kin: 2 }, 'company'], [{ path: 'stay', aware: 80, beacon: true, dry: true, leversForMe: 1, kin: 3 }, 'tithonus'], [{ path: 'stay', aware: 80, kin: 2 }, 'colony'], [{ path: 'stay', aware: 80, kin: 1 }, 'resident'],
+    [{ path: 'stay', aware: 80, recurred: true }, 'recurrence'], [{ path: 'draw', kin: 2, response: 55 }, 'slide'], [{ path: 'draw', kin: 2, response: 55, hostLowest: 40 }, 'stranger'], [{ path: 'draw', kin: 1, response: 90 }, 'artifact'], [{ path: 'draw', kin: 3, response: 10 }, 'artifact'],
+  ];
+  for (const [f, out] of want) { assert.equal(id(f), out, JSON.stringify(f)); got.add(out); }
+  assert.equal(got.size, Story14.OUTCOMES.length);
+  assert.equal(Story14.conclude({ ...base, aware: 10 }).last, 'ACK.'); assert.equal(Story14.conclude({ ...base, aware: 80 }).last, 'I was here.');
+});
