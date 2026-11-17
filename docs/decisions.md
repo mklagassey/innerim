@@ -472,3 +472,11 @@ QA bot: the all-obey policy should accept the telemetry review.
 2. **Kupffer-spare.** No trust change, as well as no awareness.
 
 The Recurrence soft-lock is fixed.
+
+**QA on Version 73.**
+- **All-obey runs:** no deaths. Lowest host health had a median of 44, and the final value a median of 58. Awareness had a median of 22, and every run stayed under 30. Accepted.
+- **Recurrence:** reachable, with no soft-lock.
+- **Two order-timing fixes requested:**
+  1. Suppress is now issued on first approach to the nodule (within 6 tiles) in chapter 4. If the tumour is already gone before the order is issued, nothing is recorded.
+  2. Margins is issued when the ring is set. Leaving within 5 s of the order appearing counts as lapsed.
+- **Host target:** judged on medians. Outlier seeds below target are accepted.
