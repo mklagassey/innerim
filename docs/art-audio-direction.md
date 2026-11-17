@@ -1,4 +1,6 @@
-# Insiderim: art and audio direction
+# Host: art and audio direction
+
+(Working title changed from Insiderim to **Host** on 2026-11-17.)
 
 The look and sound of the game, for anyone (human or Claude) adding to it. The world bible
 (`/mnt/project-files/creative/world-bible.md`, section 3) sets the tone; this file turns it into
@@ -35,6 +37,24 @@ Four words to test every change against: **dark, wet, warm-lit, moving.**
 6. **Readable first.** At 1x zoom on a phone, the player must find their ship, every threat and
    the exit in under a second. Atmosphere layers sit *under* readability: if a mote or haze
    hides a neutrophil, the mote loses.
+
+## 2a. Realism rule (Mick, 2026-11-17)
+
+Keep it as close to scientific fact as a game allows. Bend physics or biology only where a good
+story, time or scale would otherwise be unworkable, the way *The Martian* bends its windstorm or
+*The Expanse* its drives. We are not making a simulator, but it should be close.
+
+- **Nothing biological is a character.** No faces, eyes, expressions or creature-like body
+  language on cells, the tumour, bacteria or viruses. A tumour is frightening because it is
+  real, not because it is evil.
+- **Draw things as they really look and behave.** Shapes, sizes, colours (stain logic) and
+  motion should come from micrographs and physiology. Immune cells crawl and extend
+  pseudopods; they do not lunge, snarl or pounce.
+- **The only bends allowed are for readability.** Exaggerated contrast, a colour key per place,
+  a soft glow on something the player must find, or slightly larger scale on a tiny thing.
+  Write a one-line comment in the code naming the bend.
+- The machine side (the unit, wardens, Shepherd's UI) can carry personality. The biology
+  cannot.
 
 ## 3. Motion and flashing safety (hard rules)
 
@@ -162,7 +182,7 @@ little muffled. High frequencies are rare and therefore special: they belong to 
 
 ## 8. Checklist for anything new
 
-- [ ] Reads as a real biological thing (with one liberty), not a cartoon. No faces.
+- [ ] Reads as a real biological thing (with one liberty), not a cartoon. No faces, no creature-like behaviour (section 2a).
 - [ ] Fits the place key colour, or is the machine's cyan/amber on purpose.
 - [ ] Fades in and out; no pops; obeys the flashing rules in section 3.
 - [ ] Moves a little, slowly, unless reduced motion is on.
