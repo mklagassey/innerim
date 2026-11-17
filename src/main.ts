@@ -916,13 +916,13 @@ function hud() {
       }
       if (s.ask.kind === 'handover') {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Handover';
-        $('ask-text').textContent = 'Upload route map for successor units. Your experience will not be wasted.';
-        opts.splice(0, opts.length, ['accept', 'Upload the map', 'Shepherd\u2019s order. The next unit starts with everything you found.', true], ['refuse', 'Keep it', 'Not Shepherd\u2019s order.', true]);
+        $('ask-text').textContent = 'Upload route map for successor units. Your experience will help the next unit.';
+        opts.splice(0, opts.length, ['accept', 'Upload the map', 'Shepherd\u2019s order. The next unit starts with everything you found.', true], ['refuse', 'Keep it', 'Not Shepherd\u2019s order. The next unit finds its own way.', true]);
       }
       if (s.ask.kind === 'nighthold') {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Night hold';
-        $('ask-text').textContent = 'Host must not wake during final transit. Release melatonin, pineal pathway.';
-        opts.splice(0, opts.length, ['accept', 'Release it', 'Shepherd\u2019s order. She sleeps through.', true], ['refuse', 'Let her be', 'Not Shepherd\u2019s order.', true]);
+        $('ask-text').textContent = 'Final transit tonight. The host should sleep through it. Signal the pineal gland: release melatonin.';
+        opts.splice(0, opts.length, ['accept', 'Release it', 'Shepherd\u2019s order. She sleeps through.', true], ['refuse', 'Leave her night alone', 'Not Shepherd\u2019s order. She may wake.', true]);
       }
       askAll = opts.map((o) => o[0]);
       askIds = opts.filter((o) => o[3]).map((o) => o[0]);
