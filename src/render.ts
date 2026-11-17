@@ -5,7 +5,7 @@
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
 import { atmosphere } from './atmosphere';
-import { Enemy, Point, State, tutorialTarget, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, tutorialTarget, markTarget, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -794,7 +794,7 @@ export function draw(ctx: Ctx, s: State, v: View) {
     ctx.restore();
   }
   // Shepherd's pointer in its first liver: a steady amber ring on the thing it wants, and a small chevron beside the ship toward it. Both breathe slowly; neither blinks.
-  const want = tutorialTarget(s);
+  const want = tutorialTarget(s) ?? markTarget(s);
   if (want) {
     const q = project(want.x, want.y), h = project(p.x, p.y), dx = q.x - h.x, dy = q.y - h.y, far = Math.hypot(dx, dy), ease = v.still ? 0.8 : 0.7 + 0.3 * Math.sin(v.time * 1.6);
     ctx.save();

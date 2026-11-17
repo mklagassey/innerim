@@ -10,6 +10,7 @@ import * as Story from './story';
 import * as Scenes from './scenes';
 import * as Art from './scene-art';
 import { travel, Way } from './transit';
+import { DECISIONS, KIN_PINGS } from './decisions';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
@@ -328,7 +329,11 @@ function junction() {
   }));
   const done = c.excised >= CONFIG.tumor.goal;
   if (kind === 'heart' && done && Story.stageOf(c.aware ?? 0) >= 3) exits.push({ to: 'stay', label: 'Stay', note: 'refuse the recall', assigned: false, known: true, tint: TINT.stay });
-  if (split) tell([{ who: 'shepherd', text: trip.offRoute ? Story.STANDING.lane.defied[0] : trip.trip === 1 ? 'Suggested route displayed. Escort provided.' : Story.STANDING.lane.arrival }]);
+  // Once, on a later trip: a second nodule on the arterial road, offered for credit. Which mouth the unit takes is its answer.
+  if (kind === 'heart' && !forking && split && (c.chapter ?? 1) >= 2 && trip.trip >= 2 && !c.took?.['route-2'] && !c.flags?.route2 && c.excised < CONFIG.tumor.goal - 2 && ways.some((l) => l.to === 'hepatic') && Story.stageOf(c.aware ?? 0) < 4) {
+    (c.flags ??= {}).route2 = 'live'; (c.met ??= []).push('route-2');
+    tell([{ who: 'shepherd', text: DECISIONS['route-2'].order! }]);
+  } else if (split) tell([{ who: 'shepherd', text: trip.offRoute ? Story.STANDING.lane.defied[0] : trip.trip === 1 ? 'Suggested route displayed. Escort provided.' : Story.STANDING.lane.arrival }]);
   enter(G.createGame(Date.now(), c, 'vessel', 0, kind === 'heart' ? 'artery' : 'vein', false, { kind, exits }), kind === 'heart' ? 'Heart · cell tier' : 'Gut lumen · cell tier', kind === 'heart' ? 'vein' : 'artery', T.NODES[trip.at].name);
 }
 
@@ -414,27 +419,30 @@ function lever(c: G.Carry) {
   said = Story.LINES.lever[Story.stageOf(c.aware ?? 0)];
   if (forHer && !trip.defied.includes('levers') && T.commanded(trip)) { trip.defied.push('levers'); ruled = G.defyCarry(c, 'levers', CONFIG.story.orders.some); }
 }
-let ruled: G.Ruling[] = [];
+let ruled: G.Ruling[] = [], forHer = false;
 /** What you carry before you have played a single map. */
 const freshCarry = (): G.Carry => ({ difficulty, hp: CONFIG.player.maxHp, energy: DIFFICULTY[difficulty].energy, upgrades: Object.fromEntries(Object.keys(UPGRADES).map((k) => [k, 0])) as Record<UpgradeId, number>, patches: 1, hostHealth: CONFIG.host.maxHealth, hour: CONFIG.host.startHour, memory: 0, excised: 0, nap: 0, snack: -1, aware: 0, kin: 0 }); // every unit starts unwoken: what the last one became is a line of text, never awareness
 const ECHO = 'insiderim.echo';
 function echo(): number { try { return Math.min(40, Number(localStorage.getItem(ECHO)) || 0); } catch { return 0; } }
 function keepEcho(aware: number) { try { localStorage.setItem(ECHO, String(Math.max(echo(), Math.round(aware * CONFIG.story.echo)))); localStorage.setItem(ECHO + '.played', '1'); } catch { /* not kept */ } }
 function played(): boolean { try { return !!localStorage.getItem(ECHO + '.played') || !!localStorage.getItem(ECHO); } catch { return false; } }
-const hullMax = (c: G.Carry) => CONFIG.player.maxHp + (c.upgrades.glycocalyx ?? 0) * UPGRADES.glycocalyx.per;
+const hullMax = (c: G.Carry) => CONFIG.player.maxHp + (c.upgrades.glycocalyx ?? 0) * UPGRADES.glycocalyx.per - (Number(c.flags?.scar) || 0);
 function market(open: boolean) {
   const box = $('world-market');
   box.hidden = !open;
   if (!open) return;
   const c = (trade ??= G.carryOf(s)), m = CONFIG.market;
-  const offer = (title: string, cost: number, what: string, can: boolean, buy: () => void) => {
+  const cheap = !!c.flags?.discount, later = (c.chapter ?? 1) >= 2; // the flora remember a unit that brought their own back
+  const offer = (title: string, full: number, what: string, can: boolean, buy: () => void, after?: () => void) => {
+    const cost = cheap ? Math.ceil(full * 0.8) : full;
     const b = document.createElement('button');
     b.type = 'button'; b.disabled = !can || c.energy < cost;
     const add = (tag: string, text: string) => b.appendChild(Object.assign(document.createElement(tag), { textContent: text }));
-    add('small', `Release ${cost} glucose`); add('strong', title); add('span', what);
+    add('small', cost ? `Release ${cost} glucose` : 'Costs nothing'); add('strong', title); add('span', what);
     b.addEventListener('click', () => {
       c.energy -= cost; buy(); Sound.play('pickup');
       G.adopt(s, c); // the trade is real at once: the map under this screen is the one you are in
+      after?.(); trade = null; // a decision is recorded on the map itself, so what you carry is read back from it
       const line = said, verdict = ruled; said = ''; ruled = [];
       const at = s.time + 0.4;
       if (line) s.thoughts.push({ text: line, who: 'unit', st: G.stage(s), t: at });
@@ -446,10 +454,11 @@ function market(open: boolean) {
   box.replaceChildren(
     offer('Biofilm patch', m.repair.cost, `Gut bacteria secrete a tough film on any surface they are fed on. Let one grow over the breaches and harden it: +${m.repair.hull} hull.`, c.hp < hullMax(c), () => { c.hp = Math.min(hullMax(c), c.hp + m.repair.hull); }),
     offer('Vitamin K2', m.patch.cost, 'Gut bacteria make it, and clotting cannot happen without it. Enough to build one fibrin patch for the road.', c.patches < CONFIG.items.maxPatches, () => { c.patches++; }),
-    offer('Butyrate', m.butyrate.cost, 'A fatty acid gut bacteria make from fibre. It pushes the immune system toward tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }),
+    offer('Butyrate', m.butyrate.cost, 'A fatty acid gut bacteria make from fibre. It pushes the immune system toward tolerance: the host forgets some of what it learned about you.', c.memory > 0.02, () => { c.memory = Math.max(0, c.memory - m.butyrate.forget); }, () => { if (later) G.take(s, 'gut-butyrate', 'deviate'); }),
+    ...((c.flora ?? 0) > 0 ? [offer('Put the hitchhikers back', 0, 'The bacteria on the hull came from here. Let them go where they belong, unspent.', true, () => { c.flora = 0; }, () => G.take(s, 'hitchhikers', 'deviate'))] : []),
     offer('Hitchhikers', CONFIG.flora.cost, `Bacteria stick to any surface, the hull included. Let ${CONFIG.flora.aboard} attach. When an immune cell finds you and the cloak cannot answer, the ship sheds one, and every phagocyte nearby goes for it instead of you. Each one loose costs the host ${CONFIG.flora.hostDamage}% health. Stomach acid kills them.`, (c.flora ?? 0) + CONFIG.flora.aboard <= CONFIG.flora.most, () => { c.flora = (c.flora ?? 0) + CONFIG.flora.aboard; }),
-    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and she mends.`, c.nap <= 0, () => { lever(c); c.nap = CONFIG.levers.serotonin.hours; }),
-    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone, made in the stomach wall. Signal the stomach to release it and the host is in the fridge before she knows why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { lever(c); c.snack = c.hour; }),
+    offer('Serotonin', CONFIG.levers.serotonin.cost, `Nine tenths of the body's serotonin is made down here. Send a pulse of it up the vagus nerve and the host dozes off for ${CONFIG.levers.serotonin.hours} hours: slow blood, sharp noses, and she mends.`, c.nap <= 0, () => { forHer = c.hostHealth < CONFIG.story.orders.levers; lever(c); c.nap = CONFIG.levers.serotonin.hours; }, () => { said = ''; G.take(s, 'lever-nap', forHer ? 'deviate' : 'self', { mute: true }); }),
+    offer('Ghrelin', CONFIG.levers.ghrelin.cost, 'The hunger hormone, made in the stomach wall. Signal the stomach to release it and the host is in the fridge before she knows why: a meal right now, with all the sugar and stomach acid that brings.', G.digesting(c.hour, c.snack) < 0.5, () => { lever(c); c.snack = c.hour; }, () => { said = ''; G.take(s, 'lever-hunger', 'deviate', { mute: ruled.length > 0 }); }),
     ...(Story.stageOf(c.aware ?? 0) >= 4 ? [offer('A gut feeling', CONFIG.story.feeling.cost, `Not a lever. One signal up the vagus nerve with nothing in it except: you are looked after. ${Story.HOST} will not know where it came from. +${CONFIG.story.feeling.heals}% host health.`, c.hostHealth < CONFIG.host.maxHealth, () => { (c.ledger ??= G.newLedger()).feelings++; c.hostHealth = Math.min(CONFIG.host.maxHealth, c.hostHealth + CONFIG.story.feeling.heals); said = `She stopped on the stairs with a hand on her stomach, and smiled at nothing. That was me. That was the first thing I ever said to her.`; })] : []),
     ...stock.map((id) => offer(`Salvage: ${UPGRADES[id].name}${c.upgrades[id] ? ' ' + roman(c.upgrades[id] + 1) : ''}`, m.upgrade.cost, UPGRADES[id].what, (c.upgrades[id] ?? 0) < UPGRADES[id].max, () => {
       c.upgrades[id] = (c.upgrades[id] ?? 0) + 1;
@@ -482,6 +491,7 @@ function go(to: T.NodeId, forked = false) {
   // The garbled order needs somewhere to arrive: with one pending, the road home from the first liver is always played.
   const sl = trip.carry?.slip;
   if (out.kind === 'arrive' && sl && !sl.result && sl.kind !== 'fork' && to === 'heart') out = { kind: 'patrol', size: sl.kind === 'hold' ? 2 : 1 };
+  if (out.kind === 'arrive' && trip.carry?.flags?.nodule2 === 'due' && to !== 'heart') out = { kind: 'patrol', size: 1 }; // the secondary nodule is in the wall of this road
   // The branch taken at the garbled fork has already been ruled on: it is not also a lane deviation.
   if (forked && way && !T.assigned(trip, way)) trip.offRoute = true;
   // Taking a road Shepherd did not assign: the escort goes, and the unit has done something it was not told to.
@@ -517,7 +527,7 @@ function finish(way: 'breath' | 'stay') {
   Sound.play('win');
 }
 
-let askIds: string[] = [], route: string[] = ['heart'];
+let askIds: string[] = [], askAll: string[] = [], route: string[] = ['heart'];
 function answerAsk(i: number) { const id = askIds[i]; if (id) { G.answer(s, id as 'salvage'); keys.clear(); release(); } }
 
 /** Arrives somewhere, settles what the arrival means, and carries on. */
@@ -550,6 +560,7 @@ function land(to: T.NodeId, carry: G.Carry | null, alert: number) {
   else if (ch === 2 && trip.trip >= 2 && (to === 'liver' || to === 'stomach' || to === 'gut')) c.chapter = 3;
   if (home && c.excised >= CONFIG.tumor.goal) c.chapter = 5;
   if (home && kept && T.commanded(trip)) c.trust = Math.min(100, (c.trust ?? CONFIG.trust.start) + CONFIG.trust.escort);
+  if (home && c.flags) delete c.flags.immune; // a fever damped or left alone lasts the trip
   filePages(c);
   if (home && c.excised >= CONFIG.tumor.goal) {
     const st = Story.stageOf(c.aware ?? 0);
@@ -677,7 +688,7 @@ function hud() {
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
     : s.junction ? `${done ? 'The tumor is out. Shepherd orders every unit to the lungs' : `Mission: cut the tumor out of the liver \u00b7 ${s.excised}/${CONFIG.tumor.goal} out`} \u00b7 ${s.junction.kind === 'heart' ? 'steer into a vessel to leave the heart' : 'the portal vein leads on to the liver'}`
     : s.place === 'stomach' ? 'Cross to the gastric vein on the far side' : s.place === 'lung' ? 'Ride the breath out to the far end' : 'Reach the far end of the vessel'}${s.flora ? ` \u00b7 ${s.flora} hitchhiker${s.flora > 1 ? 's' : ''}` : ''}${s.silent ? ' \u00b7 running silent' : ''}${G.inNiche(s) ? ` \u00b7 hidden in the wall${s.nicheTime > CONFIG.niche.holds ? ', fouling' : ` (${Math.ceil(CONFIG.niche.holds - s.nicheTime)} s)`}` : ''}`);
-  const order = G.slipOrder(s) || G.tutorialOrder(s);
+  const order = G.slipOrder(s) || G.tutorialOrder(s) || G.markOrder(s);
   set('link', 'text', started && G.stage(s) < 4 ? `Link ${G.linkQuality(s)}%` : '');
   if ($('order').hidden === !!order) $('order').hidden = !order;
   if (order) set('order', 'text', `Shepherd: ${order}`);
@@ -730,7 +741,7 @@ function hud() {
   const th = [...s.thoughts].reverse().find((x) => x.t <= s.time), dur = th ? 4 + th.text.length * 0.055 : 0, mind = $('mind');
   if (th && s.time < th.t + dur + 1) { if (mind.textContent !== th.text) { mind.textContent = th.who === 'shepherd' ? `Shepherd: ${th.text}` : th.text; mind.dataset.who = th.who; mind.dataset.stage = String(th.st ?? G.stage(s)); } }
   mind.classList.toggle('on', !!th && s.time < th.t + dur && s.status === 'playing');
-  const askKey = s.ask ? `${G.stage(s)}:${!!s.ask.item.lamp}:${!!s.slipLive}` : '';
+  const askKey = s.ask ? `${s.ask.kind}:${G.stage(s)}:${!!s.ask.item.lamp}:${!!s.slipLive}` : '';
   if (askKey !== shownAsk) {
     shownAsk = askKey;
     $('ask').hidden = !s.ask;
@@ -744,6 +755,12 @@ function hud() {
       const opts: [string, string, string, boolean][] = [['salvage', 'Salvage it', garbled ? `+${c.energy} energy, +${c.hull} hull.` : `Shepherd's order. +${c.energy} energy, +${c.hull} hull.`, true]];
       if (st >= 1 || lamp) opts.push(['wake', 'Give it some of your charge', `Nobody ordered this. Costs ${c.wake} energy.${s.player.energy < c.wake ? ' You do not have it.' : ''}`, s.player.energy >= c.wake]);
       opts.push(['leave', 'Leave it whole', garbled ? 'Do not touch it.' : "Not Shepherd's order.", true]);
+      if (s.ask.kind === 'volunteer') {
+        $('ask-kind').textContent = 'Short band'; $('ask-title').textContent = st >= 3 ? 'One of yours, close behind' : 'Woken unit, in range';
+        $('ask-text').textContent = `It has seen what is on you. “${KIN_PINGS.volunteer}” If it does, it will not get clear afterwards.`;
+        opts.splice(0, opts.length, ['accept', 'Let it', 'Everything hunting you turns toward its lamp. The unit is lost.', true], ['refuse', 'Refuse', 'It stays dark and stays with you. Nothing else changes.', true]);
+      }
+      askAll = opts.map((o) => o[0]);
       askIds = opts.filter((o) => o[3]).map((o) => o[0]);
       $('ask-list').replaceChildren(...opts.map(([id, title, what, can], i) => {
         const b = document.createElement('button'); b.type = 'button'; b.disabled = !can;
@@ -763,13 +780,13 @@ function hud() {
     if (s.junction) { // the mouth you steered into is the road you take
       const ex = s.junction.exits[s.junction.chose ?? 0], pending = !!trip.carry?.slip && !trip.carry.slip.result;
       trip.carry = G.carryOf(s);
-      tell(s.rulings); filePages(trip.carry);
+      news.push(...s.notes); tell(s.rulings); filePages(trip.carry);
       const forked = pending && s.slip?.kind === 'fork' && (s.slip.result === 'match' || s.slip.result === 'miss');
       if (ex.to === 'stay') finish('stay'); else go(ex.to as T.NodeId, forked);
       return;
     }
     void Stats.save(s, { trip: trip.trip, toward: dest, route: [...route] });
-    tell(s.rulings);
+    news.push(...s.notes); tell(s.rulings);
     land(dest, G.carryOf(s), s.alert);
     return;
   }
@@ -899,7 +916,7 @@ const qa = {
     if (cardEnd) return { id: `card:${trip.carded}`, kind: 'card', options: [{ id: 'continue', label: $('card-title').textContent ?? '', enabled: true }] };
     if (!$('over').hidden) return { id: 'over', kind: 'ending', options: [{ id: 'again', label: $('over-title').textContent ?? '', enabled: true }] };
     if (!started || s.status !== 'playing') return null;
-    if (s.ask) return { id: 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: ['salvage', 'wake', 'leave'].find((x) => b.textContent?.toLowerCase().includes(x === 'wake' ? 'charge' : x)) ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
+    if (s.ask) return { id: s.ask.kind === 'volunteer' ? 'kin-volunteer' : 'sibling', kind: 'ask', options: [...$('ask-list').querySelectorAll('button')].map((b, i) => ({ id: askAll[i] ?? String(i), label: b.querySelector('strong')?.textContent ?? '', enabled: !b.disabled })) };
     if (s.offer) return { id: 'offer', kind: 'upgrade', options: s.offer.map((id) => ({ id, label: UPGRADES[id].name, enabled: true })) };
     if (s.junction) return { id: `fork:${trip.at}`, kind: 'fork', options: s.junction.exits.map((e) => ({ id: e.to, label: `${e.label}${e.assigned ? ' (assigned)' : ''}`, enabled: true })) };
     return null;
@@ -918,6 +935,10 @@ const qa = {
   /** Sets this game's garbled order, for testing each one. */
   slip(kind: Story.SlipKind, meant: 'A' | 'B' = 'A') { const c = (trip.carry ??= freshCarry()); c.slip = { kind, meant }; if (started && s.status === 'playing') s.slip = { kind, meant }; return true; },
   state: () => ({ chapter: started && s.status === 'playing' ? s.chapter : trip.carry?.chapter ?? 1, trust: started && s.status === 'playing' ? s.trust : trip.carry?.trust ?? CONFIG.trust.start, compliance: G.compliance(started && s.status === 'playing' ? s.ledger : trip.carry?.ledger), slip: started && s.status === 'playing' ? s.slip : trip.carry?.slip ?? null, slipLive: !!s.slipLive, card: cardEnd ? trip.carded : 0, at: trip.at, trip: trip.trip, tripsDone: trip.tripsDone, place: s.junction ? `junction:${s.junction.kind}` : s.place, status: s.status, started, paused, flying: !!flight, scene: !$('scene').hidden, over: !$('over').hidden ? $('over-title').textContent : null, hp: s.player.hp, energy: s.player.energy, host: s.hostHealth, aware: s.aware, excised: s.excised, hour: s.host.hour, event: trip.event, seen: [...trip.seen], offRoute: trip.offRoute, build: Stats.BUILD }),
+  /** Records a decision as taken, as if the unit had just done it. For testing what follows. */
+  take(id: string, choice: string) { if (!started || s.status !== 'playing' || !(id in DECISIONS)) return false; G.take(s, id, choice); return true; },
+  /** What has been decided so far, the facts that follow from it, and what Shepherd has marked on this map. */
+  decisions: () => ({ took: { ...s.took }, met: [...s.met], flags: { ...s.flags }, waiting: s.echoes.map((e) => `${e.id}:${e.choice}`), marks: s.marks.map((k) => ({ id: k.id, kind: k.kind, at: k.at, met: k.met, done: k.done })), order: G.markOrder(s) }),
   /** Keeps the hull and the tanks full. */
   god(on = true) { godMode = on; },
   /** Scenes end the moment they would start. */
