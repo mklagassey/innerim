@@ -772,11 +772,21 @@ function enemy(ctx: Ctx, e: Enemy, v: View) {
   // It has found something and is making sure: a ring closes over it. Get clear before it closes and it loses you.
   const onto = e.mood === 'chase' ? 0 : e.onto ?? 0;
   if (onto > 0.02) {
-    const q = project(e.x, e.y), top = q.y - (e.kind === 'kupffer' ? 44 : 32);
-    ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    ctx.strokeStyle = `rgba(20,10,8,${0.5 * Math.min(1, onto * 4)})`; ctx.beginPath(); ctx.arc(q.x, top, 7, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = `rgba(255,${Math.round(211 - 120 * onto)},90,${Math.min(1, onto * 4)})`;
-    ctx.beginPath(); ctx.arc(q.x, top, 7, -Math.PI / 2, -Math.PI / 2 + onto * Math.PI * 2); ctx.stroke();
+    // Drawn on the floor round the cell, in the iso plane, so it reads as the cell taking hold of
+    // the ground you left rather than a badge floating over it. It fills clockwise and warms from
+    // pale to inflamed red as it closes. No blinking. (Readability bend: real cells give no sign.)
+    const q = project(e.x, e.y), rx = (e.kind === 'kupffer' ? 26 : 18), ry = rx * 0.5, fade = Math.min(1, onto * 4);
+    const ease = onto * onto * (3 - 2 * onto), g = Math.round(220 - 150 * ease), b = Math.round(170 - 120 * ease);
+    ctx.save(); ctx.translate(q.x, q.y + 1); ctx.scale(1, ry / rx); ctx.lineCap = 'round';
+    ctx.lineWidth = 6; ctx.strokeStyle = `rgba(12,4,6,${0.5 * fade})`;
+    ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 3.6; ctx.strokeStyle = `rgba(255,${g},${b},${0.95 * fade})`;
+    ctx.beginPath(); ctx.arc(0, 0, rx, -Math.PI / 2, -Math.PI / 2 + ease * Math.PI * 2); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(0, 0, rx * 0.6, 0, 0, rx * 1.35);
+    glow.addColorStop(0, 'rgba(255,90,60,0)'); glow.addColorStop(0.7, `rgba(255,90,60,${0.18 * ease * fade})`); glow.addColorStop(1, 'rgba(255,90,60,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, rx * 1.35, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
   }
   // A hit used to turn the whole cell white for a few frames. Now it is a warm glow that fades
   // as quickly as it came: the same information, without the strobe (art direction, section 3).
