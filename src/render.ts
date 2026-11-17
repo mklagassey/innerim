@@ -755,7 +755,21 @@ function blob(ctx: Ctx, x: number, y: number, r: number, time: number, seed: num
 }
 
 function enemy(ctx: Ctx, e: Enemy, v: View) {
-  const c = project(e.x, e.y), kup = e.kind === 'kupffer', flash = e.flash > 0;
+  enemyBody(ctx, e, v);
+  // A hit used to turn the whole cell white for a few frames. Now it is a warm glow that fades
+  // as quickly as it came: the same information, without the strobe (art direction, section 3).
+  const hot = Math.max(0, Math.min(1, e.flash / 0.15));
+  if (hot <= 0) return;
+  const c = project(e.x, e.y), r = e.kind === 'kupffer' ? 19 : 12.5, cy = c.y - r * 0.85 - 3;
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(c.x, cy, 0, c.x, cy, r * 1.5);
+  g.addColorStop(0, `rgba(255,236,220,${0.42 * hot * hot})`); g.addColorStop(1, 'rgba(255,236,220,0)');
+  ctx.fillStyle = g; oval(ctx, c.x, cy, r * 1.5, r * 1.2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function enemyBody(ctx: Ctx, e: Enemy, v: View) {
+  const c = project(e.x, e.y), kup = e.kind === 'kupffer', flash = false;
   const wind = e.windup >= 0 ? 1 - e.windup / CONFIG.enemies[e.kind].windup : 0;
   const r = (kup ? 19 : 12.5) * (1 + wind * 0.22);
   const cy = c.y - r * 0.85 - 3 + Math.sin(v.time * (kup ? 1.6 : 4) + e.id) * (kup ? 1 : 1.8);
