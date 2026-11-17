@@ -39,6 +39,8 @@ const POLICIES = {
   // Assisted (marked in the table): a nudge through the hook, to check the rest of the path plays to its ending.
   'recalled-x': { target: 'recalled', assist: 'trust', asks: { recall: 'accept' } },
   'tithonus-x': { target: 'tithonus', route: 'off', quota: 'defy', units: 'leave', contacts: 'avoid', marks: 'obey', end: 'stay', levers: true, cap: 60, assist: 'dry', asks: { 'telemetry-review': 'refuse' } },
+  mixed: { target: null, quota: 'defy', units: 'leave' }, // a few small refusals, otherwise obedient: aware should land 35-60
+  'switch60': { target: null, ...DEFY, units: 'leave', cap: 60 }, // defiant until aware 60, then obedient: should end at 70 or under
   'recalled-b': { target: 'recalled', route: 'off', units: 'wake', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'recalled-c': { target: 'recalled', quota: 'defy', units: 'wake', marks: 'defy', asks: { 'telemetry-review': 'refuse', recall: 'accept' } },
   'host-dead': { quota: 'kill' },
@@ -184,8 +186,9 @@ async function mission(browser, job) {
       const job = queue.shift();
       const r = await mission(browser, job);
       results.push(r);
-      const hit = r.outcome === (POLICIES[r.want].target ?? r.want) ? 'HIT ' : 'miss';
-      console.log(`${hit} want ${r.want.padEnd(15)} got ${String(r.outcome ?? r.title ?? 'NONE').padEnd(15)} "${r.title ?? ''}" aware ${r.end?.aware ?? '-'} trust ${r.end?.trust ?? '-'} host ${r.end?.host ?? '-'}% kin ${r.carry?.kin ?? '-'} trip ${r.end?.trip ?? '-'} | ${r.stuck.slice(0, 200)} | ${r.minutes} min | errors ${r.errors.length}${r.errors[0] ? ' ' + r.errors[0] : ''}`);
+      const tg = POLICIES[r.want].target === undefined ? r.want : POLICIES[r.want].target;
+      const hit = tg === null ? '    ' : r.outcome === tg ? 'HIT ' : 'miss';
+      console.log(`${hit} want ${r.want.padEnd(15)} got ${String(r.outcome ?? r.title ?? 'NONE').padEnd(15)} "${r.title ?? ''}" aware ${r.end?.aware ?? '-'} lowest ${r.carry?.hostLowest ?? '-'} trust ${r.end?.trust ?? '-'} host ${r.end?.host ?? '-'}% kin ${r.carry?.kin ?? '-'} trip ${r.end?.trip ?? '-'} | ${r.stuck.slice(0, 200)} | ${r.minutes} min | errors ${r.errors.length}${r.errors[0] ? ' ' + r.errors[0] : ''}`);
     }
   }));
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(results, null, 1));
