@@ -1636,3 +1636,19 @@ test('the docking site can be planted and then broken: two blows, and Shepherd o
   assert.ok(s.dock!.broken); assert.equal(s.took.beacon, 'broken'); assert.ok(!s.flags['prop:brochure']); assert.equal(s.trust, Math.max(0, trust - CONFIG.marks.dockTrust));
   assert.ok(s.thoughts.some((t) => t.text === 'Docking site signal lost. Investigating.'));
 });
+test('the recall of a unit you woke is a race: reach it before the Warden does, or lose it', () => {
+  const heart = () => { const s = G.createGame(3, carried({ chapter: 4, kin: 1, aware: 20 }), 'vessel', 0, 'artery', false, plan(3)); s.due = [{ kind: 'kinrecall', t: 0.5 }]; run(s, 1); return s; };
+  const h = heart(); assert.equal(h.ask?.kind, 'kinrecall'); assert.ok(G.answer(h, 'refuse'));
+  assert.equal(h.status, 'won'); assert.equal(h.flags.kinRecall, 'due'); assert.ok(!h.took['kin-recall'], 'nothing is settled at the heart');
+  const v = G.createGame(11, G.carryOf(h), 'vessel', 0, 'artery'); v.host.nextSurge = 999;
+  const unit = v.pickups.find((i) => i.posed && i.beset !== undefined)!, w = v.enemies.find((e) => e.prey)!;
+  assert.ok(unit && w && w.kind === 'warden');
+  const d0 = G.dist(w, unit); run(v, 2); assert.ok(G.dist(w, unit) < d0, 'the Warden is going to it, not to you');
+  v.player.x = unit.x + 0.5; v.player.y = unit.y; run(v, 0.2);
+  assert.equal(v.took['kin-recall'], 'deviate'); assert.equal(v.kin, 1); assert.ok(!w.prey); assert.ok(v.pickups.includes(unit));
+  const l = G.createGame(11, G.carryOf(h), 'vessel', 0, 'artery'); l.host.nextSurge = 999; l.cloak = 999;
+  const at = { x: l.player.x, y: l.player.y };
+  for (let t = 0; t < CONFIG.marks.kinRun.time + 2 && !l.took['kin-recall']; t += 1 / 60) { l.player.x = at.x; l.player.y = at.y; l.player.hp = 60; l.cloak = 999; G.update(l, 1 / 60); }
+  assert.equal(l.took['kin-recall'], 'obey'); assert.equal(l.kin, 0);
+  const o = heart(); G.answer(o, 'accept'); assert.equal(o.took['kin-recall'], 'obey'); assert.equal(o.kin, 0);
+});

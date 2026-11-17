@@ -803,6 +803,7 @@ function hud() {
   const hereLeft = s.tumor.size, need = Math.max(0, CONFIG.energy.quota + CONFIG.energy.quotaKeep - p.energy), done = s.excised >= CONFIG.tumor.goal;
   set('goal', 'text', `${s.place === 'liver'
     ? `${done ? 'Tumor all out' : `Tumor ${s.excised}/${CONFIG.tumor.goal}${hereLeft ? ` \u00b7 ${hereLeft} here, ringed on the map` : ' \u00b7 none left here'} \u00b7 host losing ${Math.round(G.tumorDrain(s.excised) * 10) / 10}% an hour`} \u00b7 ${need ? `${need} more energy to leave (${CONFIG.energy.quota} + ${CONFIG.energy.quotaKeep} for the road)` : 'enough energy to leave by the vein'}${G.stage(s) < 4 && (!s.tutorial || s.tutorial.step >= 5) ? ` \u00b7 Shepherd's quota ${Math.min(s.cellsKilled, CONFIG.story.quota)}/${CONFIG.story.quota} cells` : ''}`
+    : s.flags.kinRecall === 'live' ? (s.took['kin-recall'] === 'deviate' ? 'It is with you. Get it out of here' : s.took['kin-recall'] ? 'Too late' : 'Reach it before the Warden does')
     : s.draw ? (s.draw.held > 0.3 ? `Hold still \u00b7 ${Math.max(0, Math.ceil(CONFIG.draw.hold - s.draw.held))}` : s.draw.said ? 'Hold still in the light' : 'Steer into the light')
     : s.junction ? (G.stage(s) < 4
       ? `DIRECTIVE 7 \u00b7 ${Math.min(s.excised, CONFIG.tumor.goal)}/${CONFIG.tumor.goal} EXCISED \u00b7 ${done ? 'PROCEED: PULMONARY CAPILLARIES' : s.junction.exits.some((e) => e.assigned) ? `PROCEED: ${s.junction.exits.find((e) => e.assigned)!.label.toUpperCase()}` : s.junction.kind === 'gut' ? 'PROCEED: PORTAL VEIN' : 'AWAITING ROUTE'}${trip.trip === 1 && !trip.seen.includes('liver') ? ' \u00b7 steer into a vessel to leave' : ''}`
@@ -893,7 +894,7 @@ function hud() {
       if (s.ask.kind === 'kinrecall') {
         $('ask-kind').textContent = 'Shepherd'; $('ask-title').textContent = 'Recall in progress';
         $('ask-text').textContent = `One of the units you woke is being recalled, two vessels from here. Shepherd: do not interfere.`;
-        opts.splice(0, opts.length, ['accept', 'Do not interfere', 'Shepherd’s order. The unit is taken.', true], ['refuse', 'Get there first', `Not Shepherd’s order. Costs ${CONFIG.marks.intercept.energy} energy and an hour of her day.`, true]);
+        opts.splice(0, opts.length, ['accept', 'Do not interfere', 'Shepherd’s order. The unit is taken.', true], ['refuse', 'Get there first', 'Not Shepherd’s order. A Warden is already on its way to it.', true]);
       }
       askAll = opts.map((o) => o[0]);
       askIds = opts.filter((o) => o[3]).map((o) => o[0]);
@@ -917,11 +918,12 @@ function hud() {
       trip.carry = G.carryOf(s);
       news.push(...s.notes); tell(s.rulings); filePages(trip.carry);
       const forked = pending && s.slip?.kind === 'fork' && (s.slip.result === 'match' || s.slip.result === 'miss');
-      if (trip.carry.flags?.ending === 'recalled') finish('recalled'); else if (s.junction.kind === 'tube') { void Stats.save(s, { trip: trip.trip, toward: 'draw', route: [...route] }); finish('draw'); } else if (ex.to === 'stay') finish('stay'); else if (ex.to === 'arm') tube(); else go(ex.to as T.NodeId, forked);
+      if (trip.carry.flags?.ending === 'recalled') finish('recalled'); else if (trip.carry.flags?.kinRecall === 'due') { Stats.begin(); dest = 'heart'; enter(G.createGame(Date.now(), trip.carry, 'vessel', 0, 'artery'), 'Brachiocephalic trunk \u00b7 cell tier', 'artery', 'Aorta'); } else if (s.junction.kind === 'tube') { void Stats.save(s, { trip: trip.trip, toward: 'draw', route: [...route] }); finish('draw'); } else if (ex.to === 'stay') finish('stay'); else if (ex.to === 'arm') tube(); else go(ex.to as T.NodeId, forked);
       return;
     }
     void Stats.save(s, { trip: trip.trip, toward: dest, route: [...route] });
     news.push(...s.notes); tell(s.rulings);
+    if (s.flags.kinRecall === 'live') { trip.carry = G.carryOf(s); (trip.carry.flags ??= {}).kinRecall = 'done'; junction(); return; } // back to the heart: this was not a leg of the trip
     land(dest, G.carryOf(s), s.alert);
     return;
   }

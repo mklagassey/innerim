@@ -5,7 +5,7 @@
 // stamped, so the scene can be detailed without redrawing every granule each frame.
 import { CONFIG } from './config';
 import { atmosphere } from './atmosphere';
-import { Enemy, Point, State, tutorialTarget, markTarget, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
+import { Enemy, Point, State, tutorialTarget, markTarget, ownTarget, inSearch, inNiche, acidLevel, cloaked, digesting, hostState, maxHp, stage, riding, currentAt, currentStrength, idx, open, scentScale, stripTarget, trailLife, vision } from './game';
 
 export const TW = 64, TH = 32;
 const INK = '#0a0407';
@@ -936,19 +936,19 @@ export function draw(ctx: Ctx, s: State, v: View) {
     if (held > 0) { ctx.strokeStyle = `rgba(255,244,214,${0.8 * up})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(q.x, q.y, 104, 57, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * held); ctx.stroke(); }
     ctx.restore();
   }
-  const want = tutorialTarget(s) ?? markTarget(s);
+  const ordered = tutorialTarget(s) ?? markTarget(s), want = ordered ?? ownTarget(s), tone = ordered ? '240,170,90' : '150,225,255'; // amber for Shepherd's pointer, the unit's own teal for its own
   if (want) {
     const q = project(want.x, want.y), h = project(p.x, p.y), dx = q.x - h.x, dy = q.y - h.y, far = Math.hypot(dx, dy), ease = v.still ? 0.8 : 0.7 + 0.3 * Math.sin(v.time * 1.6);
     ctx.save();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     if (s.visible[idx(s, Math.floor(want.x), Math.floor(want.y))] || far < 150) {
-      ctx.strokeStyle = `rgba(240,170,90,${0.8 * ease})`; ctx.lineWidth = 2.4; ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = `rgba(${tone},${0.8 * ease})`; ctx.lineWidth = 2.4; ctx.setLineDash([6, 5]);
       const lift = s.tiles[idx(s, Math.floor(want.x), Math.floor(want.y))] === 'cell' ? 30 : 4; // on a cell, ring its top face
       ctx.beginPath(); ctx.ellipse(q.x, q.y - lift, 28, 16, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
     if (far > 70) {
       const ux = dx / far, uy = dy / far, ax = h.x + ux * 46, ay = h.y - 8 + uy * 46;
-      for (const [w, col] of [[5, 'rgba(10,6,4,0.7)'], [2.4, `rgba(232,162,90,${0.9 * ease})`]] as const) {
+      for (const [w, col] of [[5, 'rgba(10,6,4,0.7)'], [2.4, `rgba(${tone},${0.9 * ease})`]] as const) {
         ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
         ctx.moveTo(ax - ux * 7 - uy * 7, ay - uy * 7 + ux * 7); ctx.lineTo(ax + ux * 4, ay + uy * 4); ctx.lineTo(ax - ux * 7 + uy * 7, ay - uy * 7 - ux * 7); ctx.stroke();
       }
