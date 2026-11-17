@@ -436,3 +436,33 @@ Change: offer ethanol-correction at the first chapter 3+ liver visit if she has 
 - **Awareness gain.** `G.roused` is used for every gain. Awareness is now fractional internally.
 - **Stage 4.** All stage-4 gates on orders are removed.
 - **Drinking.** `flags.drank` is set at nightly homecomings unless she is dry, which makes ethanol-correction effectively always on offer in chapter 3.
+
+### 6.6 Second retune (QA on Version 69)
+
+What QA found:
+- **Met:** defiant, switch-to-obey and reachability, apart from Recurrence. Recurrence soft-locked at the lungs mouth, a P1 bug for the engineer.
+- **Missed:**
+  - The all-obey host was too low: lowest median 37, end median 50.
+  - The all-obey awareness was 15 to 50, against a target of 0.
+
+The awareness came from orders the bot *could not* complete, not from choices to defy:
+- kupffer-spare: 20 of 20 runs.
+- suppress: 14.
+- marked-cell: 7.
+- The bot also refused the review, which is a bug in the bot's policy.
+
+**Rule: lapsed is not defied.** An order counts as a deviation only when the player does something contrary to it while able to comply. Failing, being interrupted, running out of time or leaving the map is *lapsed*. Lapsed shows in the log as `LAPSED` and lowers compliance %, but it gives no awareness and no trust change. This is the S21 rule ("awareness only from deliberate defiance"), made explicit.
+
+Applied per decision:
+- **m3 kupffer-spare:** weight → none. Surviving an engulf is not a choice. The echo (it eats a neutrophil later) stays.
+- **D13 suppress:** if the player started the hold (1 s or more) at any point, excising before it completes counts as lapsed. It is a deviation only if they never tried.
+- **m2 marked-cell:** a deviation only if the player stripped a *different* healthy cell on that map. If they stripped none, it counts as lapsed.
+- **Hold marks in general** (ethanol, fever, pain, beacon): an interrupted hold is lapsed. A deviation needs an explicit act: leaving the map after holding 0 s while no hostile cell was within 4 tiles for the whole window.
+- **The Slip:** acting on the other reading is still a deviation (that is its job). A Slip with no action at all counts as lapsed.
+
+Host health:
+- `CONFIG.marks.orderedHarm` 0.5 → 0.35.
+- `CONFIG.mend.night` 12 → 15.
+- Targets unchanged: all-obey lowest ≥ 40, end 55–70.
+
+QA bot: the all-obey policy should accept the telemetry review.
