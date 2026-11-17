@@ -18,6 +18,8 @@ Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-hand
 
 **Obedient run shows no bracket lines.** A bot that strips the 2-cell quota, kills what finds it, salvages dark units and excises the nodule finished the tutorial liver with awareness 0, no defiance, and no line containing "[" in its thoughts or Shepherd's rulings (10 of 10 runs).
 
+**Recheck at Version 56 (head a7a5188):** T1 fixed (with no immune cell near, step 3 is dropped after 10 s: 3 to 4 at 190 s, was 270 s). T2 fixed (no info box opened during steps 1 to 4 in the phone run). T3 fixed per the engineer (goal line hidden on narrow screens during steps 1 to 4). Hold-to-steer on touch completes step 1 (14.6 tiles moved, step 2 order shown). Obedient bot still shows 0 bracket lines in 10 runs.
+
 **Old saves** from Version 40, pre-ledger builds and Version 47 still resume and play.
 
 ## Pass 5: 2026-11-17, Versions 49 to 52 (unit-8, unit-8b, unit-9; head b3a1c50)
