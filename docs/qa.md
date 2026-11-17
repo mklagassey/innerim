@@ -2,6 +2,36 @@
 
 Owner: QA thread. Newest pass first. Bug format follows `studio/engineering-handbook.md`: steps, what happened, what was expected, build, device.
 
+## Pass 4: 2026-11-17, Version 47 (head 42f6bb9, unit-7)
+
+69/69 tests, `tsc` clean, no page errors.
+
+**Can a careful run still finish with the host alive? Yes, with real pressure.** `scripts/qa-tumor-clock.ts` models a skim-only mission of three hepatic-route trips using the real drain (2% an hour with the whole tumor in, falling in step with what is left) and sleep mending (1 point per 15 s, so 2 per host hour asleep), with liver times taken from Mick's run reports:
+
+| Minutes per liver | No other host damage | 5 per liver (frights, a strip) | 10 per liver |
+|---|---|---|---|
+| 4 | ends 90% (low 75%) | 75% | 60% |
+| 8 | ends 80% (low 59%) | 65% | 50% |
+| 12 | ends 69% (low 44%) | 54% | 39% |
+| 15 | ends 58% (low 35%) | 43% | 28% (low 18%) |
+
+Mick's livers have taken 6 to 12 minutes, so a careful Mick should finish around 50 to 75% with lows in the 40s to 60s. Only a very slow run that also hurts her often gets close to zero. Day/night timing shifts results by about 10 points (a run whose livers fall at night mends more).
+
+**HUD drain rate reads sensibly.** It shows one decimal place: 2% an hour at 0 out, 1.1 at 9, 0.2 at 18, 0.1 at 19, and the line drops to "Tumor all out" at 20. The world-map status line uses the same number.
+
+**Tumor count stops at 20.** Later livers hold only what is still needed (9 at 0 or 9 out, 2 at 18, 1 at 19, none at 20). Note that 20% of first livers generate 7 or 8 tumor cells rather than 9 (200 seeds: 161 had 9, 22 had 8, 17 had 7), so "about 3 more liver visits" is right but the count per liver varies. Three livers always cover 20.
+
+**Overlay map tumor marks (asked to eyeball): readable, but three problems** (screens `/mnt/project-files/qa/overlay-map-desktop.png` and `overlay-map-phone.png`):
+- **M1 (P2)** The violet tumor marks are drawn on the overlay map, which sits at a different offset from the world, so with the map open they land on top of the ship sprite while the gold "ringed on the map" circle sits on the real cell a tile or two away. Two markers for one thing, in two places, is confusing. Either draw the overlay with the ship in a corner or inset, or drop the gold world ring while the map is open.
+- **M2 (P3)** There is no legend: the map uses red, amber, cyan, green, violet and blue dots, and a new player cannot tell glucose from immune cells from antibodies. A one-line key on the map or a field-note entry would do.
+- **M3 (P3)** On a phone the log and Shepherd lines are drawn over the open map, so the middle third of the map is under text.
+
+**Immune memory (unit-7).** Not measured this pass beyond the tests; the bots do not reach memory 0.5 in a single trip either way.
+
+## Pass 3: 2026-11-17, recheck at Version 44 (head 73903bd)
+
+69/69 tests, no JavaScript errors and no layout flags in a phone bot run. **B1 fixed:** walking to the stomach exit in fog now spends 0.0 s in open acid (was 5.7), fully explored also 0.0; the rim bot that waits out dinner then leaves now loses 4 hull on average with 0 deaths in 15 (was 24 hull, 1 death); a tap on the exit at any hour costs about 1 hull. As the engineer notes, a human reaches the exit in several taps, since each path stops at the edge of the known rim. **B5 fixed** (veil 99%), **B7 fixed** (clock ribbon icons are 36x36, and the bot no longer flags any small tap targets). All pass-1 bugs are now closed; realism items R1 to R3 stay open for the creative director and systems designer.
+
 ## Pass 2: 2026-11-17, recheck at Version 43 (head e2489a3)
 
 `tsc` clean, 68/68 tests, bot runs at desktop, iPhone 13 and Galaxy S8 sizes with no JavaScript errors. Acceptance checks unchanged from pass 1 (S1, S2, S3, S7 met).
