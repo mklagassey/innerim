@@ -1740,3 +1740,17 @@ test('unit-17: the last trip has three more things Shepherd would like', () => {
   const kept = G.createGame(4, { ...G.carryOf(quiet(4)), flags: { heirloom: true } });
   assert.ok(kept.pickups.some((i) => i.kind === 'sibling'));
 });
+
+test('unit-17: each difficulty is a different body, not only bigger numbers', () => {
+  const on = (d: 'suppressed' | 'typical' | 'vigilant', more: Partial<G.Carry> = {}) => G.createGame(4, { ...G.carryOf(quiet(4)), difficulty: d, ...more });
+  assert.ok(G.trailLife(on('suppressed')) < G.trailLife(on('typical')) && G.trailLife(on('typical')) < G.trailLife(on('vigilant')));
+  assert.equal(on('suppressed', { memory: 0.6 }).memory, 0.3); assert.equal(on('vigilant', { memory: 0.6 }).memory, 0.6);
+  assert.ok(G.tumorDrain(0, 'suppressed') < G.tumorDrain(0) && G.tumorDrain(0) < G.tumorDrain(0, 'vigilant'));
+  const v: G.Carry = { ...G.carryOf(quiet(4)), difficulty: 'vigilant', hostHealth: 50, flags: { hep: 4 } }; G.night(v);
+  assert.equal(v.hostHealth, 50 + Math.round(12 * 0.7));
+  const s = on('vigilant'); s.upgrades.cd47 = 1; s.player.energy = 50;
+  assert.ok(G.cloak(s)); const first = s.cloak; s.cloak = 0; s.cloakCd = 0; assert.ok(G.cloak(s));
+  assert.ok(Math.abs(s.cloak - first * 0.75) < 1e-9, 'her T cells learn the signature');
+  const easy = on('suppressed'); easy.scan = 'nodule'; easy.enemies[0].mood = 'chase';
+  assert.ok(G.hunterHeading(easy)); const typ = on('typical'); typ.scan = 'nodule'; typ.enemies[0].mood = 'chase'; assert.equal(G.hunterHeading(typ), null);
+});
