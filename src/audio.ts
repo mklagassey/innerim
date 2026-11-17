@@ -3,7 +3,7 @@
 import * as Music from './music';
 
 let ac: AudioContext | null = null;
-let master: GainNode, bed: GainNode, noise: AudioBuffer;
+let master: GainNode, bed: GainNode, noise: AudioBuffer, muffle: BiquadFilterNode;
 let on = true;
 try { on = localStorage.getItem('insiderim.sound') !== 'off'; } catch { /* default to on */ }
 
@@ -23,8 +23,10 @@ export function start() {
   master = ac.createGain();
   master.gain.value = on ? 0.9 : 0;
   const squash = ac.createDynamicsCompressor(); // keeps a busy fight from clipping
-  master.connect(squash).connect(ac.destination);
-  room(ac, squash);
+  muffle = ac.createBiquadFilter(); // opened all the way in play; closes for a scene from outside the body
+  muffle.type = 'lowpass'; muffle.frequency.value = 20000; muffle.Q.value = 0.5;
+  master.connect(muffle).connect(squash).connect(ac.destination);
+  cavity(ac, muffle);
 
   noise = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
   const data = noise.getChannelData(0);
@@ -159,7 +161,7 @@ export function pulse(bpm: number, life: number, heat = 0) {
 // rushing flow in a vessel that surges with each beat, thick slow flow in the liver,
 // gurgles and churn in the stomach, wind that rises and falls with each breath in the lung.
 
-function room(ac: AudioContext, out: AudioNode) {
+function cavity(ac: AudioContext, out: AudioNode) {
   const len = Math.floor(ac.sampleRate * 1.6), ir = ac.createBuffer(2, len, ac.sampleRate);
   for (let ch = 0; ch < 2; ch++) {
     const d = ir.getChannelData(ch);
@@ -245,3 +247,79 @@ export function scene(where: string, breath: number, digest: number, live: boole
     gurgleAt = now + (digest > 0.3 ? 0.8 : 2.2) + Math.random() * (digest > 0.3 ? 2 : 5);
   }
 }
+
+// ---------- outside: the interludes ----------
+//
+// In a scene from Marian's life the game's sound sinks behind flesh: the music and the body's
+// beds drop to a dull murmur (her heart still comes through faintly), and a quiet room plays
+// instead, itself a little muffled, as if heard through tissue. On the match cut back inside,
+// the body returns hard. See docs/art-audio-direction.md, section 9.
+
+let outBus: GainNode | null = null, hum: GainNode | null = null;
+
+function outsideBus() {
+  if (!ac || outBus) return;
+  outBus = ac.createGain(); outBus.gain.value = 0.9;
+  const dull = ac.createBiquadFilter(); dull.type = 'lowpass'; dull.frequency.value = 2400; dull.Q.value = 0.4;
+  outBus.connect(dull).connect(ac.destination);
+  // Room tone: a fridge's mains hum and the faint hiss of a quiet house.
+  hum = ac.createGain(); hum.gain.value = 0; hum.connect(outBus);
+  for (const [f, v] of [[50, 0.05], [100, 0.035], [150, 0.012]]) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = f; g.gain.value = v; o.connect(g).connect(hum); o.start();
+  }
+  const air = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  air.buffer = noise; air.loop = true; f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.5; g.gain.value = 0.05;
+  air.connect(f).connect(g).connect(hum); air.start();
+}
+
+/** Starts or ends an interlude. `on` true: over about a second the game sinks and the room fades
+ *  up. `on` false: the room cuts out and the body comes back hard, for the match cut. */
+export function outside(on: boolean) {
+  if (!ac || !muffle) return;
+  outsideBus();
+  const now = ac.currentTime, f = muffle.frequency;
+  f.cancelScheduledValues(now); f.setValueAtTime(f.value, now);
+  master.gain.cancelScheduledValues(now); master.gain.setValueAtTime(master.gain.value, now);
+  hum!.gain.cancelScheduledValues(now); hum!.gain.setValueAtTime(hum!.gain.value, now);
+  if (on) {
+    f.exponentialRampToValueAtTime(260, now + 1.2);
+    master.gain.linearRampToValueAtTime(on && isOn() ? 0.35 : 0, now + 1.2);
+    hum!.gain.linearRampToValueAtTime(isOn() ? 1 : 0, now + 1.5);
+  } else {
+    f.exponentialRampToValueAtTime(20000, now + 0.12);
+    master.gain.linearRampToValueAtTime(isOn() ? 0.9 : 0, now + 0.12);
+    hum!.gain.linearRampToValueAtTime(0, now + 0.08);
+  }
+}
+
+function out(fn: (at: number, to: AudioNode) => void, delay = 0) {
+  if (!ac || !on) return;
+  outsideBus();
+  fn(ac.currentTime + delay, outBus!);
+}
+function ping(at: number, to: AudioNode, freq: number, dur: number, vol: number) {
+  const o = ac!.createOscillator(), g = ac!.createGain();
+  o.frequency.value = freq; g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g).connect(to); o.start(at); o.stop(at + dur + 0.02);
+}
+function rustle(at: number, to: AudioNode, freq: number, dur: number, vol: number, q = 1) {
+  const src = ac!.createBufferSource(), f = ac!.createBiquadFilter(), g = ac!.createGain();
+  src.buffer = noise; src.loop = true; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + Math.min(0.05, dur / 3)); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  src.connect(f).connect(g).connect(to); src.start(at, Math.random()); src.stop(at + dur + 0.02);
+}
+
+/** The small sounds of the interludes. Each is quiet and domestic; none of them is music. */
+export const room = {
+  /** A spoon stirring and tapping the rim of the chipped mug. */
+  spoon: () => out((t, to) => { for (let i = 0; i < 3; i++) rustle(t + i * 0.32, to, 1800, 0.25, 0.08, 3); ping(t + 1.05, to, 2650, 0.5, 0.06); ping(t + 1.05, to, 3980, 0.35, 0.03); ping(t + 1.3, to, 2650, 0.4, 0.04); }),
+  /** An old dog's claws crossing a kitchen floor. */
+  claws: () => out((t, to) => { for (let i = 0; i < 8; i++) rustle(t + i * 0.19 + Math.random() * 0.04, to, 3200 + Math.random() * 800, 0.03, 0.12, 4); }),
+  /** A letter unfolded, or a brochure. */
+  paper: () => out((t, to) => { rustle(t, to, 2200, 0.35, 0.12, 0.8); rustle(t + 0.4, to, 1600, 0.5, 0.1, 0.8); }),
+  /** One long breath out. */
+  sigh: () => out((t, to) => rustle(t, to, 700, 2.2, 0.16, 0.7)),
+  /** A mug set down on a table. */
+  set: () => out((t, to) => { ping(t, to, 180, 0.12, 0.2); rustle(t, to, 900, 0.08, 0.1, 2); }),
+};

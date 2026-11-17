@@ -132,7 +132,10 @@ Drawn in this order (bottom to top). `src/atmosphere.ts` owns layers 5 to 8.
    lens. Low opacity (under 0.12). They are the strongest scale cue we have.
 8. **Grade**: a gentle place-keyed colour wash and a vignette. Changes between places fade
    over about a second.
-9. **Alert overlays** (edge glow, rings), **info markers**, **night tint**, **map**.
+9. **Alert overlays**, in the body's own language: each beat sends a soft pressure wave through
+   the fluid, the haze warms toward inflamed red, and the edges of the view flush with blood and
+   close in, as fear narrows sight. No neon, no scan lines. Then **info markers**, **night tint**,
+   **map**.
 
 ## 6. The unit's ship
 
@@ -189,3 +192,34 @@ little muffled. High frequencies are rare and therefore special: they belong to 
 - [ ] Readable on a phone at default zoom, and does not hide threats.
 - [ ] Has a sound that fits the frequency budget, routed through the shared reverb.
 - [ ] Gets an info box in `src/tips.ts` the first time the player meets it.
+
+## 9. Interludes: outside the body
+
+Short wordless scenes of Marian's life between legs of the trip (`src/scenes.ts`, scripts in
+`/mnt/project-files/creative/interludes.md`). They must look and sound unmistakably *outside*.
+
+### Look
+
+- **Paper cut-outs in lamplight.** Flat shapes, 2 or 3 tones per beat plus one warm light source,
+  no outlines, no gradients except the light's own soft pool. Inline SVG, `viewBox 0 0 320 200`.
+- **Palette** per light: night `#0d0a12` / `#241c2c` / lamp `#e8b36a`; dusk `#1a0f0c` / `#3a2219` /
+  `#d9874a`; dawn `#18120e` / `#4a3324` / `#f0c48a`; clinic `#0e1416` / `#2c3a3e` / `#cfe0e4`.
+  Marian and the dog are always the darkest shape in the frame.
+- **Marian** is seen only from behind, in profile against light, or as hands. Never a face.
+- **The motifs** (mug, dog, fridge, her right side) are drawn the same way every time so the eye
+  learns them: the mug always has its chip on the left of the rim.
+- **Words** appear only as `print` text, set in the data face below the picture, never drawn
+  inside it, so they stay legible on a phone.
+- **Motion**: at most one slow element per beat (steam rising, the dog's breathing, a hand
+  moving), slower than 0.5 Hz, using SMIL or CSS. Nothing flashes or snaps.
+- **The match cut** back into the body is the only cut. Everything else fades.
+
+### Sound
+
+- `Sound.outside(true)` when a scene starts: over about a second the game's sound sinks to a
+  muffled murmur (her heart still faintly comes through), and a quiet room fades up: fridge hum,
+  the hiss of a quiet house.
+- One small domestic sound per beat at most, from `Sound.room`: `spoon`, `claws`, `paper`,
+  `sigh`, `set` (a mug put down). No music, no stingers.
+- `Sound.outside(false)` on the match cut: the room cuts out and the body comes back hard,
+  within about a tenth of a second.

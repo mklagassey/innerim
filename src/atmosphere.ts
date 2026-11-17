@@ -27,6 +27,8 @@ export interface Air {
   place: string;
   /** 0 to 1 lung fill. */
   breath: number;
+  /** 0 to 1 how loud the score is (the alert). The fluid fills with inflammation as it rises. */
+  heat?: number;
   dt: number;
 }
 
@@ -104,7 +106,9 @@ export function atmosphere(ctx: Ctx, a: Air) {
   // The grade eases toward the new place over about a second, so a change of place never pops.
   const k = graded ? 1 - Math.exp(-a.dt / 0.6) : 1; graded = true;
   grade.r += (key.grade[0] - grade.r) * k; grade.g += (key.grade[1] - grade.g) * k; grade.b += (key.grade[2] - grade.b) * k; grade.a += (key.gradeA - grade.a) * k;
-  grade.hr += (key.haze[0] - grade.hr) * k; grade.hg += (key.haze[1] - grade.hg) * k; grade.hb += (key.haze[2] - grade.hb) * k;
+  // Under alarm the haze warms toward inflamed red: histamine, leaking plasma, a body on guard.
+  const fever = Math.min(1, a.heat ?? 0), want = key.haze.map((c, i) => c + ([255, 70, 50][i] - c) * fever * 0.6);
+  grade.hr += (want[0] - grade.hr) * k; grade.hg += (want[1] - grade.hg) * k; grade.hb += (want[2] - grade.hb) * k;
 
   // Blood comes in surges: each beat shoves the fluid forward and it coasts until the next.
   // Arteries surge hard, veins hardly at all.
@@ -135,7 +139,7 @@ export function atmosphere(ctx: Ctx, a: Air) {
   ctx.globalCompositeOperation = 'lighter';
   const hazeR = a.reach * 1.1, breathe = a.still ? 0 : (a.breath - 0.5) * 0.015;
   const haze = ctx.createRadialGradient(cx, cy - 10 * a.zoom, 0, cx, cy - 10 * a.zoom, hazeR);
-  haze.addColorStop(0, rgba([grade.hr, grade.hg, grade.hb], 0.075 + breathe)); haze.addColorStop(0.45, rgba([grade.hr, grade.hg, grade.hb], 0.03)); haze.addColorStop(1, rgba([grade.hr, grade.hg, grade.hb], 0));
+  haze.addColorStop(0, rgba([grade.hr, grade.hg, grade.hb], 0.075 + breathe + fever * 0.05)); haze.addColorStop(0.45, rgba([grade.hr, grade.hg, grade.hb], 0.03)); haze.addColorStop(1, rgba([grade.hr, grade.hg, grade.hb], 0));
   ctx.fillStyle = haze; ctx.fillRect(cx - hazeR, cy - hazeR, hazeR * 2, hazeR * 2);
 
   // Specks: bright inside the lamp's reach, a faint memory of light beyond it.
